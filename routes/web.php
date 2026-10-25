@@ -18,6 +18,8 @@ Route::post('/language', function (\Illuminate\Http\Request $request) {
 })->middleware('auth')->name('language.update');
 
 Route::middleware('auth')->group(function () {
+    Route::get('/finance/exchanges', [\App\Http\Controllers\CurrencyExchangeController::class,'index'])->name('finance.exchanges.index');
+    Route::post('/finance/exchanges', [\App\Http\Controllers\CurrencyExchangeController::class,'store'])->name('finance.exchanges.store');
     Route::get('/finance/money', [\App\Http\Controllers\MoneyTransactionController::class,'index'])->name('finance.money.index');
     Route::post('/finance/money', [\App\Http\Controllers\MoneyTransactionController::class,'store'])->name('finance.money.store');
     Route::get('/finance/accounts', [\App\Http\Controllers\FinancialAccountController::class,'index'])->name('finance.accounts.index');
