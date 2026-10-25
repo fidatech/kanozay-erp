@@ -20,3 +20,11 @@
 </form>
 @endcan
 @endif
+
+@if($doc->allocations->isNotEmpty())
+<div class="settlement-history" style="margin-top:7px;font-size:11px;color:#60758f">
+@foreach($doc->allocations as $allocation)
+<div style="display:flex;gap:7px;align-items:center;justify-content:space-between;padding:4px 0;border-top:1px solid #edf1f6"><span>{{ $allocation->transaction?->journal?->number ?? '#'.$allocation->money_transaction_id }}</span><x-finance-amount :amount="$allocation->amount" direction="in" /></div>
+@endforeach
+</div>
+@endif
