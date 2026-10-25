@@ -13,15 +13,15 @@
 .gl-summary>div{min-width:0;border:1px solid #dfeaf5;border-radius:11px;padding:15px 16px;background:#f8fbff}
 .gl-summary strong{display:block;margin-top:9px;font-size:18px;color:#173e6b;overflow-wrap:anywhere}
 .gl-muted{font-size:12px;color:#6a7e99}.gl-num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.gl-link{color:#1769b2;font-weight:750}
-.gl-workspace .table-wrap{max-width:100%;overflow-x:auto;margin:0!important}
-.gl-workspace table{min-width:980px;width:100%;border-collapse:collapse}
-.gl-workspace thead th{padding:13px 12px!important;background:#f2f6fc!important;color:#526c87!important;font-size:10px!important;text-transform:uppercase;letter-spacing:.35px;white-space:nowrap}
-.gl-workspace tbody td{padding:13px 12px!important;vertical-align:middle!important;font-size:12px;border-bottom:1px solid #e9eff6!important}
+.gl-workspace .table-wrap{max-width:100%;overflow-x:auto;margin:0 20px 18px!important;width:calc(100% - 40px)!important;border:1px solid #dfe8f3!important;border-radius:10px!important;background:#fff}
+.gl-workspace table{min-width:980px;width:100%;border-collapse:separate;border-spacing:0}
+.gl-workspace thead th{padding:15px 16px!important;background:#f2f6fc!important;color:#526c87!important;font-size:10px!important;text-transform:uppercase;letter-spacing:.35px;white-space:nowrap}
+.gl-workspace tbody td{padding:15px 16px!important;vertical-align:middle!important;font-size:12px;border-bottom:1px solid #e9eff6!important}
 .gl-workspace tbody tr:hover{background:#f8fbff}
 .gl-account{font-weight:700;color:#2b4c71}.gl-date{white-space:nowrap;color:#617a94}.gl-memo{max-width:260px;overflow-wrap:anywhere;color:#647a92}
 .gl-workspace .gl-pagination{padding:12px 20px}
 @media(max-width:1000px){.gl-filters{grid-template-columns:repeat(2,minmax(0,1fr))}.gl-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:620px){.gl-filters,.gl-summary{grid-template-columns:1fr}.gl-workspace-header{padding:15px}.gl-summary{padding:12px}.gl-workspace table{min-width:900px}}
+@media(max-width:620px){.gl-filters,.gl-summary{grid-template-columns:1fr}.gl-workspace-header{padding:15px}.gl-summary{padding:12px}.gl-workspace table{min-width:900px}.gl-workspace .table-wrap{margin:0 12px 14px!important;width:calc(100% - 24px)!important}}
 
 /* Institutional transaction register: legible account hierarchy and compact numeric cells. */
 .gl-workspace .table-wrap{border:0!important}
@@ -39,7 +39,7 @@
 .gl-memo{min-width:160px;max-width:310px;line-height:1.6!important}
 .gl-currency-chip{display:inline-block;border:1px solid #dce8f5;background:#f5f9fd;color:#41688e;border-radius:6px;padding:4px 7px;font-size:10px;font-weight:800}
 .gl-workspace .gl-num{min-width:110px}
-.gl-workspace .gl-running{background:#f8fbff;font-weight:800;border-left:1px solid #e4edf7}
+.gl-workspace .gl-running{background:#f8fbff;font-weight:800;border-left:1px solid #e4edf7;padding-right:22px!important}
 .gl-workspace .gl-zero{color:#b0bed0;font-weight:500}
 .gl-workspace .gl-num .k-finance-amount{justify-content:flex-end;font-size:12px}
 .gl-workspace .gl-pagination{border-top:1px solid #e6edf5}
