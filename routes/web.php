@@ -18,6 +18,9 @@ Route::post('/language', function (\Illuminate\Http\Request $request) {
 })->middleware('auth')->name('language.update');
 
 Route::middleware('auth')->group(function () {
+    Route::get('/finance/accounts', [\App\Http\Controllers\FinancialAccountController::class,'index'])->name('finance.accounts.index');
+    Route::post('/finance/accounts', [\App\Http\Controllers\FinancialAccountController::class,'store'])->name('finance.accounts.store');
+    Route::put('/finance/accounts/{account}', [\App\Http\Controllers\FinancialAccountController::class,'update'])->name('finance.accounts.update');
     Route::get('/finance/general-ledger', [\App\Http\Controllers\GeneralLedgerController::class,'index'])->name('finance.ledger.index');
     Route::get('/finance/journals', [\App\Http\Controllers\JournalEntryController::class,'index'])->name('finance.journals.index');
     Route::post('/finance/journals', [\App\Http\Controllers\JournalEntryController::class,'store'])->name('finance.journals.store');
