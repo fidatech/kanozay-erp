@@ -49,6 +49,26 @@ class TradeReconciliationController extends Controller
             $rows[$key]['unapplied'] += max(0, (float) $transaction->amount - $allocated);
             if ($allocated > (float) $transaction->amount + 0.00001) $rows[$key]['issues']++;
         }
+        $ledgerBalances = \Illuminate\Support\Facades\DB::table('entity_ledger_accounts as ea')
+            ->join('journal_lines as jl', 'jl.ledger_account_id', '=', 'ea.ledger_account_id')
+            ->join('journal_entries as je', function ($join) {
+                $join->on('je.id', '=', 'jl.journal_entry_id')
+                    ->on('je.currency_id', '=', 'ea.currency_id');
+            })
+            ->where('ea.entity_type', $partyType)->where('ea.purpose', $type)
+            ->where('je.status', 'posted')
+            ->selectRaw('ea.entity_id, ea.currency_id, SUM(jl.debit) AS debits, SUM(jl.credit) AS credits')
+            ->groupBy('ea.entity_id', 'ea.currency_id')->get()
+            ->keyBy(fn ($item) => $item->entity_id . ':' . $item->currency_id);
+        foreach ($rows as $key => &$row) {
+            $ledger = $ledgerBalances->get($key);
+            $row['ledger_balance'] = $ledger ? ($type === 'receivable'
+                ? (float) $ledger->debits - (float) $ledger->credits
+                : (float) $ledger->credits - (float) $ledger->debits) : null;
+            $row['difference'] = $row['ledger_balance'] === null ? null
+                : round($row['outstanding'] - $row['unapplied'] - $row['ledger_balance'], 4);
+        }
+        unset($row);
         $currencies = \App\Models\Currency::pluck('code', 'id');
         return view('finance.documents.reconciliation', compact('type', 'rows', 'currencies', 'unmappedTransactions'));
     }
