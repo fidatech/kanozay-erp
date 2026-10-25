@@ -101,20 +101,27 @@
 .content:has(.k-register-panel){width:auto;max-width:none;min-width:0;display:flex;flex-direction:column}
 .content:has(.k-register-panel)>div.coa-grid,.content:has(.k-register-panel)>div.fx-grid,.content:has(.k-register-panel)>div.rate-grid,.content:has(.k-register-panel)>div.fa-layout,.content:has(.k-register-panel)>div.money-layout{flex:1 1 auto;width:100%!important;max-width:none!important;min-width:0;display:block!important}
 .coa-grid:has(.k-register-panel),.fx-grid:has(.k-register-panel),.rate-grid:has(.k-register-panel),.fa-layout:has(.k-register-panel),.money-layout:has(.k-register-panel){display:block!important;grid-template-columns:none!important;width:100%!important;max-width:none!important}
-.k-register-panel{display:flex;flex-direction:column;width:100%!important;max-width:none!important;min-width:0;min-height:calc(100vh - 190px);margin:0!important}
-.k-register-panel>.table-wrap{flex:1 1 auto;width:100%!important;max-width:100%!important;min-width:0;overflow-x:auto}
+.k-register-panel{display:flex;flex-direction:column;width:100%!important;max-width:none!important;min-width:0;min-height:0!important;height:auto!important;margin:0!important}
+.k-register-panel>.table-wrap{flex:0 1 auto;width:100%!important;max-width:100%!important;min-width:0;overflow-x:auto}
 .k-register-panel table{width:100%!important;min-width:100%;table-layout:auto}
-.k-register-panel>.k-pagination{margin-top:auto;padding-top:15px}
-@media(max-width:950px){.k-register-panel{min-height:calc(100vh - 170px)}}
+.k-register-panel>.k-pagination{margin-top:15px;padding-top:0}
+@media(max-width:950px){.k-register-panel{min-height:0!important}}
 /* Unified full-area table workspace, including Journal Entries. */
 .content:has(.k-register-panel){display:flex!important;flex-direction:column!important;align-items:stretch!important;min-width:0}
+/* Register cards grow only with content, not viewport height. */
+.content:has(.k-register-panel) .k-register-panel{height:auto!important;min-height:0!important;flex:0 0 auto!important}
+.content:has(.k-register-panel) .k-register-panel>.table-wrap{height:auto!important;min-height:0!important;flex:0 0 auto!important}
+.content:has(.k-register-panel)>div.sequence-layout{display:block!important;width:100%!important;grid-template-columns:none!important;max-width:none!important}
+.sequence-layout:has(.k-register-panel){display:block!important;width:100%!important;grid-template-columns:none!important}
+.content:has(.k-register-panel)>div{min-width:0}
+
 .content:has(.k-register-panel)>div.journal-layout{flex:1 1 auto;display:block!important;grid-template-columns:none!important;width:100%!important;max-width:none!important;min-width:0!important}
 .journal-layout:has(.k-register-panel){display:block!important;grid-template-columns:none!important;width:100%!important;max-width:none!important;min-width:0!important}
-.content:has(.k-register-panel) .k-register-panel{box-sizing:border-box;display:flex!important;flex-direction:column!important;width:100%!important;max-width:none!important;min-width:0!important;min-height:calc(100vh - 190px)!important}
-.content:has(.k-register-panel) .k-register-panel>.table-wrap{width:100%!important;flex:1 1 auto!important;min-width:0!important;overflow-x:auto!important}
+.content:has(.k-register-panel) .k-register-panel{box-sizing:border-box;display:flex!important;flex-direction:column!important;width:100%!important;max-width:none!important;min-width:0!important;min-height:0!important}
+.content:has(.k-register-panel) .k-register-panel>.table-wrap{width:100%!important;flex:0 1 auto!important;min-width:0!important;overflow-x:auto!important}
 .content:has(.k-register-panel) .k-register-panel>.table-wrap>table{width:100%!important;min-width:100%!important}
 .content:has(.k-register-panel) .k-register-panel>.table-wrap>table tbody tr:only-child td.empty{text-align:center;padding:42px 16px}
-@media(max-width:650px){.content:has(.k-register-panel) .k-register-panel{min-height:calc(100vh - 160px)!important}}
+@media(max-width:650px){.content:has(.k-register-panel) .k-register-panel{min-height:0!important}}
 
 
 
