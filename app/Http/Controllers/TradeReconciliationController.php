@@ -62,6 +62,7 @@ class TradeReconciliationController extends Controller
             ->keyBy(fn ($item) => $item->entity_id . ':' . $item->currency_id);
         foreach ($rows as $key => &$row) {
             $ledger = $ledgerBalances->get($key);
+            $row['ledger_account_id'] = $ledgers->first(fn ($item) => $item->entity_id . ':' . $item->currency_id === (string) $key)?->ledger_account_id;
             $row['ledger_balance'] = $ledger ? ($type === 'receivable'
                 ? (float) $ledger->debits - (float) $ledger->credits
                 : (float) $ledger->credits - (float) $ledger->debits) : null;
