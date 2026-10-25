@@ -244,6 +244,15 @@
 .content .panel .k-filter-actions>.btn{display:inline-flex!important;align-items:center!important;gap:8px!important;min-height:42px!important;padding:0 18px!important}
 @media(max-width:650px){.content .panel .k-filter-actions{flex-direction:column-reverse!important}.content .panel .k-filter-actions>.btn{width:100%!important;justify-content:center!important}}
 
+/* Filter overflow containment: the action row stays inside the card at every viewport. */
+.finance-workspace .k-collapsible-filters,.finance-workspace .k-filter-toggle{min-width:0;max-width:100%;box-sizing:border-box}
+.finance-workspace .k-filter-toggle>form.gl-filters,.finance-workspace .k-filter-toggle>form.report-filter-form{width:auto!important;max-width:calc(100% - 36px)!important;box-sizing:border-box!important;margin:14px 18px!important;min-width:0!important}
+.finance-workspace .k-filter-toggle .k-filter-actions{width:100%!important;min-width:0!important;max-width:100%!important;box-sizing:border-box!important;flex-wrap:wrap!important}
+.finance-workspace .k-filter-toggle .k-filter-actions>.btn{width:auto!important;max-width:100%!important;box-sizing:border-box!important;white-space:normal!important;text-align:center!important;flex:0 1 auto!important}
+.finance-workspace .k-filter-toggle .k-filter-actions>button[type=submit]{grid-column:auto!important;justify-self:auto!important;min-width:0!important;margin:0!important}
+.finance-workspace .k-filter-toggle .k-filter-actions>a{min-width:0!important}
+.finance-workspace .k-filter-toggle .k-filter-actions .btn i{flex-shrink:0}
+@media(max-width:650px){.finance-workspace .k-filter-toggle>form.gl-filters,.finance-workspace .k-filter-toggle>form.report-filter-form{max-width:calc(100% - 28px)!important;margin:12px 14px!important}.finance-workspace .k-filter-toggle .k-filter-actions{flex-direction:column-reverse!important}.finance-workspace .k-filter-toggle .k-filter-actions>.btn{width:100%!important;flex:0 0 auto!important}}
 /* Compact expandable filter toolbar */
 .finance-workspace .k-collapsible-filters{padding:0!important;overflow:visible;margin-bottom:14px}
 .finance-workspace .k-filter-toggle>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 18px;cursor:pointer;list-style:none;font-weight:750;color:#24466d;font-size:13px}
