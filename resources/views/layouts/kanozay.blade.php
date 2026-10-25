@@ -23,5 +23,15 @@
  document.querySelectorAll('dialog.k-modal').forEach(dialog=>dialog.addEventListener('click',event=>{if(event.target===dialog)dialog.close();}));
 })();
 </script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+@if(session()->has('status'))
+<script>
+document.addEventListener('DOMContentLoaded',function(){
+ const message = @json(session('status'));
+ if(typeof Swal !== 'undefined') Swal.fire({icon:'success',title:'Success',text:message,confirmButtonColor:'#0868ef',timer:2600,timerProgressBar:true});
+ else { const alertBox=document.createElement('div');alertBox.setAttribute('role','status');alertBox.textContent=message;alertBox.style.cssText='position:fixed;right:20px;top:75px;z-index:9999;background:#e6f6f1;color:#087a47;padding:16px 22px;border:1px solid #b4e4d0;border-radius:8px;box-shadow:0 8px 25px #0002';document.body.append(alertBox);setTimeout(()=>alertBox.remove(),4500); }
+});
+</script>
+@endif
 @stack('scripts')
 </body></html>

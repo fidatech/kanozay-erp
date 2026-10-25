@@ -1,7 +1,6 @@
 @extends('layouts.kanozay')
 @section('content')
 <div class="heading"><div><h1>User Management</h1><p>Manage employee accounts and access levels</p></div>@can('users.create')<button class="btn" type="button" data-modal-open="create-user"><i class="fa-solid fa-plus"></i> Add User</button>@endcan</div>
-@if(session('status'))<div class="panel" role="status">{{ session('status') }}</div>@endif
 @if($errors->any())<div class="panel error" role="alert">{{ implode(' | ', $errors->all()) }}</div>@endif
 <section class="panel"><h2>Employee Accounts</h2><div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Actions</th></tr></thead><tbody>
 @forelse($users as $user)
@@ -27,7 +26,6 @@
 @endcan
 @endsection
 @push('scripts')
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
 document.querySelectorAll('.delete-user-form').forEach(form => form.addEventListener('submit', async e => {
  e.preventDefault();
