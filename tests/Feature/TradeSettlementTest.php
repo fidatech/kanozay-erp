@@ -53,8 +53,9 @@ class TradeSettlementTest extends TestCase {
   $this->actingAs($user)->get(route('finance.reconciliation.index',['party_id'=>$doc->trade_party_id,'currency_id'=>$currency->id]))->assertOk()->assertSee('Investigation History');
   \App\Models\JournalLine::create(['journal_entry_id'=>$doc->journal_entry_id,'ledger_account_id'=>$payment->counterpart_ledger_account_id,'debit'=>'1','credit'=>0]);
   $this->actingAs($user)->get(route('finance.reconciliation.index'))->assertOk();
-  $this->assertDatabaseHas('reconciliation_cases',['id'=>$case->id,'status'=>'investigating']);
-  $this->assertDatabaseHas('reconciliation_case_events',['reconciliation_case_id'=>$case->id,'action'=>'auto_reopened']);
+  $this->assertDatabaseHas('reconciliation_cases',['id'=>$case->id,'status'=>'resolved']);
+  $this->assertDatabaseMissing('reconciliation_case_events',['reconciliation_case_id'=>$case->id,'action'=>'auto_reopened']);
+  $this->actingAs($user)->get(route('finance.reconciliation.index'))->assertSee('Balance changed — review required');
  }
  public function test_reconciliation_approval_rejects_unmapped_currency_receipts():void {
   [$user,$doc,$payment,$currency]=$this->fixtures();

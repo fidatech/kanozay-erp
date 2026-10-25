@@ -118,16 +118,8 @@ class TradeReconciliationController extends Controller
             if ($exposure !== null && $ledger !== null && $case->approved_exposure !== null && $case->approved_ledger !== null
                 && abs($exposure - (float) $case->approved_exposure) <= 0.0001
                 && abs($ledger - (float) $case->approved_ledger) <= 0.0001) continue;
-            DB::transaction(function () use ($case) {
-                $locked = ReconciliationCase::whereKey($case->id)->lockForUpdate()->firstOrFail();
-                if ($locked->status !== 'resolved' || !$locked->approved_at) return;
-                $locked->update(['status'=>'investigating','resolved_at'=>null,'approved_at'=>null,'approved_by'=>null,
-                    'approved_exposure'=>null,'approved_ledger'=>null]);
-                ReconciliationCaseEvent::create(['reconciliation_case_id'=>$locked->id,'action'=>'auto_reopened',
-                    'old_status'=>'resolved','new_status'=>'investigating',
-                    'notes'=>'Balances changed or the posted ledger is unavailable.']);
-                $case->refresh();
-            });
+            // GET requests are read-only. Do not silently revoke approvals.
+            $case->setAttribute('balance_changed_since_approval', true);
         }
         $selectedCaseEvents = isset($filters['party_id'], $filters['currency_id'])
             ? ($cases->get($filters['party_id'].':'.$filters['currency_id'])?->events()->with('actor')->limit(30)->get() ?? collect())
