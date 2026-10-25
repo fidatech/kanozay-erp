@@ -219,7 +219,18 @@
    if(index===0&&(document.querySelector('.error')||document.querySelector('[data-form-errors]')))dialog.showModal();
   });
  }
- document.addEventListener('DOMContentLoaded',()=>{setupCreationDialogs();enhanceSelects(document.body);});
+ document.addEventListener('DOMContentLoaded',()=>{
+  setupCreationDialogs();enhanceSelects(document.body);
+  // Select2 consumes native change handling differently across browsers.
+  // Bind filters to the enhanced selection and submit the correct GET form.
+  if(window.jQuery&&jQuery.fn.select2){
+   jQuery('select[data-auto-submit="1"]').off('change.kFilter').on('change.kFilter',function(){
+    const form=this.form;if(form&&form.method.toLowerCase()==='get')form.requestSubmit();
+   });
+  }else{
+   document.querySelectorAll('select[data-auto-submit="1"]').forEach(select=>select.addEventListener('change',()=>select.form?.requestSubmit()));
+  }
+ });
  // Enhance dynamic journal rows and selects added after initial page load.
  new MutationObserver(records=>{for(const record of records)for(const node of record.addedNodes)if(node.nodeType===1&&node.matches?.('.journal-line'))enhanceSelects(node);}).observe(document.documentElement,{childList:true,subtree:true});
 })();
