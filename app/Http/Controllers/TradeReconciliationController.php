@@ -9,6 +9,7 @@ use App\Models\TradeDocument;
 use App\Models\TradeParty;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\DB;
 
 class TradeReconciliationController extends Controller
 {
@@ -142,7 +143,8 @@ class TradeReconciliationController extends Controller
         $partyType = $data['type'] === 'receivable' ? 'customer' : 'supplier';
         abort_unless(TradeParty::whereKey($data['trade_party_id'])->where('type',$partyType)->exists(),422);
         $key = ['type'=>$data['type'],'trade_party_id'=>$data['trade_party_id'],'currency_id'=>$data['currency_id']];
-        $case = ReconciliationCase::firstOrNew($key);
+        return DB::transaction(function () use ($key, $data, $request) {
+        $case = ReconciliationCase::where($key)->lockForUpdate()->first() ?? new ReconciliationCase($key);
         $oldStatus = $case->exists ? $case->status : null;
         if ($data['status'] === 'resolved') $data['status'] = 'investigating';
         $data['updated_by'] = $request->user()->id;
@@ -153,10 +155,13 @@ class TradeReconciliationController extends Controller
         ReconciliationCaseEvent::create(['reconciliation_case_id'=>$case->id,'actor_id'=>$request->user()->id,
             'action'=>'updated','old_status'=>$oldStatus,'new_status'=>$case->status,'notes'=>$case->notes]);
         return redirect()->route('finance.reconciliation.index', ['type'=>$data['type'],'party_id'=>$data['trade_party_id'],'currency_id'=>$data['currency_id']])->with('success','Reconciliation case saved.');
+        });
     }
     public function approveCase(Request $request, ReconciliationCase $case)
     {
         abort_unless($request->user()->can('administration.update'),403);
+        return DB::transaction(function () use ($request, $case) {
+        $case = ReconciliationCase::whereKey($case->id)->lockForUpdate()->firstOrFail();
         abort_if((int)$case->updated_by === (int)$request->user()->id,403,'Independent approval required.');
         abort_unless($case->status === 'investigating',422);
         $review = $request->validate(['resolution_notes'=>['required','string','min:10','max:5000']]);
@@ -196,6 +201,7 @@ class TradeReconciliationController extends Controller
         ReconciliationCaseEvent::create(['reconciliation_case_id'=>$case->id,'actor_id'=>$request->user()->id,
             'action'=>'approved','old_status'=>'investigating','new_status'=>'resolved','notes'=>$review['resolution_notes']]);
         return redirect()->route('finance.reconciliation.index',['type'=>$case->type,'party_id'=>$case->trade_party_id,'currency_id'=>$case->currency_id]);
+        });
     }
 
 }
