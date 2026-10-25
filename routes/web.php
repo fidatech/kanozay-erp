@@ -30,6 +30,9 @@ Route::middleware('auth')->group(function () {
 });
 
 Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
+    Route::get('chart-of-accounts', [\App\Http\Controllers\Admin\LedgerAccountController::class,'index'])->name('accounts.index');
+    Route::post('chart-of-accounts', [\App\Http\Controllers\Admin\LedgerAccountController::class,'store'])->name('accounts.store');
+    Route::put('chart-of-accounts/{account}', [\App\Http\Controllers\Admin\LedgerAccountController::class,'update'])->name('accounts.update');
     Route::get('financial-settings', [\App\Http\Controllers\Admin\FinancialSettingController::class,'edit'])->name('financial-settings.edit');
     Route::put('financial-settings', [\App\Http\Controllers\Admin\FinancialSettingController::class,'update'])->name('financial-settings.update');
     Route::get('document-numbering', [\App\Http\Controllers\Admin\DocumentSequenceController::class,'index'])->name('sequences.index');
