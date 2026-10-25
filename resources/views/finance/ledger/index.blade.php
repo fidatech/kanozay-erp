@@ -70,12 +70,13 @@
 @media(max-width:850px){.gl-summary>.gl-currency-summary{align-items:stretch;flex-direction:column;gap:12px}.gl-currency-title{flex:auto}.gl-summary-metrics{width:100%}}
 @media(max-width:560px){.gl-summary{padding:12px!important}.gl-summary-metrics{grid-template-columns:1fr;gap:10px}.gl-summary-metrics>div{border-left:0;border-top:1px solid #e7eef6;padding:10px 0 0}.gl-table-heading{padding:16px 13px 12px}.gl-table-hint{display:none}}
 
-/* Finance summary: color the amount and arrow only, not the metric label. */
-.gl-summary-metrics strong .k-finance-amount{display:inline-flex;align-items:center;gap:6px;font-size:16px;font-weight:800;font-variant-numeric:tabular-nums}
-.gl-summary-metrics strong .k-finance-amount i{font-size:12px}
-.gl-summary-metrics strong .k-finance-amount--in{color:#16803d!important}
-.gl-summary-metrics strong .k-finance-amount--out{color:#dc2626!important}
-.gl-summary-metrics strong .k-finance-amount--neutral{color:#244b76!important}
+/* Apply the semantic color to the number span itself; shared finance styles can override a wrapper. */
+.gl-summary-metrics .k-finance-amount{display:inline-flex!important;align-items:center;gap:7px;font-size:16px!important;font-weight:800!important;font-variant-numeric:tabular-nums}
+.gl-summary-metrics .k-finance-amount i{font-size:12px!important;flex-shrink:0}
+.gl-summary-metrics .k-finance-amount--in,.gl-summary-metrics .k-finance-amount--in>span,.gl-summary-metrics .k-finance-amount--in>i{color:#15803d!important}
+.gl-summary-metrics .k-finance-amount--out,.gl-summary-metrics .k-finance-amount--out>span,.gl-summary-metrics .k-finance-amount--out>i{color:#dc2626!important}
+.gl-summary-metrics .k-finance-amount--neutral,.gl-summary-metrics .k-finance-amount--neutral>span{color:#244b76!important}
+.gl-summary-metrics .k-finance-amount>span{font:inherit!important;letter-spacing:-.2px}
 </style>
 <div class="heading"><div><h1><i class="fa-solid fa-list-ol" style="color:#2266ad"></i> General Ledger</h1><p>Posted accounting movements, opening balances and currency-specific running balances. Select an account for a meaningful account balance.</p></div></div>
 <section class="panel k-collapsible-filters"><details class="k-filter-toggle"><summary><span><i class="fa-solid fa-sliders"></i> Filter ledger entries</span><span class="k-filter-toggle-hint">Account, currency and dates <i class="fa-solid fa-chevron-down"></i></span></summary><form class="gl-filters" method="GET" action="{{ route('finance.ledger.index') }}"><label>Ledger Account<select name="account_id"><option value="">All accounts</option>@foreach($accounts as $a)<option value="{{ $a->id }}" @selected($account?->id===$a->id)>{{ $a->code }} — {{ $a->name }}</option>@endforeach</select></label><label>Currency<select name="currency_id"><option value="">All currencies (separate balances)</option>@foreach($currencies as $c)<option value="{{ $c->id }}" @selected($currency?->id===$c->id)>{{ $c->code }} — {{ $c->name }}</option>@endforeach</select></label><label>From<input type="date" name="from" value="{{ $filters['from']??'' }}"></label><label>To<input type="date" name="to" value="{{ $filters['to']??'' }}"></label><div class="k-filter-actions"><a class="btn btn-light" href="{{ route('finance.ledger.index') }}"><i class="fa-solid fa-arrow-rotate-left"></i> Reset</a><button class="btn" type="submit"><i class="fa-solid fa-filter"></i> Apply Filters</button></div></form></details></section>
