@@ -8,15 +8,18 @@
 <input type="hidden" name="trade_document_id" value="{{ $doc->id }}">
 <select name="money_transaction_id" required aria-label="Payment to allocate" style="min-width:145px;max-width:250px">
 <option value="">Select {{ $type==='receivable'?'receipt':'payment' }}</option>
+@php($eligibleCount=0)
 @foreach($settlementTransactions as $payment)
 @php($mapping=$settlementLedgerMap->get($doc->trade_party_id.':'.$doc->currency_id))
 @if($mapping && $payment->currency_id===$doc->currency_id && (int)$payment->counterpart_ledger_account_id===(int)$mapping->ledger_account_id)
+@php($eligibleCount++)
 <option value="{{ $payment->id }}">#{{ $payment->id }} · {{ rtrim(rtrim(number_format((float)$payment->amount-(float)($payment->allocations_sum_amount??0),4,'.',','),'0'),'.') }} available</option>
 @endif
 @endforeach
+@if($eligibleCount===0)<option value="" disabled>No eligible unapplied payment</option>@endif
 </select>
 <input type="number" name="amount" min="0.0001" step="0.0001" max="{{ $remaining }}" placeholder="Amount" aria-label="Amount to allocate" required style="width:100px">
-<button class="btn" type="submit">Allocate</button>
+<button class="btn" type="submit" @disabled($eligibleCount===0)>Allocate</button>
 </form>
 @endcan
 @endif
@@ -24,7 +27,7 @@
 @if($doc->allocations->isNotEmpty())
 <div class="settlement-history" style="margin-top:7px;font-size:11px;color:#60758f">
 @foreach($doc->allocations as $allocation)
-<div style="display:flex;gap:7px;align-items:center;justify-content:space-between;padding:4px 0;border-top:1px solid #edf1f6"><span>{{ $allocation->transaction?->journal?->number ?? '#'.$allocation->money_transaction_id }}</span><x-finance-amount :amount="$allocation->amount" direction="in" /></div>
+<div style="display:flex;gap:7px;align-items:center;justify-content:space-between;padding:4px 0;border-top:1px solid #edf1f6"><span>{{ $allocation->transaction?->journal?->number ?? '#'.$allocation->money_transaction_id }}</span><x-finance-amount :amount="$allocation->amount" :direction="$type==='receivable'?'in':'out'" /></div>
 @endforeach
 </div>
 @endif
