@@ -8,7 +8,7 @@
 @can('users.update')<button type="button" class="btn" data-modal-open="edit-user-{{ $user->id }}"><i class="fa-solid fa-pen"></i> Edit</button>@endcan
 @can('users.delete')<form class="inline delete-user-form" method="POST" action="{{ route('admin.users.destroy',$user) }}">@csrf @method('DELETE')<button type="submit" class="btn danger-btn"><i class="fa-solid fa-trash"></i> Delete</button></form>@endcan
 </td></tr>
-@empty<tr><td colspan="4" class="empty">No employee accounts yet.</td></tr>@endforelse
+@empty<tr><td colspan="4" class="empty"><div class="k-empty-state" role="status"><div class="k-empty-icon"><i class="fa-solid fa-users" aria-hidden="true"></i></div><strong>No employee accounts yet</strong><p>Create a user account to grant access to the ERP.</p></div></td></tr>@endforelse
 </tbody></table></div>{{ $users->onEachSide(1)->links('vendor.pagination.kanozay') }}</section>
 @can('users.create')
 <dialog class="k-modal" id="create-user" aria-labelledby="create-user-title"><form method="POST" action="{{ route('admin.users.store') }}" class="modal-form">@csrf

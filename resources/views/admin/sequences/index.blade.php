@@ -29,7 +29,7 @@
 @can('administration.update')<button type="button" class="sequence-edit" onclick="document.getElementById('sequence-{{ $sequence->id }}').showModal()"><i class="fa-solid fa-pen"></i> Edit</button>@endcan
 </td></tr>
 @empty
-<tr><td colspan="4" class="empty">No numbering series configured.</td></tr>
+<tr><td colspan="4" class="empty"><div class="k-empty-state" role="status"><div class="k-empty-icon"><i class="fa-solid fa-hashtag" aria-hidden="true"></i></div><strong>No numbering series yet</strong><p>Create a numbering series to issue sequential document references.</p></div></td></tr>
 @endforelse
 </tbody></table></div></section></div>
 @can('administration.update')

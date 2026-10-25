@@ -106,6 +106,13 @@
 .k-register-panel table{width:100%!important;min-width:100%;table-layout:auto}
 .k-register-panel>.k-pagination{margin-top:15px;padding-top:0}
 @media(max-width:950px){.k-register-panel{min-height:0!important}}
+/* Accessible, consistent empty table states with natural card height. */
+.k-empty-state{width:100%;min-height:205px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:9px;padding:28px 18px;color:#637b9b}
+.k-empty-state .k-empty-icon{display:grid;place-items:center;width:58px;height:58px;border:1px solid #d9e8f5;border-radius:17px;background:linear-gradient(145deg,#f0f8ff,#e8f3ff);color:#3278b9;font-size:23px;margin-bottom:3px}
+.k-empty-state strong{font-size:15px;letter-spacing:-.2px;color:#213f65;font-weight:800}
+.k-empty-state p{font-size:12px;line-height:1.7;max-width:390px;margin:0;color:#70839c;font-weight:400}
+.table-wrap td:has(>.k-empty-state){padding:0!important;text-align:center!important;border-bottom:0!important}
+@media(max-width:650px){.k-empty-state{min-height:165px;padding:22px 12px}.k-empty-state .k-empty-icon{width:48px;height:48px;font-size:19px}}
 /* Unified full-area table workspace, including Journal Entries. */
 .content:has(.k-register-panel){display:flex!important;flex-direction:column!important;align-items:stretch!important;min-width:0}
 /* Register cards grow only with content, not viewport height. */
