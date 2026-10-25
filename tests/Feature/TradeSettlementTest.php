@@ -46,8 +46,10 @@ class TradeSettlementTest extends TestCase {
   $case=\App\Models\ReconciliationCase::firstOrFail();
   $this->actingAs($user)->post(route('finance.reconciliation.cases.approve',$case))->assertForbidden();
   $reviewer=User::factory()->create();$reviewer->givePermissionTo('administration.update');
-  $this->actingAs($reviewer)->post(route('finance.reconciliation.cases.approve',$case))->assertRedirect();
+  $this->actingAs($reviewer)->post(route('finance.reconciliation.cases.approve',$case))->assertSessionHasErrors('resolution_notes');
+  $this->actingAs($reviewer)->post(route('finance.reconciliation.cases.approve',$case),['resolution_notes'=>'Reviewed posted journal and settlement source documents.'])->assertRedirect();
   $this->assertDatabaseHas('reconciliation_cases',['id'=>$case->id,'status'=>'resolved','approved_by'=>$reviewer->id]);
+  $this->assertDatabaseHas('reconciliation_case_events',['reconciliation_case_id'=>$case->id,'action'=>'approved','notes'=>'Reviewed posted journal and settlement source documents.']);
   $this->actingAs($user)->get(route('finance.reconciliation.index',['party_id'=>$doc->trade_party_id,'currency_id'=>$currency->id]))->assertOk()->assertSee('Investigation History');
   \App\Models\JournalLine::create(['journal_entry_id'=>$doc->journal_entry_id,'ledger_account_id'=>$payment->counterpart_ledger_account_id,'debit'=>'1','credit'=>0]);
   $this->actingAs($user)->get(route('finance.reconciliation.index'))->assertOk();

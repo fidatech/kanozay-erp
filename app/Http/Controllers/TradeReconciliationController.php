@@ -159,14 +159,17 @@ class TradeReconciliationController extends Controller
         abort_unless($request->user()->can('administration.update'),403);
         abort_if((int)$case->updated_by === (int)$request->user()->id,403,'Independent approval required.');
         abort_unless($case->status === 'investigating',422);
+        $review = $request->validate(['resolution_notes'=>['required','string','min:10','max:5000']]);
         $partyType = $case->type === 'receivable' ? 'customer' : 'supplier';
         abort_unless(TradeParty::whereKey($case->trade_party_id)->where('type',$partyType)->exists(),422);
         $documents = TradeDocument::where('type',$case->type)->where('trade_party_id',$case->trade_party_id)->where('currency_id',$case->currency_id)->withSum('allocations','amount')->get();
         $exposure = $documents->sum(fn($doc)=>max(0,(float)$doc->amount-(float)($doc->allocations_sum_amount??0)));
+        abort_if($documents->contains(fn($doc)=>(float)($doc->allocations_sum_amount??0) > (float)$doc->amount + 0.00001),422,'Excess document allocation must be corrected.');
         $ledgerId = \Illuminate\Support\Facades\DB::table('entity_ledger_accounts')->where('entity_type',$partyType)->where('entity_id',$case->trade_party_id)->where('currency_id',$case->currency_id)->where('purpose',$case->type)->value('ledger_account_id');
         abort_unless($ledgerId,422,'Missing ledger mapping.');
         $moneyType = $case->type === 'receivable' ? 'receipt' : 'payment';
         $payments = MoneyTransaction::where('type',$moneyType)->where('counterpart_ledger_account_id',$ledgerId)->where('currency_id',$case->currency_id)->withSum('allocations','amount')->get();
+        abort_if($payments->contains(fn($tx)=>(float)($tx->allocations_sum_amount??0) > (float)$tx->amount + 0.00001),422,'Excess payment allocation must be corrected.');
         $exposure -= $payments->sum(fn($tx)=>max(0,(float)$tx->amount-(float)($tx->allocations_sum_amount??0)));
         $ledger = \Illuminate\Support\Facades\DB::table('journal_lines as jl')->join('journal_entries as je','je.id','=','jl.journal_entry_id')
             ->where('jl.ledger_account_id',$ledgerId)->where('je.currency_id',$case->currency_id)->where('je.status','posted')
@@ -176,7 +179,7 @@ class TradeReconciliationController extends Controller
         $case->update(['status'=>'resolved','approved_by'=>$request->user()->id,'approved_at'=>now(),
             'resolved_at'=>now(),'approved_exposure'=>round($exposure,4),'approved_ledger'=>round($balance,4)]);
         ReconciliationCaseEvent::create(['reconciliation_case_id'=>$case->id,'actor_id'=>$request->user()->id,
-            'action'=>'approved','old_status'=>'investigating','new_status'=>'resolved']);
+            'action'=>'approved','old_status'=>'investigating','new_status'=>'resolved','notes'=>$review['resolution_notes']]);
         return redirect()->route('finance.reconciliation.index',['type'=>$case->type,'party_id'=>$case->trade_party_id,'currency_id'=>$case->currency_id]);
     }
 
