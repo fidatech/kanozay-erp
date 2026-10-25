@@ -88,6 +88,16 @@
 .k-create-dialog form button[type=submit]{min-height:43px;border:0;background:#115aa8;color:white;border-radius:8px;font-weight:700;cursor:pointer}
 .k-create-trigger{display:inline-flex;align-items:center;gap:9px;justify-content:center;min-height:39px;padding:9px 15px;border:0;border-radius:9px;background:#125eac;color:white;font-size:12px;font-weight:800;cursor:pointer}
 .k-create-trigger:hover{background:#0b487f}
+/* Creation forms live in dialogs; registers use the full available card width. */
+.coa-grid,.fx-grid,.rate-grid,.fa-layout,.money-layout{display:block!important;width:100%!important;min-width:0!important}
+.coa-grid>section.panel,.fx-grid>section.panel,.rate-grid>section.panel,.fa-layout>section.panel,.money-layout>section.panel{width:100%!important;max-width:none!important;min-width:0!important}
+.k-create-source{display:none!important}
+.k-register-header{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:16px;min-height:42px}
+.k-register-header h2{margin:0!important;padding:0!important;border:0!important}
+.k-register-header .k-create-trigger{margin-left:auto;white-space:nowrap}
+.k-register-panel>.table-wrap{width:100%;max-width:100%;overflow-x:auto}
+.k-register-panel table{width:100%}
+
 .k-create-dialog .select2-container{width:100%!important}
 </style></head><body>
 <header class="top"><a class="brand" href="{{ route('dashboard') }}"><span class="brand-icon"><i class="fa-solid fa-leaf"></i></span><span class="brand-name">KANOZAY<small>FOODS</small></span><span class="brand-divider"></span><span class="brand-sub">ERP System<small>Quality • Nutrition • Growth</small></span></a><div class="search"><i class="fa-solid fa-magnifying-glass"></i><input aria-label="Search" placeholder="Search for products, transactions, suppliers, employees, documents..." disabled><kbd>⌘ K</kbd></div><div class="tools"><details class="top-dropdown language-dropdown"><summary class="language-trigger" aria-label="Select language"><i class="fa-solid fa-globe"></i><span>{{ ['en'=>'EN','fa'=>'دری','ps'=>'پښتو'][session('locale','en')] ?? 'EN' }}</span><i class="fa-solid fa-chevron-down" style="font-size:10px"></i></summary><div class="dropdown-panel language-options"><b>Interface Language</b><form method="POST" action="{{ route('language.update') }}">@csrf<button type="submit" name="locale" value="en" @if(session('locale','en')==='en')class="selected"@endif>🇬🇧 English @if(session('locale','en')==='en')<i class="fa-solid fa-check"></i>@endif</button><button type="submit" name="locale" value="fa" @if(session('locale','en')==='fa')class="selected"@endif>🇦🇫 دری @if(session('locale','en')==='fa')<i class="fa-solid fa-check"></i>@endif</button><button type="submit" name="locale" value="ps" @if(session('locale','en')==='ps')class="selected"@endif>🇦🇫 پښتو @if(session('locale','en')==='ps')<i class="fa-solid fa-check"></i>@endif</button></form></div></details><details class="top-dropdown"><summary aria-label="Notifications" title="Notifications"><i class="fa-regular fa-bell"></i>@if(auth()->user()->unreadNotifications()->count())<span class="count">{{ auth()->user()->unreadNotifications()->count() > 99 ? '99+' : auth()->user()->unreadNotifications()->count() }}</span>@endif</summary><div class="dropdown-panel"><b>Notifications</b>@forelse(auth()->user()->unreadNotifications()->latest()->limit(4)->get() as $notice)<a href="{{ route('notifications.index') }}"><strong>{{ $notice->data['title'] ?? 'Notification' }}</strong><small style="display:block;color:#64799e;margin-top:4px">{{ $notice->data['message'] ?? '' }}</small></a>@empty<p class="muted">You're all caught up.</p>@endforelse<a href="{{ route('notifications.index') }}" style="color:#0868ef;font-weight:700;border-top:1px solid #e6edf7">View all notifications</a></div></details><details class="top-dropdown"><summary aria-label="Help" title="Help"><i class="fa-regular fa-circle-question"></i></summary><div class="dropdown-panel"><b>Help & Support</b><p class="muted">Support options will be available after setup.</p></div></details><details class="top-dropdown"><summary aria-label="Applications" title="Applications"><i class="fa-solid fa-border-all"></i></summary><div class="dropdown-panel"><b>Available modules</b><a href="{{ route('dashboard') }}">Dashboard</a>@can('administration.view')<a href="{{ route('admin.index') }}">Administration</a>@endcan @can('users.view')<a href="{{ route('admin.users.index') }}">User Management</a>@endcan @can('roles.view')<a href="{{ route('admin.roles.index') }}">Roles & Permissions</a>@endcan</div></details><details class="top-dropdown profile-menu"><summary class="profile"><span class="avatar">{{ strtoupper(substr(auth()->user()->name,0,1)) }}</span><span><b>{{ auth()->user()->name }}</b><small>{{ auth()->user()->roles->pluck('name')->first() ?? 'Employee' }}</small></span><i class="fa-solid fa-chevron-down" style="font-size:11px"></i></summary><div class="dropdown-panel"><b>My Account</b><a href="{{ route('profile.edit') }}">Profile & Security</a>@can('users.view')<a href="{{ route('admin.users.index') }}">Manage Users</a>@endcan<form action="{{ route('logout') }}" method="POST">@csrf<button class="logout" type="submit"><i class="fa-solid fa-right-from-bracket"></i> Sign out</button></form></div></details></div></header>
@@ -128,11 +138,20 @@
    const head=document.createElement('div');head.className='k-create-head';
    const label=document.createElement('h2');label.textContent=title;const close=document.createElement('button');close.type='button';close.setAttribute('aria-label','Close dialog');close.textContent='×';close.addEventListener('click',()=>dialog.close());head.append(label,close);
    const body=document.createElement('div');body.className='k-create-body';
-   // Move, never clone: preserve existing form validation, values and listeners.
+   const intro=[...panel.children].filter(child=>child.tagName==='P');intro.forEach(el=>body.append(el));
    body.append(form);dialog.append(head,body);document.body.append(dialog);
    const trigger=document.createElement('button');trigger.type='button';trigger.className='k-create-trigger';trigger.innerHTML='<i class="fa-solid fa-plus"></i> '+title;
    trigger.addEventListener('click',()=>{dialog.showModal();enhanceSelects(dialog);});
-   if(heading)heading.insertAdjacentElement('afterend',trigger);else panel.append(trigger);
+   // Place the action inside the full-width register card header, not the form card.
+   const container=panel.parentElement;
+   const register=[...container.children].find(el=>el!==panel&&el.matches?.('section.panel'));
+   if(register){
+    register.classList.add('k-register-panel');
+    let header=register.querySelector(':scope > .k-register-header');
+    if(!header){header=document.createElement('div');header.className='k-register-header';const registerTitle=register.querySelector(':scope > h2');if(registerTitle)header.append(registerTitle);register.prepend(header);}
+    header.append(trigger);
+    panel.classList.add('k-create-source');
+   }else if(heading){heading.insertAdjacentElement('afterend',trigger);}
    dialog.addEventListener('click',e=>{if(e.target===dialog)dialog.close();});
    if(index===0&&(document.querySelector('.error')||document.querySelector('[data-form-errors]')))dialog.showModal();
   });
