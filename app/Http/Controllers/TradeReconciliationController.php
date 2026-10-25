@@ -3,6 +3,7 @@ namespace App\Http\Controllers;
 
 use App\Models\MoneyTransaction;
 use App\Models\ReconciliationCase;
+use App\Models\ReconciliationCaseEvent;
 use App\Models\User;
 use App\Models\TradeDocument;
 use App\Models\TradeParty;
@@ -108,10 +109,24 @@ class TradeReconciliationController extends Controller
             }
         }
         $cases = ReconciliationCase::where('type', $type)->with('assignee')->get()->keyBy(fn ($case) => $case->trade_party_id . ':' . $case->currency_id);
+        foreach ($cases as $key => $case) {
+            if ($case->status !== 'resolved' || !$case->approved_at) continue;
+            $row = $rows[$key] ?? null;
+            $exposure = $row ? round($row['outstanding'] - $row['unapplied'], 4) : null;
+            $ledger = $row['ledger_balance'] ?? null;
+            if ($exposure !== null && $ledger !== null && $case->approved_exposure !== null && $case->approved_ledger !== null
+                && abs($exposure - (float) $case->approved_exposure) <= 0.0001
+                && abs($ledger - (float) $case->approved_ledger) <= 0.0001) continue;
+            $case->update(['status'=>'investigating','resolved_at'=>null,'approved_at'=>null,'approved_by'=>null]);
+            ReconciliationCaseEvent::create(['reconciliation_case_id'=>$case->id,'action'=>'auto_reopened','old_status'=>'resolved','new_status'=>'investigating','notes'=>'Balances changed or the posted ledger is unavailable.']);
+        }
+        $selectedCaseEvents = isset($filters['party_id'], $filters['currency_id'])
+            ? ($cases->get($filters['party_id'].':'.$filters['currency_id'])?->events()->with('actor')->limit(30)->get() ?? collect())
+            : collect();
         $partiesForCases = $parties->pluck('name', 'id');
         $assignees = User::orderBy('name')->get(['id','name']);
         $currencies = \App\Models\Currency::pluck('code', 'id');
-        return view('finance.documents.reconciliation', compact('type', 'rows', 'currencies', 'unmappedTransactions', 'selectedParty', 'documentBreakdown', 'paymentBreakdown', 'journalBreakdown', 'reconciliationSummary', 'filters', 'cases', 'assignees', 'partiesForCases'));
+        return view('finance.documents.reconciliation', compact('type', 'rows', 'currencies', 'unmappedTransactions', 'selectedParty', 'documentBreakdown', 'paymentBreakdown', 'journalBreakdown', 'reconciliationSummary', 'filters', 'cases', 'assignees', 'partiesForCases', 'selectedCaseEvents'));
     }
     public function saveCase(Request $request)
     {
@@ -126,12 +141,43 @@ class TradeReconciliationController extends Controller
         ]);
         $partyType = $data['type'] === 'receivable' ? 'customer' : 'supplier';
         abort_unless(TradeParty::whereKey($data['trade_party_id'])->where('type',$partyType)->exists(),422);
+        $key = ['type'=>$data['type'],'trade_party_id'=>$data['trade_party_id'],'currency_id'=>$data['currency_id']];
+        $case = ReconciliationCase::firstOrNew($key);
+        $oldStatus = $case->exists ? $case->status : null;
+        if ($data['status'] === 'resolved') $data['status'] = 'investigating';
         $data['updated_by'] = $request->user()->id;
-        $data['resolved_at'] = $data['status'] === 'resolved' ? now() : null;
-        ReconciliationCase::updateOrCreate(
-            ['type'=>$data['type'],'trade_party_id'=>$data['trade_party_id'],'currency_id'=>$data['currency_id']],$data
-        );
+        $data['resolved_at'] = null;
+        $data['approved_by'] = null;
+        $data['approved_at'] = null;
+        $case->fill($data)->save();
+        ReconciliationCaseEvent::create(['reconciliation_case_id'=>$case->id,'actor_id'=>$request->user()->id,
+            'action'=>'updated','old_status'=>$oldStatus,'new_status'=>$case->status,'notes'=>$case->notes]);
         return redirect()->route('finance.reconciliation.index', ['type'=>$data['type'],'party_id'=>$data['trade_party_id'],'currency_id'=>$data['currency_id']])->with('success','Reconciliation case saved.');
+    }
+    public function approveCase(Request $request, ReconciliationCase $case)
+    {
+        abort_unless($request->user()->can('administration.update'),403);
+        abort_if((int)$case->updated_by === (int)$request->user()->id,403,'Independent approval required.');
+        abort_unless($case->status === 'investigating',422);
+        $partyType = $case->type === 'receivable' ? 'customer' : 'supplier';
+        abort_unless(TradeParty::whereKey($case->trade_party_id)->where('type',$partyType)->exists(),422);
+        $documents = TradeDocument::where('type',$case->type)->where('trade_party_id',$case->trade_party_id)->where('currency_id',$case->currency_id)->withSum('allocations','amount')->get();
+        $exposure = $documents->sum(fn($doc)=>max(0,(float)$doc->amount-(float)($doc->allocations_sum_amount??0)));
+        $ledgerId = \Illuminate\Support\Facades\DB::table('entity_ledger_accounts')->where('entity_type',$partyType)->where('entity_id',$case->trade_party_id)->where('currency_id',$case->currency_id)->where('purpose',$case->type)->value('ledger_account_id');
+        abort_unless($ledgerId,422,'Missing ledger mapping.');
+        $moneyType = $case->type === 'receivable' ? 'receipt' : 'payment';
+        $payments = MoneyTransaction::where('type',$moneyType)->where('counterpart_ledger_account_id',$ledgerId)->where('currency_id',$case->currency_id)->withSum('allocations','amount')->get();
+        $exposure -= $payments->sum(fn($tx)=>max(0,(float)$tx->amount-(float)($tx->allocations_sum_amount??0)));
+        $ledger = \Illuminate\Support\Facades\DB::table('journal_lines as jl')->join('journal_entries as je','je.id','=','jl.journal_entry_id')
+            ->where('jl.ledger_account_id',$ledgerId)->where('je.currency_id',$case->currency_id)->where('je.status','posted')
+            ->selectRaw('SUM(jl.debit) as debits, SUM(jl.credit) as credits, COUNT(*) as lines')->first();
+        abort_unless($ledger && $ledger->lines,422,'No posted ledger lines.');
+        $balance = $case->type === 'receivable' ? (float)$ledger->debits-(float)$ledger->credits : (float)$ledger->credits-(float)$ledger->debits;
+        $case->update(['status'=>'resolved','approved_by'=>$request->user()->id,'approved_at'=>now(),
+            'resolved_at'=>now(),'approved_exposure'=>round($exposure,4),'approved_ledger'=>round($balance,4)]);
+        ReconciliationCaseEvent::create(['reconciliation_case_id'=>$case->id,'actor_id'=>$request->user()->id,
+            'action'=>'approved','old_status'=>'investigating','new_status'=>'resolved']);
+        return redirect()->route('finance.reconciliation.index',['type'=>$case->type,'party_id'=>$case->trade_party_id,'currency_id'=>$case->currency_id]);
     }
 
 }
