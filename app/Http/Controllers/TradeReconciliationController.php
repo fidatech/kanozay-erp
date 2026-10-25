@@ -12,7 +12,8 @@ class TradeReconciliationController extends Controller
     public function index(Request $request)
     {
         abort_unless($request->user()->can('administration.view'), 403);
-        $type = $request->validate(['type' => ['nullable', Rule::in(['receivable', 'payable'])]])['type'] ?? 'receivable';
+        $filters = $request->validate(['type' => ['nullable', Rule::in(['receivable', 'payable'])], 'party_id' => ['nullable', 'integer', 'min:1'], 'currency_id' => ['nullable', 'integer', 'min:1']]);
+        $type = $filters['type'] ?? 'receivable';
         $partyType = $type === 'receivable' ? 'customer' : 'supplier';
         $moneyType = $type === 'receivable' ? 'receipt' : 'payment';
         $parties = TradeParty::where('type', $partyType)->orderBy('name')->get();
@@ -70,7 +71,20 @@ class TradeReconciliationController extends Controller
                 : round($row['outstanding'] - $row['unapplied'] - $row['ledger_balance'], 4);
         }
         unset($row);
+        $selectedParty = null;
+        $documentBreakdown = collect();
+        $paymentBreakdown = collect();
+        if (isset($filters['party_id'], $filters['currency_id'])) {
+            $party = $parties->firstWhere('id', (int) $filters['party_id']);
+            $key = $filters['party_id'] . ':' . $filters['currency_id'];
+            if ($party && isset($rows[$key])) {
+                $selectedParty = $party;
+                $documentBreakdown = $documents->filter(fn ($doc) => (int) $doc->trade_party_id === (int) $party->id && (int) $doc->currency_id === (int) $filters['currency_id'])->values();
+                $mappedLedger = $rows[$key]['ledger_account_id'];
+                $paymentBreakdown = $transactions->filter(fn ($tx) => $mappedLedger && (int) $tx->counterpart_ledger_account_id === (int) $mappedLedger && (int) $tx->currency_id === (int) $filters['currency_id'])->values();
+            }
+        }
         $currencies = \App\Models\Currency::pluck('code', 'id');
-        return view('finance.documents.reconciliation', compact('type', 'rows', 'currencies', 'unmappedTransactions'));
+        return view('finance.documents.reconciliation', compact('type', 'rows', 'currencies', 'unmappedTransactions', 'selectedParty', 'documentBreakdown', 'paymentBreakdown', 'filters'));
     }
 }
