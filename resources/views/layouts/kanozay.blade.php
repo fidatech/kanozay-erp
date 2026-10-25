@@ -34,6 +34,11 @@
 .select2-container{width:100%!important;max-width:100%}
 .select2-container--default .select2-selection--single{height:var(--k-field-height)!important;min-height:var(--k-field-height);border:1px solid var(--k-field-border)!important;border-radius:var(--k-field-radius)!important;background:#fff;box-sizing:border-box;display:flex;align-items:center}
 .select2-container--default .select2-selection--single .select2-selection__rendered{padding-left:12px;padding-right:30px;line-height:normal!important;color:#253e64;font-size:12px}
+/* Select2 renders the selected value inside a span; override form-label and plugin defaults. */
+.select2-container--default .select2-selection--single .select2-selection__rendered{display:block!important;width:100%;margin:0!important;padding-top:0!important;padding-bottom:0!important;font-weight:400!important;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.coa-form .select2-container--default .select2-selection--single .select2-selection__rendered{font-size:12px!important;font-weight:400!important;color:#253e64!important}
+.coa-form label>.select2-container{display:block!important;min-width:0}
+.select2-container--default .select2-selection--single .select2-selection__placeholder{color:#8191a8;font-weight:400}
 .select2-container--default .select2-selection--single .select2-selection__arrow{height:calc(var(--k-field-height) - 2px)!important;top:0;right:7px}
 .select2-container--default.select2-container--focus .select2-selection--single,.select2-container--default.select2-container--open .select2-selection--single{border-color:#4389d6!important;box-shadow:0 0 0 3px #2780e71a;outline:0}
 .select2-container--default .select2-selection--multiple{min-height:var(--k-field-height);border:1px solid var(--k-field-border)!important;border-radius:var(--k-field-radius)!important;padding:4px 7px}
