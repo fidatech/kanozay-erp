@@ -179,6 +179,12 @@
 .k-empty-state p{font-size:12px;line-height:1.7;max-width:390px;margin:0;color:#70839c;font-weight:400}
 .table-wrap td:has(>.k-empty-state){padding:0!important;text-align:center!important;border-bottom:0!important}
 @media(max-width:650px){.k-empty-state{min-height:165px;padding:22px 12px}.k-empty-state .k-empty-icon{width:48px;height:48px;font-size:19px}}
+
+/* Receivables / payables: title and create action share one compact card header. */
+.content .k-register-panel>.k-register-header{display:flex!important;align-items:center!important;justify-content:space-between!important;flex-wrap:wrap!important;gap:12px!important;min-height:46px!important;margin:0 0 14px!important;padding:0 0 13px!important;border-bottom:1px solid #e7eef6!important}
+.content .k-register-panel>.k-register-header h2{margin:0!important;padding:0!important;line-height:1.4!important}
+.content .k-register-panel>.k-register-header .k-create-trigger{margin:0 0 0 auto!important;max-width:100%;white-space:normal;text-align:center;flex-shrink:0}
+@media(max-width:600px){.content .k-register-panel>.k-register-header{align-items:flex-start!important}.content .k-register-panel>.k-register-header .k-create-trigger{margin-left:0!important}}
 /* Unified full-area table workspace, including Journal Entries. */
 .content:has(.k-register-panel){display:flex!important;flex-direction:column!important;align-items:stretch!important;min-width:0}
 /* Pre-render layout: hide modal-only source cards before JS executes.
