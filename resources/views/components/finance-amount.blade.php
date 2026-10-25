@@ -2,7 +2,7 @@
 @php
     // Keep significant decimal digits, without adding .0000 to whole amounts.
     $precision = max(0, min(12, (int) $decimals));
-    $raw = trim((string) ($amount ?? '0'));
+    $raw = str_replace(',', '', trim((string) ($amount ?? '0')));
     $negative = str_starts_with($raw, '-');
     $numeric = ltrim($raw, '+-');
     $parts = explode('.', $numeric, 2);
