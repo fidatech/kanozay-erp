@@ -240,6 +240,29 @@
 /* Unified semantic finance amount display */
 .k-finance-amount{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;font-weight:750;font-variant-numeric:tabular-nums;color:#24456f}
 .k-finance-amount--in{color:#15803d}.k-finance-amount--out{color:#dc2626}.k-finance-amount i{font-size:11px}
+/* Consistent filter toolbar: inputs occupy a clean grid; actions live in a separate right-aligned footer. */
+.content .panel form.gl-filters,.content .panel form.report-filter-form{
+ display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;
+ align-items:end!important;column-gap:16px!important;row-gap:16px!important;width:100%;min-width:0
+}
+.content .panel form.gl-filters>label,.content .panel form.report-filter-form>label{
+ display:flex!important;flex-direction:column!important;gap:8px!important;min-width:0!important;
+ font-size:12px!important;font-weight:700!important;color:#3d5878!important;letter-spacing:.1px
+}
+.content .panel form.gl-filters>label select,.content .panel form.gl-filters>label input,
+.content .panel form.report-filter-form>label select,.content .panel form.report-filter-form>label input{
+ width:100%!important;min-width:0!important;min-height:44px!important;box-sizing:border-box!important
+}
+.content .panel form.gl-filters>button[type=submit],.content .panel form.report-filter-form>button[type=submit]{
+ grid-column:1/-1!important;justify-self:end!important;align-self:center!important;
+ display:inline-flex!important;align-items:center!important;justify-content:center!important;gap:8px!important;
+ min-width:152px!important;min-height:42px!important;margin:0!important;padding:0 22px!important
+}
+.content .panel form.gl-filters>button[type=submit]::before{content:"";display:none}
+.content .panel form.gl-filters>button[type=submit],.content .panel form.report-filter-form>button[type=submit]{box-shadow:0 5px 14px #1769b21a}
+.content .panel form.gl-filters>button[type=submit]:hover,.content .panel form.report-filter-form>button[type=submit]:hover{transform:translateY(-1px)}
+@media(max-width:1100px){.content .panel form.gl-filters,.content .panel form.report-filter-form{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+@media(max-width:650px){.content .panel form.gl-filters,.content .panel form.report-filter-form{grid-template-columns:1fr!important;gap:13px!important}.content .panel form.gl-filters>button[type=submit],.content .panel form.report-filter-form>button[type=submit]{width:100%!important;justify-self:stretch!important}}
 /* Report workspaces: polished, responsive, scoped to report pages. */
 .finance-workspace .report-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 17px}
 .finance-workspace .report-tabs a{display:inline-flex;align-items:center;gap:9px;padding:11px 17px;border-radius:11px;background:#fff;border:1px solid #dbe6f1;color:#46617f;font-weight:750;font-size:12px}
