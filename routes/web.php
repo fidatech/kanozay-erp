@@ -20,6 +20,7 @@ Route::post('/language', function (\Illuminate\Http\Request $request) {
 Route::middleware('auth')->group(function () {
     Route::get('/finance/documents', [\App\Http\Controllers\TradeDocumentController::class,'index'])->name('finance.documents.index');
     Route::post('/finance/documents', [\App\Http\Controllers\TradeDocumentController::class,'store'])->name('finance.documents.store');
+    Route::post('/finance/settlements', [\App\Http\Controllers\TradeSettlementController::class,'store'])->name('finance.settlements.store');
     Route::get('/finance/parties', [\App\Http\Controllers\TradePartyController::class,'index'])->name('finance.parties.index');
     Route::post('/finance/parties', [\App\Http\Controllers\TradePartyController::class,'store'])->name('finance.parties.store');
     Route::post('/finance/parties/{party}/opening-balance', [\App\Http\Controllers\TradePartyController::class,'openingBalance'])->name('finance.parties.opening.store');
