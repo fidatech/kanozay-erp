@@ -240,6 +240,9 @@
 /* Unified semantic finance amount display */
 .k-finance-amount{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;font-weight:750;font-variant-numeric:tabular-nums;color:#24456f}
 .k-finance-amount--in{color:#15803d}.k-finance-amount--out{color:#dc2626}.k-finance-amount i{font-size:11px}
+.content .panel .k-filter-actions{grid-column:1/-1!important;display:flex!important;justify-content:flex-end!important;gap:10px!important;padding-top:14px!important;border-top:1px solid #e6edf5}
+.content .panel .k-filter-actions>.btn{display:inline-flex!important;align-items:center!important;gap:8px!important;min-height:42px!important;padding:0 18px!important}
+@media(max-width:650px){.content .panel .k-filter-actions{flex-direction:column-reverse!important}.content .panel .k-filter-actions>.btn{width:100%!important;justify-content:center!important}}
 /* Consistent filter toolbar: inputs occupy a clean grid; actions live in a separate right-aligned footer. */
 .content .panel form.gl-filters,.content .panel form.report-filter-form{
  display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;
