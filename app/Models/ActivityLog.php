@@ -12,6 +12,11 @@ class ActivityLog extends Model
     public function actor(): BelongsTo { return $this->belongsTo(User::class, 'actor_id'); }
     public static function record(string $action, string $subjectType, ?int $subjectId, string $description, array $details = []): void
     {
-        self::create(['actor_id' => auth()->id(), 'action' => $action, 'subject_type' => $subjectType, 'subject_id' => $subjectId, 'description' => $description, 'details' => $details]);
+        $log = self::create(['actor_id' => auth()->id(), 'action' => $action, 'subject_type' => $subjectType, 'subject_id' => $subjectId, 'description' => $description, 'details' => $details]);
+        if (in_array($subjectType, ['user', 'role'], true)) {
+            User::role('Super Administrator')->where('id', '!=', auth()->id())->each(function (User $recipient) use ($description, $action) {
+                $recipient->notify(new \App\Notifications\AdministrativeChange('Administration update', $description.' ('.$action.')'));
+            });
+        }
     }
 }
