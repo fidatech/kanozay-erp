@@ -1,0 +1,29 @@
+<?php
+namespace App\Services\Accounting;
+use App\Models\ActivityLog;
+use App\Models\JournalEntry;
+use App\Models\LedgerAccount;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+class JournalPostingService {
+ public function post(JournalEntry $journal,int $userId):JournalEntry {
+  return DB::transaction(function()use($journal,$userId){
+   $entry=JournalEntry::whereKey($journal->id)->lockForUpdate()->firstOrFail();
+   if($entry->status!=='draft')throw ValidationException::withMessages(['status'=>'Only draft journals may be posted.']);
+   $lines=$entry->lines()->get();if($lines->count()<2)throw ValidationException::withMessages(['lines'=>'A journal needs at least two lines.']);
+   $debits=0;$credits=0;
+   foreach($lines as $line){$account=LedgerAccount::findOrFail($line->ledger_account_id);if($account->is_group||!$account->is_active)throw ValidationException::withMessages(['lines'=>'Posting requires active, non-group accounts.']);
+    $d=(int)round((float)$line->debit*10000);$c=(int)round((float)$line->credit*10000);if(($d>0&&$c>0)||($d===0&&$c===0)||$d<0||$c<0)throw ValidationException::withMessages(['lines'=>'Each line must contain exactly one positive debit or credit.']);$debits+=$d;$credits+=$c;
+   }
+   if($debits!==$credits)throw ValidationException::withMessages(['lines'=>'Total debits must equal total credits.']);
+   $entry->update(['status'=>'posted','posted_by'=>$userId,'posted_at'=>now()]);ActivityLog::record('journal.posted','journal_entry',$entry->id,'Journal '.$entry->number.' posted');return $entry;
+  });
+ }
+ public function reverse(JournalEntry $journal,int $userId):JournalEntry {
+  return DB::transaction(function()use($journal,$userId){$original=JournalEntry::whereKey($journal->id)->lockForUpdate()->firstOrFail();if($original->status!=='posted'||JournalEntry::where('reversal_of_id',$original->id)->exists())throw ValidationException::withMessages(['status'=>'Only an unreversed posted journal can be reversed.']);
+   $reverse=JournalEntry::create(['number'=>'REV-'.$original->number,'entry_date'=>now()->toDateString(),'reference'=>$original->number,'description'=>'Reversal: '.$original->description,'status'=>'draft','currency_id'=>$original->currency_id,'created_by'=>$userId,'reversal_of_id'=>$original->id]);
+   foreach($original->lines as $line)$reverse->lines()->create(['ledger_account_id'=>$line->ledger_account_id,'debit'=>$line->credit,'credit'=>$line->debit,'memo'=>$line->memo]);
+   $this->post($reverse,$userId);ActivityLog::record('journal.reversed','journal_entry',$original->id,'Journal '.$original->number.' reversed by '.$reverse->number);return $reverse->fresh();
+  });
+ }
+}

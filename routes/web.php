@@ -18,6 +18,10 @@ Route::post('/language', function (\Illuminate\Http\Request $request) {
 })->middleware('auth')->name('language.update');
 
 Route::middleware('auth')->group(function () {
+    Route::get('/finance/journals', [\App\Http\Controllers\JournalEntryController::class,'index'])->name('finance.journals.index');
+    Route::post('/finance/journals', [\App\Http\Controllers\JournalEntryController::class,'store'])->name('finance.journals.store');
+    Route::patch('/finance/journals/{journal}/post', [\App\Http\Controllers\JournalEntryController::class,'post'])->name('finance.journals.post');
+    Route::post('/finance/journals/{journal}/reverse', [\App\Http\Controllers\JournalEntryController::class,'reverse'])->name('finance.journals.reverse');
     Route::get('/approvals', [\App\Http\Controllers\ApprovalController::class, 'index'])->name('approvals.index');
     Route::post('/approvals', [\App\Http\Controllers\ApprovalController::class, 'store'])->name('approvals.store');
     Route::patch('/approvals/{approval}/decide', [\App\Http\Controllers\ApprovalController::class, 'decide'])->name('approvals.decide');
