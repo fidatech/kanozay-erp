@@ -61,9 +61,19 @@ class TradeSettlementTest extends TestCase {
   \App\Models\JournalLine::create(['journal_entry_id'=>$doc->journal_entry_id,'ledger_account_id'=>$payment->counterpart_ledger_account_id,'debit'=>'200','credit'=>0]);
   $this->actingAs($user)->post(route('finance.reconciliation.cases.save'),['type'=>'receivable','trade_party_id'=>$doc->trade_party_id,'currency_id'=>$currency->id,'status'=>'investigating','notes'=>'Checking mapping'])->assertRedirect();
   $reviewer=User::factory()->create();$reviewer->givePermissionTo('administration.update');
+  app(TradeSettlementService::class)->allocate($doc->id,$payment->id,'50',$user->id);
   $payment->update(['counterpart_ledger_account_id'=>null]);
   $this->actingAs($reviewer)->post(route('finance.reconciliation.cases.approve',\App\Models\ReconciliationCase::firstOrFail()),['resolution_notes'=>'All transactions checked carefully'])->assertStatus(422);
   $this->assertDatabaseHas('reconciliation_cases',['trade_party_id'=>$doc->trade_party_id,'status'=>'investigating']);
+ }
+ public function test_unallocated_unmapped_receipt_does_not_block_unrelated_party_approval():void {
+  [$user,$doc,$payment,$currency]=$this->fixtures();
+  \App\Models\JournalLine::create(['journal_entry_id'=>$doc->journal_entry_id,'ledger_account_id'=>$payment->counterpart_ledger_account_id,'debit'=>'200','credit'=>0]);
+  $this->actingAs($user)->post(route('finance.reconciliation.cases.save'),['type'=>'receivable','trade_party_id'=>$doc->trade_party_id,'currency_id'=>$currency->id,'status'=>'investigating','notes'=>'Reviewed'])->assertRedirect();
+  $payment->update(['counterpart_ledger_account_id'=>null]);
+  $reviewer=User::factory()->create();$reviewer->givePermissionTo('administration.update');
+  $this->actingAs($reviewer)->post(route('finance.reconciliation.cases.approve',\App\Models\ReconciliationCase::firstOrFail()),['resolution_notes'=>'Reviewed party ledger and documents'])->assertRedirect();
+  $this->assertDatabaseHas('reconciliation_cases',['trade_party_id'=>$doc->trade_party_id,'status'=>'resolved']);
  }
  public function test_reconciliation_flags_unmapped_payment_instead_of_hiding_it():void {[$user,$doc,$payment]=$this->fixtures();$payment->update(['counterpart_ledger_account_id'=>null]);$this->actingAs($user)->get(route('finance.reconciliation.index'))->assertOk()->assertSee('Unmapped Payment Exceptions')->assertSee('Missing party ledger mapping')->assertSee('Attention')->assertSee('#'.$payment->id);}
  public function test_rejects_mismatched_currency_and_unauthorized_access():void {[$user,$doc,$payment]=$this->fixtures();$other=Currency::create(['code'=>'USD','name'=>'Dollar','is_active'=>true]);$payment->update(['currency_id'=>$other->id]);$this->actingAs($user)->post(route('finance.settlements.store'),['trade_document_id'=>$doc->id,'money_transaction_id'=>$payment->id,'amount'=>'10'])->assertSessionHasErrors('money_transaction_id');$this->actingAs(User::factory()->create())->post(route('finance.settlements.store'),['trade_document_id'=>$doc->id,'money_transaction_id'=>$payment->id,'amount'=>'10'])->assertForbidden();$this->assertDatabaseCount('trade_settlement_allocations',0);}

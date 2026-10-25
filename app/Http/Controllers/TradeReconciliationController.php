@@ -168,17 +168,21 @@ class TradeReconciliationController extends Controller
         $ledgerId = \Illuminate\Support\Facades\DB::table('entity_ledger_accounts')->where('entity_type',$partyType)->where('entity_id',$case->trade_party_id)->where('currency_id',$case->currency_id)->where('purpose',$case->type)->value('ledger_account_id');
         abort_unless($ledgerId,422,'Missing ledger mapping.');
         $moneyType = $case->type === 'receivable' ? 'receipt' : 'payment';
-        // An unlinked payment cannot be attributed safely to a party. Block closure
-        // while unassigned receipts/payments exist in the same currency.
+        // Only transactions linked by allocation to this party can be attributed
+        // to this case. Unassigned receipts remain visible in the exception register.
         $unmapped = MoneyTransaction::where('type',$moneyType)
             ->where('currency_id',$case->currency_id)
-            ->where(function ($query) {
-                $query->whereNull('counterpart_ledger_account_id')
-                    ->orWhereNotIn('counterpart_ledger_account_id', function ($subquery) {
-                        $subquery->select('ledger_account_id')->from('entity_ledger_accounts');
-                    });
-            })->exists();
-        abort_if($unmapped,422,'Unmapped settlement transactions must be investigated before approval.');
+            ->whereHas('allocations.document', fn ($query) => $query
+                ->where('trade_party_id',$case->trade_party_id)
+                ->where('currency_id',$case->currency_id))
+            ->where('counterpart_ledger_account_id','!=',$ledgerId)->exists();
+        $missingMapping = MoneyTransaction::where('type',$moneyType)
+            ->where('currency_id',$case->currency_id)
+            ->whereHas('allocations.document', fn ($query) => $query
+                ->where('trade_party_id',$case->trade_party_id)
+                ->where('currency_id',$case->currency_id))
+            ->whereNull('counterpart_ledger_account_id')->exists();
+        abort_if($unmapped || $missingMapping,422,'Settlement allocated to this party has a missing or conflicting ledger mapping.');
         $payments = MoneyTransaction::where('type',$moneyType)->where('counterpart_ledger_account_id',$ledgerId)->where('currency_id',$case->currency_id)->withSum('allocations','amount')->get();
         abort_if($payments->contains(fn($tx)=>(float)($tx->allocations_sum_amount??0) > (float)$tx->amount + 0.00001),422,'Excess payment allocation must be corrected.');
         $exposure -= $payments->sum(fn($tx)=>max(0,(float)$tx->amount-(float)($tx->allocations_sum_amount??0)));
