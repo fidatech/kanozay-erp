@@ -75,6 +75,16 @@ class TradeSettlementTest extends TestCase {
   $this->actingAs($reviewer)->post(route('finance.reconciliation.cases.approve',\App\Models\ReconciliationCase::firstOrFail()),['resolution_notes'=>'Reviewed party ledger and documents'])->assertRedirect();
   $this->assertDatabaseHas('reconciliation_cases',['trade_party_id'=>$doc->trade_party_id,'status'=>'resolved']);
  }
+ public function test_reconciliation_audit_events_cannot_be_changed_through_eloquent():void {
+  [$user,$doc,$payment,$currency]=$this->fixtures();
+  $this->actingAs($user)->post(route('finance.reconciliation.cases.save'),['type'=>'receivable','trade_party_id'=>$doc->trade_party_id,'currency_id'=>$currency->id,'status'=>'investigating','notes'=>'Audit baseline'])->assertRedirect();
+  $event=\App\Models\ReconciliationCaseEvent::firstOrFail();
+  try {$event->update(['notes'=>'Altered']);$this->fail('Update should be rejected');}
+  catch (\LogicException $exception) {$this->assertStringContainsString('immutable',$exception->getMessage());}
+  try {$event->delete();$this->fail('Delete should be rejected');}
+  catch (\LogicException $exception) {$this->assertStringContainsString('cannot be deleted',$exception->getMessage());}
+  $this->assertDatabaseHas('reconciliation_case_events',['id'=>$event->id,'notes'=>'Audit baseline']);
+ }
  public function test_reconciliation_flags_unmapped_payment_instead_of_hiding_it():void {[$user,$doc,$payment]=$this->fixtures();$payment->update(['counterpart_ledger_account_id'=>null]);$this->actingAs($user)->get(route('finance.reconciliation.index'))->assertOk()->assertSee('Unmapped Payment Exceptions')->assertSee('Missing party ledger mapping')->assertSee('Attention')->assertSee('#'.$payment->id);}
  public function test_rejects_mismatched_currency_and_unauthorized_access():void {[$user,$doc,$payment]=$this->fixtures();$other=Currency::create(['code'=>'USD','name'=>'Dollar','is_active'=>true]);$payment->update(['currency_id'=>$other->id]);$this->actingAs($user)->post(route('finance.settlements.store'),['trade_document_id'=>$doc->id,'money_transaction_id'=>$payment->id,'amount'=>'10'])->assertSessionHasErrors('money_transaction_id');$this->actingAs(User::factory()->create())->post(route('finance.settlements.store'),['trade_document_id'=>$doc->id,'money_transaction_id'=>$payment->id,'amount'=>'10'])->assertForbidden();$this->assertDatabaseCount('trade_settlement_allocations',0);}
 }
