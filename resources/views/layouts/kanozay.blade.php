@@ -106,6 +106,17 @@
 .k-register-panel table{width:100%!important;min-width:100%;table-layout:auto}
 .k-register-panel>.k-pagination{margin-top:15px;padding-top:0}
 @media(max-width:950px){.k-register-panel{min-height:0!important}}
+/* All registers scroll with the page vertically; only wide tables scroll sideways. */
+.content .table-wrap,.finance-workspace .table-wrap,.k-register-panel>.table-wrap,
+.content:has(.k-register-panel) .k-register-panel>.table-wrap{
+ height:auto!important;max-height:none!important;min-height:0!important;
+ overflow-x:auto!important;overflow-y:clip!important;
+ scrollbar-width:thin;scrollbar-color:#bfd1e6 transparent;
+}
+.content .k-register-panel{overflow:visible!important;height:auto!important;max-height:none!important}
+.content .k-register-panel table{width:100%!important}
+/* Pagination remains outside the scroll container, never clipped at its bottom. */
+.content .k-register-panel .k-pagination{position:relative;clear:both;width:100%;margin-top:15px}
 /* Accessible, consistent empty table states with natural card height. */
 .k-empty-state{width:100%;min-height:205px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:9px;padding:28px 18px;color:#637b9b}
 .k-empty-state .k-empty-icon{display:grid;place-items:center;width:58px;height:58px;border:1px solid #d9e8f5;border-radius:17px;background:linear-gradient(145deg,#f0f8ff,#e8f3ff);color:#3278b9;font-size:23px;margin-bottom:3px}
