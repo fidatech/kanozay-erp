@@ -30,6 +30,11 @@ Route::middleware('auth')->group(function () {
 });
 
 Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
+    Route::get('financial-settings', [\App\Http\Controllers\Admin\FinancialSettingController::class,'edit'])->name('financial-settings.edit');
+    Route::put('financial-settings', [\App\Http\Controllers\Admin\FinancialSettingController::class,'update'])->name('financial-settings.update');
+    Route::get('document-numbering', [\App\Http\Controllers\Admin\DocumentSequenceController::class,'index'])->name('sequences.index');
+    Route::post('document-numbering', [\App\Http\Controllers\Admin\DocumentSequenceController::class,'store'])->name('sequences.store');
+    Route::put('document-numbering/{sequence}', [\App\Http\Controllers\Admin\DocumentSequenceController::class,'update'])->name('sequences.update');
     Route::get('currencies', [\App\Http\Controllers\Admin\CurrencyController::class,'index'])->name('currencies.index');
     Route::post('currencies', [\App\Http\Controllers\Admin\CurrencyController::class,'store'])->name('currencies.store');
     Route::put('currencies/{currency}', [\App\Http\Controllers\Admin\CurrencyController::class,'update'])->name('currencies.update');
