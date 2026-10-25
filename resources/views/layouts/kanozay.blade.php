@@ -105,6 +105,16 @@
 .k-modal .modal-body label{min-width:0}
 .k-modal .modal-body input:not([type=checkbox]),.k-modal .modal-body textarea{width:100%;min-height:44px}
 @media(max-width:650px){.k-create-dialog .k-create-head{padding:14px 16px}.k-create-dialog .k-create-body{padding:16px}.k-create-dialog{width:calc(100vw - 18px)!important}.k-modal{max-width:calc(100vw - 18px)!important}}
+/* Two-column data entry for long institutional forms; single-column on mobile. */
+@media(min-width:680px){
+ .k-create-dialog:has(form.fx-create-form){width:min(860px,calc(100vw - 36px))!important}
+ .k-create-dialog form.fx-create-form{grid-template-columns:repeat(2,minmax(0,1fr))!important;column-gap:18px!important;row-gap:15px!important}
+ .k-create-dialog form.fx-create-form>label,.k-create-dialog form.fx-create-form>#fx-external-fields{min-width:0}
+ .k-create-dialog form.fx-create-form>#fx-external-fields{grid-column:1/-1;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+ .k-create-dialog form.fx-create-form>label:has(textarea),.k-create-dialog form.fx-create-form>.fx-filter-note,.k-create-dialog form.fx-create-form>button[type=submit]{grid-column:1/-1}
+ .k-create-dialog form.fx-create-form>button[type=submit]{width:auto;justify-self:end;min-width:215px}
+}
+@media(max-width:679px){.k-create-dialog form.fx-create-form{grid-template-columns:minmax(0,1fr)!important}.k-create-dialog form.fx-create-form>#fx-external-fields{grid-template-columns:minmax(0,1fr)}}
 /* Consistent accessible creation dialogs across ERP pages. */
 .k-create-dialog{border:1px solid #dbe6f2;border-radius:14px;padding:0;width:min(650px,calc(100vw - 28px));max-height:92vh;box-shadow:0 24px 80px #102b5044;color:#203b61}
 .k-create-dialog::backdrop{background:#0d224d9c}
