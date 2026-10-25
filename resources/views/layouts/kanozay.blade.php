@@ -115,6 +115,21 @@
  .k-create-dialog form.fx-create-form>button[type=submit]{width:auto;justify-self:end;min-width:215px}
 }
 @media(max-width:679px){.k-create-dialog form.fx-create-form{grid-template-columns:minmax(0,1fr)!important}.k-create-dialog form.fx-create-form>#fx-external-fields{grid-template-columns:minmax(0,1fr)}}
+/* Responsive paired fields across long create forms and existing edit dialogs. */
+@media(min-width:680px){
+ .k-create-dialog:has(form[data-new-entry-form]){width:min(820px,calc(100vw - 36px))!important}
+ .k-create-dialog form[data-new-entry-form]:not(.journal-form){grid-template-columns:repeat(2,minmax(0,1fr))!important;column-gap:18px!important;row-gap:15px!important}
+ .k-create-dialog form[data-new-entry-form]:not(.journal-form)>label{min-width:0}
+ .k-create-dialog form[data-new-entry-form]:not(.journal-form)>label:has(textarea),
+ .k-create-dialog form[data-new-entry-form]:not(.journal-form)>p,
+ .k-create-dialog form[data-new-entry-form]:not(.journal-form)>button[type=submit],
+ .k-create-dialog form[data-new-entry-form]:not(.journal-form)>[class*=wide]{grid-column:1/-1}
+ .k-create-dialog form[data-new-entry-form]:not(.journal-form)>button[type=submit]{width:auto;justify-self:end;min-width:200px}
+ .k-modal:not(.permission-dialog){width:min(780px,calc(100vw - 36px))!important}
+ .k-modal:not(.permission-dialog) .modal-body:has(>label){display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px 18px}
+ .k-modal:not(.permission-dialog) .modal-body>label:has(textarea),.k-modal:not(.permission-dialog) .modal-body>[class*=wide]{grid-column:1/-1}
+}
+@media(max-width:679px){.k-create-dialog form[data-new-entry-form]:not(.journal-form){grid-template-columns:minmax(0,1fr)!important}.k-modal .modal-body{grid-template-columns:minmax(0,1fr)!important}}
 /* Consistent accessible creation dialogs across ERP pages. */
 .k-create-dialog{border:1px solid #dbe6f2;border-radius:14px;padding:0;width:min(650px,calc(100vw - 28px));max-height:92vh;box-shadow:0 24px 80px #102b5044;color:#203b61}
 .k-create-dialog::backdrop{background:#0d224d9c}
