@@ -30,6 +30,12 @@ Route::middleware('auth')->group(function () {
 });
 
 Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
+    Route::get('currencies', [\App\Http\Controllers\Admin\CurrencyController::class,'index'])->name('currencies.index');
+    Route::post('currencies', [\App\Http\Controllers\Admin\CurrencyController::class,'store'])->name('currencies.store');
+    Route::put('currencies/{currency}', [\App\Http\Controllers\Admin\CurrencyController::class,'update'])->name('currencies.update');
+    Route::patch('currencies/{currency}/base', [\App\Http\Controllers\Admin\CurrencyController::class,'base'])->name('currencies.base');
+    Route::get('exchange-rates', [\App\Http\Controllers\Admin\ExchangeRateController::class,'index'])->name('exchange-rates.index');
+    Route::post('exchange-rates', [\App\Http\Controllers\Admin\ExchangeRateController::class,'store'])->name('exchange-rates.store');
     Route::get('company', [\App\Http\Controllers\Admin\CompanySettingController::class, 'edit'])->name('company.edit');
     Route::put('company', [\App\Http\Controllers\Admin\CompanySettingController::class, 'update'])->name('company.update');
     Route::get('/', function () { abort_unless(auth()->user()->can('administration.view') || auth()->user()->can('users.view') || auth()->user()->can('roles.view'), 403); return view('admin.index'); })->name('index');
