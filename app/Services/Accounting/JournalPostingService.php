@@ -8,6 +8,21 @@ use Illuminate\Validation\ValidationException;
 class JournalPostingService {
  public function post(JournalEntry $journal,int $userId):JournalEntry {
   return DB::transaction(function()use($journal,$userId){
+   // Serialize postings affecting mapped party ledgers with reconciliation approvals.
+   $currencyId=JournalEntry::whereKey($journal->id)->value('currency_id');
+   $accountIds=DB::table('journal_lines')->where('journal_entry_id',$journal->id)
+    ->pluck('ledger_account_id')->unique()->values()->all();
+   if ($accountIds) {
+    $mapped=DB::table('entity_ledger_accounts')->where('currency_id',$currencyId)
+     ->whereIn('ledger_account_id',$accountIds)
+     ->whereIn('purpose',['receivable','payable'])
+     ->whereIn('entity_type',['customer','supplier'])->get();
+    foreach ($mapped->sortBy(fn ($item) => $item->purpose.':'.$item->entity_id) as $mapping) {
+     DB::table('reconciliation_cases')->where('type',$mapping->purpose)
+      ->where('trade_party_id',$mapping->entity_id)
+      ->where('currency_id',$currencyId)->lockForUpdate()->first();
+    }
+   }
    $entry=JournalEntry::whereKey($journal->id)->lockForUpdate()->firstOrFail();
    if($entry->status!=='draft')throw ValidationException::withMessages(['status'=>'Only draft journals may be posted.']);
    $lines=$entry->lines()->get();if($lines->count()<2)throw ValidationException::withMessages(['lines'=>'A journal needs at least two lines.']);
