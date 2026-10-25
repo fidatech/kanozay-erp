@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\ActivityLog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -32,6 +33,7 @@ class RoleController extends Controller
         if ($data['name'] === 'Super Administrator') abort(403);
         $role = Role::create(['name' => $data['name'], 'guard_name' => 'web']);
         $role->syncPermissions($data['permissions'] ?? []);
+        ActivityLog::record('role.'.(request()->isMethod('post') ? 'created' : 'updated'), 'role', $role->id, 'Saved access role', ['name' => $role->name, 'permissions' => $data['permissions'] ?? []]);
         return back()->with('status', 'Role created successfully.');
     }
 
@@ -47,6 +49,7 @@ class RoleController extends Controller
         if ($data['name'] === 'Super Administrator') abort(403);
         $role->update(['name' => $data['name']]);
         $role->syncPermissions($data['permissions'] ?? []);
+        ActivityLog::record('role.'.(request()->isMethod('post') ? 'created' : 'updated'), 'role', $role->id, 'Saved access role', ['name' => $role->name, 'permissions' => $data['permissions'] ?? []]);
         return back()->with('status', 'Role updated successfully.');
     }
 
@@ -56,6 +59,7 @@ class RoleController extends Controller
         if ($role->name === 'Super Administrator' || $role->users()->exists()) {
             return back()->withErrors(['role' => 'Protected or assigned roles cannot be deleted.']);
         }
+        ActivityLog::record('role.deleted', 'role', $role->id, 'Deleted access role', ['name' => $role->name]);
         $role->delete();
         return back()->with('status', 'Role deleted successfully.');
     }

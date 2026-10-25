@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Models\ActivityLog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -38,6 +39,7 @@ class UserController extends Controller
             'password' => Hash::make($data['password']),
         ]);
         $user->assignRole($role);
+        ActivityLog::record('user.created', 'user', $user->id, 'Created employee account', ['email' => $user->email, 'role' => $role]);
         return back()->with('status', 'User created successfully.');
     }
 
@@ -58,6 +60,7 @@ class UserController extends Controller
         $user->update(['name' => $data['name'], 'email' => $data['email']]);
         if (!empty($data['password'])) $user->update(['password' => Hash::make($data['password'])]);
         $user->syncRoles([$data['role']]);
+        ActivityLog::record('user.updated', 'user', $user->id, 'Updated employee account', ['email' => $user->email, 'role' => $data['role']]);
         return back()->with('status', 'User updated successfully.');
     }
 
@@ -67,6 +70,7 @@ class UserController extends Controller
         if ($user->is($request->user()) || $user->hasRole('Super Administrator')) {
             return back()->withErrors(['user' => 'This account cannot be deleted.']);
         }
+        ActivityLog::record('user.deleted', 'user', $user->id, 'Deleted employee account', ['email' => $user->email]);
         $user->delete();
         return back()->with('status', 'User deleted successfully.');
     }
