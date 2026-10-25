@@ -9,7 +9,7 @@
 @can('users.delete')<form class="inline delete-user-form" method="POST" action="{{ route('admin.users.destroy',$user) }}">@csrf @method('DELETE')<button type="submit" class="btn danger-btn"><i class="fa-solid fa-trash"></i> Delete</button></form>@endcan
 </td></tr>
 @empty<tr><td colspan="4" class="empty">No employee accounts yet.</td></tr>@endforelse
-</tbody></table></div>{{ $users->links() }}</section>
+</tbody></table></div>{{ $users->onEachSide(1)->links('vendor.pagination.kanozay') }}</section>
 @can('users.create')
 <dialog class="k-modal" id="create-user" aria-labelledby="create-user-title"><form method="POST" action="{{ route('admin.users.store') }}" class="modal-form">@csrf
 <div class="modal-head"><h2 id="create-user-title">Add Employee</h2><button type="button" class="modal-close" data-modal-close aria-label="Close">×</button></div>
