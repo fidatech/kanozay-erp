@@ -243,6 +243,22 @@
 .content .panel .k-filter-actions{grid-column:1/-1!important;display:flex!important;justify-content:flex-end!important;gap:10px!important;padding-top:14px!important;border-top:1px solid #e6edf5}
 .content .panel .k-filter-actions>.btn{display:inline-flex!important;align-items:center!important;gap:8px!important;min-height:42px!important;padding:0 18px!important}
 @media(max-width:650px){.content .panel .k-filter-actions{flex-direction:column-reverse!important}.content .panel .k-filter-actions>.btn{width:100%!important;justify-content:center!important}}
+
+/* Compact expandable filter toolbar */
+.finance-workspace .k-collapsible-filters{padding:0!important;overflow:visible;margin-bottom:14px}
+.finance-workspace .k-filter-toggle>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 18px;cursor:pointer;list-style:none;font-weight:750;color:#24466d;font-size:13px}
+.finance-workspace .k-filter-toggle>summary::-webkit-details-marker{display:none}
+.finance-workspace .k-filter-toggle>summary>span{display:inline-flex;align-items:center;gap:9px}
+.finance-workspace .k-filter-toggle>summary i.fa-sliders{color:#2876bd}
+.finance-workspace .k-filter-toggle-hint{color:#778da5;font-size:11px;font-weight:600}
+.finance-workspace .k-filter-toggle[open]>summary{border-bottom:1px solid #e6edf5;background:#f7faff;border-radius:12px 12px 0 0}
+.finance-workspace .k-filter-toggle[open] .k-filter-toggle-hint i{transform:rotate(180deg)}
+.finance-workspace .k-filter-toggle>form,.finance-workspace .k-filter-toggle>.report-section-head{margin:14px 18px}
+.finance-workspace .k-filter-toggle>.report-section-head{margin-bottom:10px}
+.finance-workspace .k-filter-toggle>.report-section-head h2{font-size:13px}
+.finance-workspace .k-filter-toggle>.report-filter-form{padding-bottom:16px}
+.finance-workspace .k-filter-toggle .k-filter-actions{padding-top:10px!important}
+@media(max-width:650px){.finance-workspace .k-filter-toggle>summary{padding:12px 14px}.finance-workspace .k-filter-toggle>form,.finance-workspace .k-filter-toggle>.report-section-head{margin:12px 14px}.finance-workspace .k-filter-toggle-hint{font-size:10px}}
 /* Consistent filter toolbar: inputs occupy a clean grid; actions live in a separate right-aligned footer. */
 .content .panel form.gl-filters,.content .panel form.report-filter-form{
  display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;
