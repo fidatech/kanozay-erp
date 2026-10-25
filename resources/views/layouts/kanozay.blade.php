@@ -106,6 +106,16 @@
 .k-register-panel table{width:100%!important;min-width:100%;table-layout:auto}
 .k-register-panel>.k-pagination{margin-top:auto;padding-top:15px}
 @media(max-width:950px){.k-register-panel{min-height:calc(100vh - 170px)}}
+/* Unified full-area table workspace, including Journal Entries. */
+.content:has(.k-register-panel){display:flex!important;flex-direction:column!important;align-items:stretch!important;min-width:0}
+.content:has(.k-register-panel)>div.journal-layout{flex:1 1 auto;display:block!important;grid-template-columns:none!important;width:100%!important;max-width:none!important;min-width:0!important}
+.journal-layout:has(.k-register-panel){display:block!important;grid-template-columns:none!important;width:100%!important;max-width:none!important;min-width:0!important}
+.content:has(.k-register-panel) .k-register-panel{box-sizing:border-box;display:flex!important;flex-direction:column!important;width:100%!important;max-width:none!important;min-width:0!important;min-height:calc(100vh - 190px)!important}
+.content:has(.k-register-panel) .k-register-panel>.table-wrap{width:100%!important;flex:1 1 auto!important;min-width:0!important;overflow-x:auto!important}
+.content:has(.k-register-panel) .k-register-panel>.table-wrap>table{width:100%!important;min-width:100%!important}
+.content:has(.k-register-panel) .k-register-panel>.table-wrap>table tbody tr:only-child td.empty{text-align:center;padding:42px 16px}
+@media(max-width:650px){.content:has(.k-register-panel) .k-register-panel{min-height:calc(100vh - 160px)!important}}
+
 
 
 .k-create-dialog .select2-container{width:100%!important}
