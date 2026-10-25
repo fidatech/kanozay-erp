@@ -97,6 +97,16 @@
 .k-register-header .k-create-trigger{margin-left:auto;white-space:nowrap}
 .k-register-panel>.table-wrap{width:100%;max-width:100%;overflow-x:auto}
 .k-register-panel table{width:100%}
+/* Full-width register workspace: remove the former create-form column completely. */
+.content:has(.k-register-panel){width:auto;max-width:none;min-width:0;display:flex;flex-direction:column}
+.content:has(.k-register-panel)>div.coa-grid,.content:has(.k-register-panel)>div.fx-grid,.content:has(.k-register-panel)>div.rate-grid,.content:has(.k-register-panel)>div.fa-layout,.content:has(.k-register-panel)>div.money-layout{flex:1 1 auto;width:100%!important;max-width:none!important;min-width:0;display:block!important}
+.coa-grid:has(.k-register-panel),.fx-grid:has(.k-register-panel),.rate-grid:has(.k-register-panel),.fa-layout:has(.k-register-panel),.money-layout:has(.k-register-panel){display:block!important;grid-template-columns:none!important;width:100%!important;max-width:none!important}
+.k-register-panel{display:flex;flex-direction:column;width:100%!important;max-width:none!important;min-width:0;min-height:calc(100vh - 190px);margin:0!important}
+.k-register-panel>.table-wrap{flex:1 1 auto;width:100%!important;max-width:100%!important;min-width:0;overflow-x:auto}
+.k-register-panel table{width:100%!important;min-width:100%;table-layout:auto}
+.k-register-panel>.k-pagination{margin-top:auto;padding-top:15px}
+@media(max-width:950px){.k-register-panel{min-height:calc(100vh - 170px)}}
+
 
 .k-create-dialog .select2-container{width:100%!important}
 </style></head><body>
