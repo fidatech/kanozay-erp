@@ -2,6 +2,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\MoneyTransaction;
+use App\Models\ReconciliationCase;
+use App\Models\User;
 use App\Models\TradeDocument;
 use App\Models\TradeParty;
 use Illuminate\Http\Request;
@@ -105,7 +107,31 @@ class TradeReconciliationController extends Controller
                 }
             }
         }
+        $cases = ReconciliationCase::where('type', $type)->with('assignee')->get()->keyBy(fn ($case) => $case->trade_party_id . ':' . $case->currency_id);
+        $partiesForCases = $parties->pluck('name', 'id');
+        $assignees = User::orderBy('name')->get(['id','name']);
         $currencies = \App\Models\Currency::pluck('code', 'id');
-        return view('finance.documents.reconciliation', compact('type', 'rows', 'currencies', 'unmappedTransactions', 'selectedParty', 'documentBreakdown', 'paymentBreakdown', 'journalBreakdown', 'reconciliationSummary', 'filters'));
+        return view('finance.documents.reconciliation', compact('type', 'rows', 'currencies', 'unmappedTransactions', 'selectedParty', 'documentBreakdown', 'paymentBreakdown', 'journalBreakdown', 'reconciliationSummary', 'filters', 'cases', 'assignees', 'partiesForCases'));
     }
+    public function saveCase(Request $request)
+    {
+        abort_unless($request->user()->can('administration.update'), 403);
+        $data = $request->validate([
+            'type'=>['required',Rule::in(['receivable','payable'])],
+            'trade_party_id'=>['required','integer','exists:trade_parties,id'],
+            'currency_id'=>['required','integer','exists:currencies,id'],
+            'status'=>['required',Rule::in(['open','investigating','resolved'])],
+            'assigned_to'=>['nullable','integer','exists:users,id'],
+            'notes'=>['nullable','string','max:5000'],
+        ]);
+        $partyType = $data['type'] === 'receivable' ? 'customer' : 'supplier';
+        abort_unless(TradeParty::whereKey($data['trade_party_id'])->where('type',$partyType)->exists(),422);
+        $data['updated_by'] = $request->user()->id;
+        $data['resolved_at'] = $data['status'] === 'resolved' ? now() : null;
+        ReconciliationCase::updateOrCreate(
+            ['type'=>$data['type'],'trade_party_id'=>$data['trade_party_id'],'currency_id'=>$data['currency_id']],$data
+        );
+        return redirect()->route('finance.reconciliation.index', ['type'=>$data['type'],'party_id'=>$data['trade_party_id'],'currency_id'=>$data['currency_id']])->with('success','Reconciliation case saved.');
+    }
+
 }

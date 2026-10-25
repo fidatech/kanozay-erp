@@ -21,6 +21,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/finance/documents', [\App\Http\Controllers\TradeDocumentController::class,'index'])->name('finance.documents.index');
     Route::get('/finance/aging', [\App\Http\Controllers\TradeAgingController::class,'index'])->name('finance.aging.index');
     Route::get('/finance/reconciliation', [\App\Http\Controllers\TradeReconciliationController::class,'index'])->name('finance.reconciliation.index');
+    Route::post('/finance/reconciliation/cases', [\App\Http\Controllers\TradeReconciliationController::class,'saveCase'])->name('finance.reconciliation.cases.save');
     Route::post('/finance/documents', [\App\Http\Controllers\TradeDocumentController::class,'store'])->name('finance.documents.store');
     Route::post('/finance/settlements', [\App\Http\Controllers\TradeSettlementController::class,'store'])->name('finance.settlements.store');
     Route::get('/finance/parties', [\App\Http\Controllers\TradePartyController::class,'index'])->name('finance.parties.index');
