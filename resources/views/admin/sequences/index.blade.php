@@ -45,7 +45,7 @@
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-<style>.select2-container{width:100%!important}.select2-container .select2-selection--single{height:43px;border:1px solid #d7e3f1;border-radius:7px}.select2-container .select2-selection--single .select2-selection__rendered{line-height:41px;padding-left:12px}.select2-container .select2-selection--single .select2-selection__arrow{height:41px}</style>
+
 <script>
 document.addEventListener('DOMContentLoaded',function(){const prefixes=@json($prefixes),type=document.getElementById('document-type'),prefix=document.getElementById('generated-prefix');function sync(){prefix.value=prefixes[type.value]||'';}type.addEventListener('change',sync);sync();if(window.jQuery&&jQuery.fn.select2){jQuery('.enhanced-select').each(function(){const dialog=this.closest('dialog');jQuery(this).select2({width:'100%',dropdownParent:dialog?jQuery(dialog):jQuery(document.body)});});jQuery(type).on('change',sync);}});
 </script>
