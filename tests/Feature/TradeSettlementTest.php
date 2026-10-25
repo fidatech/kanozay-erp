@@ -92,6 +92,17 @@ class TradeSettlementTest extends TestCase {
   \Illuminate\Support\Facades\DB::table('reconciliation_case_events')->update(['notes'=>'Tampered']);
   $this->artisan('reconciliation:verify-audit')->assertExitCode(1);
  }
+ public function test_audit_anchor_detects_deleted_final_event():void {
+  [$user,$doc,$payment,$currency]=$this->fixtures();
+  $this->actingAs($user)->post(route('finance.reconciliation.cases.save'),['type'=>'receivable','trade_party_id'=>$doc->trade_party_id,'currency_id'=>$currency->id,'status'=>'investigating','notes'=>'Anchor baseline'])->assertRedirect();
+  $path=sys_get_temp_dir().'/kanozay-audit-'.uniqid().'.json';
+  try {
+   $this->artisan('reconciliation:export-audit-anchor',['path'=>$path])->assertExitCode(0);
+   $this->artisan('reconciliation:verify-audit',['--anchor'=>$path])->assertExitCode(0);
+   \Illuminate\Support\Facades\DB::table('reconciliation_case_events')->delete();
+   $this->artisan('reconciliation:verify-audit',['--anchor'=>$path])->assertExitCode(1);
+  } finally {if(file_exists($path))unlink($path);}
+ }
  public function test_reconciliation_flags_unmapped_payment_instead_of_hiding_it():void {[$user,$doc,$payment]=$this->fixtures();$payment->update(['counterpart_ledger_account_id'=>null]);$this->actingAs($user)->get(route('finance.reconciliation.index'))->assertOk()->assertSee('Unmapped Payment Exceptions')->assertSee('Missing party ledger mapping')->assertSee('Attention')->assertSee('#'.$payment->id);}
  public function test_rejects_mismatched_currency_and_unauthorized_access():void {[$user,$doc,$payment]=$this->fixtures();$other=Currency::create(['code'=>'USD','name'=>'Dollar','is_active'=>true]);$payment->update(['currency_id'=>$other->id]);$this->actingAs($user)->post(route('finance.settlements.store'),['trade_document_id'=>$doc->id,'money_transaction_id'=>$payment->id,'amount'=>'10'])->assertSessionHasErrors('money_transaction_id');$this->actingAs(User::factory()->create())->post(route('finance.settlements.store'),['trade_document_id'=>$doc->id,'money_transaction_id'=>$payment->id,'amount'=>'10'])->assertForbidden();$this->assertDatabaseCount('trade_settlement_allocations',0);}
 }
