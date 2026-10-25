@@ -51,6 +51,13 @@
 @php($currentCase=$cases->get($selectedParty->id.':'.$filters['currency_id']))
 @if(auth()->user()->can('administration.update'))
 <form method="POST" action="{{ route('finance.reconciliation.cases.save') }}">@csrf<input type="hidden" name="type" value="{{ $type }}"><input type="hidden" name="trade_party_id" value="{{ $selectedParty->id }}"><input type="hidden" name="currency_id" value="{{ $filters['currency_id'] }}"><div class="reconciliation-case-fields"><label>Status<select name="status"><option value="open" @selected(old('status',$currentCase?->status)==='open')>Open</option><option value="investigating" @selected(old('status',$currentCase?->status)==='investigating')>Investigating</option><option value="resolved" disabled>Resolved (reviewer approval required)</option></select></label><label>Assigned to<select name="assigned_to"><option value="">Unassigned</option>@foreach($assignees as $assignee)<option value="{{ $assignee->id }}" @selected((string)old('assigned_to',$currentCase?->assigned_to)===(string)$assignee->id)>{{ $assignee->name }}</option>@endforeach</select></label></div><label class="reconciliation-case-notes">Investigation notes<textarea name="notes" maxlength="5000" rows="3" placeholder="Record findings, journal references and follow-up actions">{{ old('notes',$currentCase?->notes) }}</textarea></label><button class="btn" type="submit"><i class="fa-solid fa-floppy-disk"></i> Save investigation</button></form>
+@if($currentCase && $currentCase->status === 'resolved')
+<form method="POST" action="{{ route('finance.reconciliation.cases.reopen',$currentCase) }}">
+@csrf
+<label>Reopening justification<textarea name="reopen_reason" minlength="10" maxlength="5000" required rows="3"></textarea></label>
+<button type="submit" class="btn">Reopen for investigation</button>
+</form>
+@endif
 @if($currentCase && $currentCase->status === 'investigating' && (int)$currentCase->updated_by !== (int)auth()->id())
 <form method="POST" action="{{ route('finance.reconciliation.cases.approve',$currentCase) }}" style="margin-top:10px">@csrf<label class="reconciliation-case-notes">Resolution justification<textarea name="resolution_notes" rows="3" minlength="10" maxlength="5000" required placeholder="Explain the reviewed discrepancy and why closure is justified"></textarea></label>@error("resolution_notes")<p class="reconciliation-difference">{{ $message }}</p>@enderror<button type="submit" class="btn"><i class="fa-solid fa-check-double"></i> Approve resolution</button></form>
 @endif

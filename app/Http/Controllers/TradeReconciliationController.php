@@ -145,6 +145,7 @@ class TradeReconciliationController extends Controller
         $key = ['type'=>$data['type'],'trade_party_id'=>$data['trade_party_id'],'currency_id'=>$data['currency_id']];
         return DB::transaction(function () use ($key, $data, $request) {
         $case = ReconciliationCase::where($key)->lockForUpdate()->first() ?? new ReconciliationCase($key);
+        abort_if($case->exists && $case->status === 'resolved', 422, 'Reopen approved cases through the audited reopening action.');
         $oldStatus = $case->exists ? $case->status : null;
         if ($data['status'] === 'resolved') $data['status'] = 'investigating';
         $data['updated_by'] = $request->user()->id;
@@ -159,6 +160,24 @@ class TradeReconciliationController extends Controller
         return redirect()->route('finance.reconciliation.index', ['type'=>$data['type'],'party_id'=>$data['trade_party_id'],'currency_id'=>$data['currency_id']])->with('success','Reconciliation case saved.');
         });
     }
+    public function reopenCase(Request $request, ReconciliationCase $case)
+    {
+        abort_unless($request->user()->can('administration.update'), 403);
+        $data = $request->validate(['reopen_reason'=>['required','string','min:10','max:5000']]);
+        return DB::transaction(function () use ($request, $case, $data) {
+            $case = ReconciliationCase::whereKey($case->id)->lockForUpdate()->firstOrFail();
+            abort_unless($case->status === 'resolved' && $case->approved_at, 422);
+            $case->update(['status'=>'investigating','resolved_at'=>null,'approved_at'=>null,
+                'approved_by'=>null,'approved_exposure'=>null,'approved_ledger'=>null,
+                'updated_by'=>$request->user()->id]);
+            ReconciliationCaseEvent::create(['reconciliation_case_id'=>$case->id,'actor_id'=>$request->user()->id,
+                'action'=>'reopened','old_status'=>'resolved','new_status'=>'investigating',
+                'notes'=>$data['reopen_reason']]);
+            return redirect()->route('finance.reconciliation.index', ['type'=>$case->type,
+                'party_id'=>$case->trade_party_id,'currency_id'=>$case->currency_id]);
+        });
+    }
+
     public function approveCase(Request $request, ReconciliationCase $case)
     {
         abort_unless($request->user()->can('administration.update'),403);

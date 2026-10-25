@@ -56,6 +56,11 @@ class TradeSettlementTest extends TestCase {
   $this->assertDatabaseHas('reconciliation_cases',['id'=>$case->id,'status'=>'resolved']);
   $this->assertDatabaseMissing('reconciliation_case_events',['reconciliation_case_id'=>$case->id,'action'=>'auto_reopened']);
   $this->actingAs($user)->get(route('finance.reconciliation.index'))->assertSee('Balance changed — review required');
+  $this->actingAs($user)->post(route('finance.reconciliation.cases.reopen',$case),['reopen_reason'=>'short'])->assertSessionHasErrors('reopen_reason');
+  $this->assertDatabaseHas('reconciliation_cases',['id'=>$case->id,'status'=>'resolved']);
+  $this->actingAs($user)->post(route('finance.reconciliation.cases.reopen',$case),['reopen_reason'=>'New ledger posting requires another reconciliation review.'])->assertRedirect();
+  $this->assertDatabaseHas('reconciliation_cases',['id'=>$case->id,'status'=>'investigating','approved_by'=>null]);
+  $this->assertDatabaseHas('reconciliation_case_events',['reconciliation_case_id'=>$case->id,'action'=>'reopened','actor_id'=>$user->id]);
  }
  public function test_reconciliation_approval_rejects_unmapped_currency_receipts():void {
   [$user,$doc,$payment,$currency]=$this->fixtures();
