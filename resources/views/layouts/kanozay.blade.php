@@ -29,17 +29,13 @@
 .sidebar a:nth-of-type(4n + 3) i{background:#fff1e3;color:#cb7c20}
 .sidebar a:nth-of-type(4n + 4) i{background:#f3eafd;color:#8957bc}
 .sidebar a.active i{background:#dbeaff;color:#0868ef}
-/* Unified Select2 controls: same dimensions and borders as institutional form inputs. */
+/* ERP-wide Select2 control: stable vertical alignment after initialization and selection. */
 :root{--k-field-height:44px;--k-field-border:#d7e3f1;--k-field-radius:8px}
-.select2-container{width:100%!important;max-width:100%}
-.select2-container--default .select2-selection--single{height:var(--k-field-height)!important;min-height:var(--k-field-height);border:1px solid var(--k-field-border)!important;border-radius:var(--k-field-radius)!important;background:#fff;box-sizing:border-box;display:flex;align-items:center}
-.select2-container--default .select2-selection--single .select2-selection__rendered{padding-left:12px;padding-right:30px;line-height:normal!important;color:#253e64;font-size:12px}
-/* Select2 renders the selected value inside a span; override form-label and plugin defaults. */
-.select2-container--default .select2-selection--single .select2-selection__rendered{display:block!important;width:100%;margin:0!important;padding-top:0!important;padding-bottom:0!important;font-weight:400!important;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.coa-form .select2-container--default .select2-selection--single .select2-selection__rendered{font-size:12px!important;font-weight:400!important;color:#253e64!important}
-.coa-form label>.select2-container{display:block!important;min-width:0}
+.select2-container{width:100%!important;max-width:100%;min-width:0}
+.select2-container--default .select2-selection--single{position:relative!important;display:block!important;height:var(--k-field-height)!important;min-height:var(--k-field-height)!important;padding:0!important;border:1px solid var(--k-field-border)!important;border-radius:var(--k-field-radius)!important;background:#fff;box-sizing:border-box!important}
+.select2-container--default .select2-selection--single .select2-selection__rendered{position:absolute!important;top:50%!important;left:0!important;right:28px!important;transform:translateY(-50%)!important;display:block!important;width:auto!important;height:auto!important;max-height:40px!important;margin:0!important;padding:0 0 0 12px!important;line-height:20px!important;font-size:12px!important;font-weight:400!important;color:#253e64!important;text-align:left;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
+.select2-container--default .select2-selection--single .select2-selection__arrow{position:absolute!important;top:50%!important;right:7px!important;transform:translateY(-50%)!important;height:30px!important}
 .select2-container--default .select2-selection--single .select2-selection__placeholder{color:#8191a8;font-weight:400}
-.select2-container--default .select2-selection--single .select2-selection__arrow{height:calc(var(--k-field-height) - 2px)!important;top:0;right:7px}
 .select2-container--default.select2-container--focus .select2-selection--single,.select2-container--default.select2-container--open .select2-selection--single{border-color:#4389d6!important;box-shadow:0 0 0 3px #2780e71a;outline:0}
 .select2-container--default .select2-selection--multiple{min-height:var(--k-field-height);border:1px solid var(--k-field-border)!important;border-radius:var(--k-field-radius)!important;padding:4px 7px}
 .select2-dropdown{border:1px solid var(--k-field-border);border-radius:8px;box-shadow:0 12px 25px #1c3e651c;overflow:hidden}
