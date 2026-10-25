@@ -31,9 +31,17 @@ class TradeReconciliationController extends Controller
             $rows[$key]['outstanding'] += max(0, (float) $document->amount - $allocated);
             if ($allocated > (float) $document->amount + 0.00001) $rows[$key]['issues']++;
         }
+        $unmappedTransactions = [];
         foreach ($transactions as $transaction) {
             $mapping = $ledgerToParty->get($transaction->counterpart_ledger_account_id . ':' . $transaction->currency_id);
-            if (!$mapping) continue;
+            if (!$mapping) {
+                $unmappedTransactions[] = [
+                    'id' => $transaction->id,
+                    'currency' => $transaction->currency_id,
+                    'amount' => max(0, (float) $transaction->amount - (float) ($transaction->allocations_sum_amount ?? 0)),
+                ];
+                continue;
+            }
             $key = $mapping->entity_id . ':' . $transaction->currency_id;
             $rows[$key] ??= ['party' => $partyNames->get($mapping->entity_id)?->name ?? 'Unknown',
                 'currency' => $transaction->currency_id, 'outstanding' => 0, 'unapplied' => 0, 'issues' => 0];
@@ -42,6 +50,6 @@ class TradeReconciliationController extends Controller
             if ($allocated > (float) $transaction->amount + 0.00001) $rows[$key]['issues']++;
         }
         $currencies = \App\Models\Currency::pluck('code', 'id');
-        return view('finance.documents.reconciliation', compact('type', 'rows', 'currencies'));
+        return view('finance.documents.reconciliation', compact('type', 'rows', 'currencies', 'unmappedTransactions'));
     }
 }
