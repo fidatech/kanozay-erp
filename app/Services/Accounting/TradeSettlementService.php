@@ -10,6 +10,7 @@ class TradeSettlementService {
   return DB::transaction(function()use($documentId,$transactionId,$amount,$userId){
    $document=TradeDocument::whereKey($documentId)->lockForUpdate()->firstOrFail();
    $transaction=MoneyTransaction::whereKey($transactionId)->lockForUpdate()->firstOrFail();
+   if(!in_array($document->type,['receivable','payable'],true))throw ValidationException::withMessages(['trade_document_id'=>'Unsupported document type.']);
    if(($document->type==='receivable'?'receipt':'payment')!==$transaction->type || $document->currency_id!==$transaction->currency_id)throw ValidationException::withMessages(['money_transaction_id'=>'Settlement type or currency does not match the document.']);
    $party=DB::table('entity_ledger_accounts')->where(['entity_type'=>$document->type==='receivable'?'customer':'supplier','entity_id'=>$document->trade_party_id,'currency_id'=>$document->currency_id,'purpose'=>$document->type])->value('ledger_account_id');
    if(!$party || (int)$transaction->counterpart_ledger_account_id!==(int)$party)throw ValidationException::withMessages(['money_transaction_id'=>'Payment must post against the same customer or supplier ledger.']);

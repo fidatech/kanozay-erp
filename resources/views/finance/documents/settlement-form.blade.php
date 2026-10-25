@@ -11,7 +11,7 @@
 @foreach($settlementTransactions as $payment)
 @php($mapping=$settlementLedgerMap->get($doc->trade_party_id.':'.$doc->currency_id))
 @if($mapping && $payment->currency_id===$doc->currency_id && (int)$payment->counterpart_ledger_account_id===(int)$mapping->ledger_account_id)
-<option value="{{ $payment->id }}">#{{ $payment->id }} · {{ number_format((float)$payment->amount-(float)($payment->allocations_sum_amount??0),2) }} available</option>
+<option value="{{ $payment->id }}">#{{ $payment->id }} · {{ rtrim(rtrim(number_format((float)$payment->amount-(float)($payment->allocations_sum_amount??0),4,'.',','),'0'),'.') }} available</option>
 @endif
 @endforeach
 </select>
