@@ -115,6 +115,24 @@
 @media(max-width:650px){.k-empty-state{min-height:165px;padding:22px 12px}.k-empty-state .k-empty-icon{width:48px;height:48px;font-size:19px}}
 /* Unified full-area table workspace, including Journal Entries. */
 .content:has(.k-register-panel){display:flex!important;flex-direction:column!important;align-items:stretch!important;min-width:0}
+/* Pre-render layout: hide modal-only source cards before JS executes.
+   This prevents a two-column form flash on navigation and pagination. */
+.content section.panel:has(> form[data-new-entry-form]),
+.content section.panel:has(> p > form[data-new-entry-form]){display:none!important}
+.content .coa-grid:has(form[data-new-entry-form]),
+.content .fx-grid:has(form[data-new-entry-form]),
+.content .rate-grid:has(form[data-new-entry-form]),
+.content .fa-layout:has(form[data-new-entry-form]),
+.content .money-layout:has(form[data-new-entry-form]),
+.content .journal-layout:has(form[data-new-entry-form]),
+.content .sequence-layout:has(form[data-new-entry-form]){display:block!important;grid-template-columns:none!important;width:100%!important;max-width:none!important;min-width:0!important}
+.content .coa-grid:has(form[data-new-entry-form])>section.panel:not(:has(form[data-new-entry-form])),
+.content .fx-grid:has(form[data-new-entry-form])>section.panel:not(:has(form[data-new-entry-form])),
+.content .rate-grid:has(form[data-new-entry-form])>section.panel:not(:has(form[data-new-entry-form])),
+.content .fa-layout:has(form[data-new-entry-form])>section.panel:not(:has(form[data-new-entry-form])),
+.content .money-layout:has(form[data-new-entry-form])>section.panel:not(:has(form[data-new-entry-form])),
+.content .journal-layout:has(form[data-new-entry-form])>section.panel:not(:has(form[data-new-entry-form])),
+.content .sequence-layout:has(form[data-new-entry-form])>section.panel:not(:has(form[data-new-entry-form])){width:100%!important;max-width:none!important;min-width:0!important}
 /* Register cards grow only with content, not viewport height. */
 .content:has(.k-register-panel) .k-register-panel{height:auto!important;min-height:0!important;flex:0 0 auto!important}
 .content:has(.k-register-panel) .k-register-panel>.table-wrap{height:auto!important;min-height:0!important;flex:0 0 auto!important}
