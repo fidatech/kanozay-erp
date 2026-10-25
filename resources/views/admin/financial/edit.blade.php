@@ -30,5 +30,5 @@
 <script>
 document.addEventListener('DOMContentLoaded',function(){const m=document.getElementById('fiscal-month'),d=document.getElementById('fiscal-day'),v=document.getElementById('fiscal-value');function sync(){const days=new Date(2024,Number(m.value),0).getDate();[...d.options].forEach(o=>o.disabled=Number(o.value)>days);if(Number(d.value)>days)d.value=String(days).padStart(2,'0');v.value=m.value+'-'+d.value;}m.addEventListener('change',sync);d.addEventListener('change',sync);sync();});
 </script>
-<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet"><script src="https://code.jquery.com/jquery-3.7.1.min.js"></script><script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script><script>document.addEventListener('DOMContentLoaded',function(){if(window.jQuery&&jQuery.fn.select2)jQuery('.enhanced-select').select2({width:'100%'});});</script>
+
 @endsection

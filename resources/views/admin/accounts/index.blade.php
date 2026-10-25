@@ -4,7 +4,7 @@
 <div class="heading"><div><h1><i class="fa-solid fa-sitemap" style="color:#2b8d70"></i> Chart of Accounts</h1><p>Configure the financial account hierarchy for Kanozay Foods.</p></div></div>
 @if($errors->any())<section class="panel" style="color:#b42318">{{ $errors->first() }}</section>@endif
 <div class="coa-grid"><section class="panel"><h2>Create Account</h2><p class="coa-muted">Create group accounts first, then add posting accounts beneath them. No opening balances are generated automatically.</p>
-@can('administration.update')<form class="coa-form" method="POST" action="{{ route('admin.accounts.store') }}">@csrf
+@can('administration.update')<form class="coa-form" data-new-entry-form="1" method="POST" action="{{ route('admin.accounts.store') }}">@csrf
 <label>Account Code<input name="code" maxlength="24" pattern="[A-Za-z0-9.-]+" placeholder="e.g. 1100" required value="{{ old('code') }}"></label>
 <label>Account Name<input name="name" maxlength="160" placeholder="e.g. Cash on Hand" required value="{{ old('name') }}"></label>
 <label>Account Type<select name="type" class="coa-select" required>@foreach($types as $type)<option value="{{ $type }}" @selected(old('type')===$type)>{{ ucfirst($type) }}</option>@endforeach</select></label>
@@ -19,6 +19,6 @@
 @can('administration.update')
 @foreach($accounts as $account)<dialog id="account-{{ $account->id }}" style="border:1px solid #dbe6f2;border-radius:12px;padding:25px;width:min(460px,94vw);box-shadow:0 20px 65px #193c6233"><h2>Edit {{ $account->code }}</h2><form class="coa-form" method="POST" action="{{ route('admin.accounts.update',$account) }}">@csrf @method('PUT')<label>Code<input name="code" value="{{ $account->code }}" maxlength="24" required></label><label>Name<input name="name" value="{{ $account->name }}" required maxlength="160"></label><label>Type<select name="type">@foreach($types as $type)<option value="{{ $type }}" @selected($account->type===$type)>{{ ucfirst($type) }}</option>@endforeach</select></label><label>Parent Group<select name="parent_id"><option value="">Top-level</option>@foreach($groups as $group)@if($group->id!==$account->id)<option value="{{ $group->id }}" @selected($account->parent_id===$group->id)>{{ $group->code }} — {{ $group->name }}</option>@endif @endforeach</select></label><label>Kind<select name="is_group"><option value="0" @selected(!$account->is_group)>Posting</option><option value="1" @selected($account->is_group)>Group</option></select></label><label>Status<select name="is_active"><option value="1" @selected($account->is_active)>Active</option><option value="0" @selected(!$account->is_active)>Inactive</option></select></label><label>Description<textarea name="description" maxlength="500">{{ $account->description }}</textarea></label><div style="display:flex;gap:10px"><button class="btn" type="submit">Save Changes</button><button type="button" onclick="this.closest('dialog').close()">Cancel</button></div></form></dialog>@endforeach
 @endcan
-<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet"><script src="https://code.jquery.com/jquery-3.7.1.min.js"></script><script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-<script>document.addEventListener('DOMContentLoaded',function(){if(window.jQuery&&jQuery.fn.select2)jQuery('.coa-select').select2({width:'100%',dropdownAutoWidth:false});});</script>
+
+
 @endsection

@@ -8,7 +8,7 @@
 <div class="sequence-layout">
 <section class="panel"><h2>Create Numbering Series</h2><p class="sequence-help">Example: PO-00001. Each issued number is reserved within a database transaction.</p>
 @can('administration.update')
-<form class="sequence-form" method="POST" action="{{ route('admin.sequences.store') }}">@csrf
+<form class="sequence-form" data-new-entry-form="1" method="POST" action="{{ route('admin.sequences.store') }}">@csrf
 <label>Document Type<select name="document_type" id="document-type" class="enhanced-select" required><option value="">Select document</option>
 @foreach($types as $type)
 @if(!$sequences->contains('document_type',$type))
@@ -42,11 +42,11 @@
 <div style="display:flex;gap:10px"><button class="btn" type="submit">Save Changes</button><button type="button" onclick="this.closest('dialog').close()">Cancel</button></div></form></dialog>
 @endforeach
 @endcan
-<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+
+
 
 <script>
-document.addEventListener('DOMContentLoaded',function(){const prefixes=@json($prefixes),type=document.getElementById('document-type'),prefix=document.getElementById('generated-prefix');function sync(){prefix.value=prefixes[type.value]||'';}type.addEventListener('change',sync);sync();if(window.jQuery&&jQuery.fn.select2){jQuery('.enhanced-select').each(function(){const dialog=this.closest('dialog');jQuery(this).select2({width:'100%',dropdownParent:dialog?jQuery(dialog):jQuery(document.body)});});jQuery(type).on('change',sync);}});
+document.addEventListener('DOMContentLoaded',function(){const prefixes=@json($prefixes),type=document.getElementById('document-type'),prefix=document.getElementById('generated-prefix');function sync(){prefix.value=prefixes[type.value]||'';}type.addEventListener('change',sync);sync();if(window.jQuery)jQuery(type).on('change',sync);});
 </script>
 @endsection

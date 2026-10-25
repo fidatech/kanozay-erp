@@ -75,6 +75,20 @@
 @media(max-width:680px){.finance-workspace .panel{padding:14px}.finance-workspace .heading h1{font-size:19px}.finance-workspace .heading p{margin-left:0}.finance-workspace .gl-filters{grid-template-columns:1fr!important}}
 /* Unified institutional pagination */
 .k-pagination{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;padding:16px 4px 4px;margin-top:14px;border-top:1px solid #e6edf6;font-size:12px}.k-pagination-info{display:flex;align-items:center;gap:12px;flex-wrap:wrap;color:#647b9f}.k-pagination-total{font-weight:800;color:#1d3f72;background:#eff5ff;border:1px solid #e0eafd;padding:8px 11px;border-radius:8px}.k-pagination-range strong{color:#173d74}.k-pagination-controls,.k-page-numbers{display:flex;align-items:center;gap:5px}.k-page-btn{min-width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 11px;border:1px solid #dce6f4;border-radius:8px;background:#fff;color:#28517e;font-size:12px;font-weight:700;white-space:nowrap;text-decoration:none;transition:background .15s,border-color .15s,box-shadow .15s}.k-page-btn:hover:not(.k-page-disabled):not(.k-page-current){background:#edf5ff;border-color:#9fc2f4;color:#075bb7}.k-page-btn:focus-visible{outline:3px solid #8ebaff;outline-offset:2px}.k-page-current{background:#0a5dbb;border-color:#0a5dbb;color:#fff;box-shadow:0 2px 7px #0a5dbb22}.k-page-disabled{opacity:.43;cursor:not-allowed}.k-page-ellipsis{padding:0 5px;color:#8ca0bc}@media(max-width:700px){.k-pagination{justify-content:center;text-align:center}.k-pagination-info{justify-content:center;width:100%}.k-pagination-controls{justify-content:center;flex-wrap:wrap}.k-page-btn{min-width:34px;height:34px;padding:0 9px}}
+/* Consistent accessible creation dialogs across ERP pages. */
+.k-create-dialog{border:1px solid #dbe6f2;border-radius:14px;padding:0;width:min(650px,calc(100vw - 28px));max-height:92vh;box-shadow:0 24px 80px #102b5044;color:#203b61}
+.k-create-dialog::backdrop{background:#0d224d9c}
+.k-create-dialog .k-create-head{position:sticky;top:0;background:white;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:18px 23px;border-bottom:1px solid #e5edf6}
+.k-create-dialog .k-create-head h2{margin:0;font-size:18px}
+.k-create-dialog .k-create-head button{border:0;background:#edf4fd;border-radius:8px;width:33px;height:33px;cursor:pointer;color:#30567e;font-size:20px}
+.k-create-dialog .k-create-body{padding:22px 23px;max-height:calc(92vh - 74px);overflow:auto}
+.k-create-dialog form{display:grid!important;gap:13px!important;align-items:stretch!important;width:100%}
+.k-create-dialog form label{display:grid;gap:6px;font-weight:700;color:#315174;font-size:12px}
+.k-create-dialog form input:not([type=checkbox]),.k-create-dialog form select,.k-create-dialog form textarea{width:100%;min-height:44px;border:1px solid #d7e3f1;border-radius:8px;padding:10px 12px;background:white;color:#253e64}
+.k-create-dialog form button[type=submit]{min-height:43px;border:0;background:#115aa8;color:white;border-radius:8px;font-weight:700;cursor:pointer}
+.k-create-trigger{display:inline-flex;align-items:center;gap:9px;justify-content:center;min-height:39px;padding:9px 15px;border:0;border-radius:9px;background:#125eac;color:white;font-size:12px;font-weight:800;cursor:pointer}
+.k-create-trigger:hover{background:#0b487f}
+.k-create-dialog .select2-container{width:100%!important}
 </style></head><body>
 <header class="top"><a class="brand" href="{{ route('dashboard') }}"><span class="brand-icon"><i class="fa-solid fa-leaf"></i></span><span class="brand-name">KANOZAY<small>FOODS</small></span><span class="brand-divider"></span><span class="brand-sub">ERP System<small>Quality • Nutrition • Growth</small></span></a><div class="search"><i class="fa-solid fa-magnifying-glass"></i><input aria-label="Search" placeholder="Search for products, transactions, suppliers, employees, documents..." disabled><kbd>⌘ K</kbd></div><div class="tools"><details class="top-dropdown language-dropdown"><summary class="language-trigger" aria-label="Select language"><i class="fa-solid fa-globe"></i><span>{{ ['en'=>'EN','fa'=>'دری','ps'=>'پښتو'][session('locale','en')] ?? 'EN' }}</span><i class="fa-solid fa-chevron-down" style="font-size:10px"></i></summary><div class="dropdown-panel language-options"><b>Interface Language</b><form method="POST" action="{{ route('language.update') }}">@csrf<button type="submit" name="locale" value="en" @if(session('locale','en')==='en')class="selected"@endif>🇬🇧 English @if(session('locale','en')==='en')<i class="fa-solid fa-check"></i>@endif</button><button type="submit" name="locale" value="fa" @if(session('locale','en')==='fa')class="selected"@endif>🇦🇫 دری @if(session('locale','en')==='fa')<i class="fa-solid fa-check"></i>@endif</button><button type="submit" name="locale" value="ps" @if(session('locale','en')==='ps')class="selected"@endif>🇦🇫 پښتو @if(session('locale','en')==='ps')<i class="fa-solid fa-check"></i>@endif</button></form></div></details><details class="top-dropdown"><summary aria-label="Notifications" title="Notifications"><i class="fa-regular fa-bell"></i>@if(auth()->user()->unreadNotifications()->count())<span class="count">{{ auth()->user()->unreadNotifications()->count() > 99 ? '99+' : auth()->user()->unreadNotifications()->count() }}</span>@endif</summary><div class="dropdown-panel"><b>Notifications</b>@forelse(auth()->user()->unreadNotifications()->latest()->limit(4)->get() as $notice)<a href="{{ route('notifications.index') }}"><strong>{{ $notice->data['title'] ?? 'Notification' }}</strong><small style="display:block;color:#64799e;margin-top:4px">{{ $notice->data['message'] ?? '' }}</small></a>@empty<p class="muted">You're all caught up.</p>@endforelse<a href="{{ route('notifications.index') }}" style="color:#0868ef;font-weight:700;border-top:1px solid #e6edf7">View all notifications</a></div></details><details class="top-dropdown"><summary aria-label="Help" title="Help"><i class="fa-regular fa-circle-question"></i></summary><div class="dropdown-panel"><b>Help & Support</b><p class="muted">Support options will be available after setup.</p></div></details><details class="top-dropdown"><summary aria-label="Applications" title="Applications"><i class="fa-solid fa-border-all"></i></summary><div class="dropdown-panel"><b>Available modules</b><a href="{{ route('dashboard') }}">Dashboard</a>@can('administration.view')<a href="{{ route('admin.index') }}">Administration</a>@endcan @can('users.view')<a href="{{ route('admin.users.index') }}">User Management</a>@endcan @can('roles.view')<a href="{{ route('admin.roles.index') }}">Roles & Permissions</a>@endcan</div></details><details class="top-dropdown profile-menu"><summary class="profile"><span class="avatar">{{ strtoupper(substr(auth()->user()->name,0,1)) }}</span><span><b>{{ auth()->user()->name }}</b><small>{{ auth()->user()->roles->pluck('name')->first() ?? 'Employee' }}</small></span><i class="fa-solid fa-chevron-down" style="font-size:11px"></i></summary><div class="dropdown-panel"><b>My Account</b><a href="{{ route('profile.edit') }}">Profile & Security</a>@can('users.view')<a href="{{ route('admin.users.index') }}">Manage Users</a>@endcan<form action="{{ route('logout') }}" method="POST">@csrf<button class="logout" type="submit"><i class="fa-solid fa-right-from-bracket"></i> Sign out</button></form></div></details></div></header>
 @php($menu=[['Dashboard','house','dashboard','dashboard'],['Purchases','cart-shopping','purchases',null],['Inventory','boxes-stacked','inventory',null],['Manufacturing','industry','manufacturing',null],['Laboratory','flask','laboratory',null],['Sales','truck','sales',null],['Finance','wallet','finance',null],['Shareholders','users','shareholders',null],['HR','user-tie','hr',null],['Reports','chart-column','reports',null],['Admin','gear','administration','admin.index']])
@@ -90,6 +104,42 @@
  document.querySelectorAll('[data-modal-open]').forEach(btn=>btn.addEventListener('click',()=>{const dialog=document.getElementById(btn.dataset.modalOpen);if(dialog&&!dialog.open)dialog.showModal();}));
  document.querySelectorAll('[data-modal-close]').forEach(btn=>btn.addEventListener('click',()=>btn.closest('dialog')?.close()));
  document.querySelectorAll('dialog.k-modal').forEach(dialog=>dialog.addEventListener('click',event=>{if(event.target===dialog)dialog.close();}));
+})();
+</script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+(function(){
+ function enhanceSelects(root){
+  if(!window.jQuery||!jQuery.fn.select2)return;
+  jQuery(root).find('select').addBack('select').each(function(){
+   if(this.dataset.noSelect2==='1'||jQuery(this).hasClass('select2-hidden-accessible'))return;
+   const dialog=this.closest('dialog');
+   jQuery(this).select2({width:'100%',dropdownAutoWidth:false,dropdownParent:dialog?jQuery(dialog):jQuery(document.body)});
+  });
+ }
+ function setupCreationDialogs(){
+  document.querySelectorAll('form[data-new-entry-form]').forEach((form,index)=>{
+   if(form.closest('dialog'))return;
+   const panel=form.closest('section.panel');if(!panel)return;
+   const heading=panel.querySelector('h2');const title=heading?.textContent.trim()||'New Entry';
+   const dialog=document.createElement('dialog');dialog.className='k-create-dialog';dialog.id='k-create-'+index;
+   const head=document.createElement('div');head.className='k-create-head';
+   const label=document.createElement('h2');label.textContent=title;const close=document.createElement('button');close.type='button';close.setAttribute('aria-label','Close dialog');close.textContent='×';close.addEventListener('click',()=>dialog.close());head.append(label,close);
+   const body=document.createElement('div');body.className='k-create-body';
+   // Move, never clone: preserve existing form validation, values and listeners.
+   body.append(form);dialog.append(head,body);document.body.append(dialog);
+   const trigger=document.createElement('button');trigger.type='button';trigger.className='k-create-trigger';trigger.innerHTML='<i class="fa-solid fa-plus"></i> '+title;
+   trigger.addEventListener('click',()=>{dialog.showModal();enhanceSelects(dialog);});
+   if(heading)heading.insertAdjacentElement('afterend',trigger);else panel.append(trigger);
+   dialog.addEventListener('click',e=>{if(e.target===dialog)dialog.close();});
+   if(index===0&&(document.querySelector('.error')||document.querySelector('[data-form-errors]')))dialog.showModal();
+  });
+ }
+ document.addEventListener('DOMContentLoaded',()=>{setupCreationDialogs();enhanceSelects(document.body);});
+ // Enhance dynamic journal rows and selects added after initial page load.
+ new MutationObserver(records=>{for(const record of records)for(const node of record.addedNodes)if(node.nodeType===1&&node.matches?.('.journal-line'))enhanceSelects(node);}).observe(document.documentElement,{childList:true,subtree:true});
 })();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
