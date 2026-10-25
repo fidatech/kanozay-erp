@@ -18,6 +18,9 @@ Route::post('/language', function (\Illuminate\Http\Request $request) {
 })->middleware('auth')->name('language.update');
 
 Route::middleware('auth')->group(function () {
+    Route::get('/finance/parties', [\App\Http\Controllers\TradePartyController::class,'index'])->name('finance.parties.index');
+    Route::post('/finance/parties', [\App\Http\Controllers\TradePartyController::class,'store'])->name('finance.parties.store');
+    Route::post('/finance/parties/{party}/currencies', [\App\Http\Controllers\TradePartyController::class,'addCurrency'])->name('finance.parties.currencies.store');
     Route::get('/finance/exchanges', [\App\Http\Controllers\CurrencyExchangeController::class,'index'])->name('finance.exchanges.index');
     Route::post('/finance/exchanges', [\App\Http\Controllers\CurrencyExchangeController::class,'store'])->name('finance.exchanges.store');
     Route::get('/finance/money', [\App\Http\Controllers\MoneyTransactionController::class,'index'])->name('finance.money.index');

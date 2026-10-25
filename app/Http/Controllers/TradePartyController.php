@@ -1,0 +1,14 @@
+<?php
+namespace App\Http\Controllers;
+use App\Models\ActivityLog;
+use App\Models\Currency;
+use App\Models\TradeParty;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
+class TradePartyController extends Controller {
+ public function index(Request $request){abort_unless($request->user()->can('administration.view'),403);$type=$request->validate(['type'=>['nullable',Rule::in(['customer','supplier'])]])['type']??'customer';return view('finance.parties.index',['type'=>$type,'parties'=>TradeParty::with('currencies')->where('type',$type)->latest()->paginate(25)->withQueryString(),'currencies'=>Currency::where('is_active',true)->orderBy('code')->get()]);}
+ public function store(Request $request){abort_unless($request->user()->can('administration.update'),403);$data=$request->validate(['type'=>['required',Rule::in(['customer','supplier'])],'name'=>['required','string','max:180'],'code'=>['nullable','string','max:40',Rule::unique('trade_parties','code')->where('type',$request->input('type'))],'contact_person'=>['nullable','string','max:150'],'phone'=>['nullable','string','max:80'],'email'=>['nullable','email','max:180'],'address'=>['nullable','string','max:2000'],'notes'=>['nullable','string','max:2000'],'currency_ids'=>['required','array','min:1'],'currency_ids.*'=>['required','integer','distinct',Rule::exists('currencies','id')->where('is_active',true)]]);DB::transaction(function()use($data,$request){$currencyIds=$data['currency_ids'];unset($data['currency_ids']);$party=TradeParty::create($data+['is_active'=>true,'created_by'=>$request->user()->id]);$party->currencies()->sync($currencyIds);foreach($currencyIds as $id)$party->provisionLedgerAccountsForCurrency((int)$id);ActivityLog::record('trade_party.created','trade_party',$party->id,ucfirst($party->type).' created: '.$party->name);});return redirect()->route('finance.parties.index',['type'=>$data['type']])->with('status','Trade party and currency-specific ledger accounts created.');}
+ public function addCurrency(Request $request,TradeParty $party){abort_unless($request->user()->can('administration.update'),403);$data=$request->validate(['currency_id'=>['required',Rule::exists('currencies','id')->where('is_active',true)]]);DB::transaction(function()use($party,$data){if($party->currencies()->whereKey($data['currency_id'])->exists())throw ValidationException::withMessages(['currency_id'=>'Currency already enabled.']);$party->provisionLedgerAccountsForCurrency((int)$data['currency_id']);$party->currencies()->attach($data['currency_id']);ActivityLog::record('trade_party.currency_added','trade_party',$party->id,'Currency enabled for '.$party->name);});return back()->with('status','Currency and ledger accounts enabled.');}
+}
