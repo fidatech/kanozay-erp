@@ -8,6 +8,8 @@ use Illuminate\Validation\ValidationException;
 class TradeSettlementService {
  public function allocate(int $documentId,int $transactionId,string $amount,int $userId):TradeSettlementAllocation {
   return DB::transaction(function()use($documentId,$transactionId,$amount,$userId){
+   $key=TradeDocument::whereKey($documentId)->firstOrFail();
+   DB::table('reconciliation_cases')->where('type',$key->type)->where('trade_party_id',$key->trade_party_id)->where('currency_id',$key->currency_id)->lockForUpdate()->first();
    $document=TradeDocument::whereKey($documentId)->lockForUpdate()->firstOrFail();
    $transaction=MoneyTransaction::whereKey($transactionId)->lockForUpdate()->firstOrFail();
    if(!in_array($document->type,['receivable','payable'],true))throw ValidationException::withMessages(['trade_document_id'=>'Unsupported document type.']);
