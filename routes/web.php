@@ -22,6 +22,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/finance/documents', [\App\Http\Controllers\TradeDocumentController::class,'store'])->name('finance.documents.store');
     Route::get('/finance/parties', [\App\Http\Controllers\TradePartyController::class,'index'])->name('finance.parties.index');
     Route::post('/finance/parties', [\App\Http\Controllers\TradePartyController::class,'store'])->name('finance.parties.store');
+    Route::post('/finance/parties/{party}/opening-balance', [\App\Http\Controllers\TradePartyController::class,'openingBalance'])->name('finance.parties.opening.store');
     Route::post('/finance/parties/{party}/currencies', [\App\Http\Controllers\TradePartyController::class,'addCurrency'])->name('finance.parties.currencies.store');
     Route::get('/finance/exchanges', [\App\Http\Controllers\CurrencyExchangeController::class,'index'])->name('finance.exchanges.index');
     Route::post('/finance/exchanges', [\App\Http\Controllers\CurrencyExchangeController::class,'store'])->name('finance.exchanges.store');
