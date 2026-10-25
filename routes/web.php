@@ -30,6 +30,8 @@ Route::middleware('auth')->group(function () {
 });
 
 Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
+    Route::get('company', [\App\Http\Controllers\Admin\CompanySettingController::class, 'edit'])->name('company.edit');
+    Route::put('company', [\App\Http\Controllers\Admin\CompanySettingController::class, 'update'])->name('company.update');
     Route::get('/', function () { abort_unless(auth()->user()->can('administration.view') || auth()->user()->can('users.view') || auth()->user()->can('roles.view'), 403); return view('admin.index'); })->name('index');
     Route::get('activity', function () { abort_unless(auth()->user()->can('administration.view'), 403); return view('admin.activity.index', ['activities' => \App\Models\ActivityLog::with('actor')->latest()->paginate(30)]); })->name('activity.index');
     Route::resource('users', \App\Http\Controllers\Admin\UserController::class)->only(['index','store','update','destroy']);

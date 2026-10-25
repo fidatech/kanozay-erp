@@ -4,6 +4,7 @@
 <div class="heading"><div><h1>Administration</h1><p>Manage access, permissions and system administration.</p></div></div>
 <p class="admin-intro">Choose an administration area below or use the administration sidebar.</p>
 <div class="admin-landing">
+@can('administration.view')<a class="admin-link-card" href="{{ route('admin.company.edit') }}"><i class="fa-solid fa-building"></i><div><h2>Company & Factory Profile</h2><p>Maintain company identity, contacts and localization preferences.</p></div></a>@endcan
 @can('users.view')<a class="admin-link-card" href="{{ route('admin.users.index') }}"><i class="fa-solid fa-users"></i><div><h2>User Management</h2><p>Create employee accounts, manage profiles and assign access roles.</p></div></a>@endcan
 @can('roles.view')<a class="admin-link-card" href="{{ route('admin.roles.index') }}"><i class="fa-solid fa-shield-halved"></i><div><h2>Roles & Permissions</h2><p>Configure roles and control permissions for each ERP module.</p></div></a>@endcan
 @can('administration.view')<a class="admin-link-card" href="{{ route('admin.activity.index') }}"><i class="fa-solid fa-clock-rotate-left"></i><div><h2>Audit Activity</h2><p>Review recorded user and role administration changes.</p></div></a>@endcan
