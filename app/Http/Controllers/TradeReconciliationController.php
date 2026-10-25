@@ -74,6 +74,7 @@ class TradeReconciliationController extends Controller
         $selectedParty = null;
         $documentBreakdown = collect();
         $paymentBreakdown = collect();
+        $journalBreakdown = collect();
         if (isset($filters['party_id'], $filters['currency_id'])) {
             $party = $parties->firstWhere('id', (int) $filters['party_id']);
             $key = $filters['party_id'] . ':' . $filters['currency_id'];
@@ -82,9 +83,18 @@ class TradeReconciliationController extends Controller
                 $documentBreakdown = $documents->filter(fn ($doc) => (int) $doc->trade_party_id === (int) $party->id && (int) $doc->currency_id === (int) $filters['currency_id'])->values();
                 $mappedLedger = $rows[$key]['ledger_account_id'];
                 $paymentBreakdown = $transactions->filter(fn ($tx) => $mappedLedger && (int) $tx->counterpart_ledger_account_id === (int) $mappedLedger && (int) $tx->currency_id === (int) $filters['currency_id'])->values();
+                if ($mappedLedger) {
+                    $journalBreakdown = \Illuminate\Support\Facades\DB::table('journal_lines as jl')
+                        ->join('journal_entries as je', 'je.id', '=', 'jl.journal_entry_id')
+                        ->where('jl.ledger_account_id', $mappedLedger)
+                        ->where('je.currency_id', (int) $filters['currency_id'])
+                        ->where('je.status', 'posted')
+                        ->select('je.number', 'je.entry_date', 'je.description', 'jl.memo', 'jl.debit', 'jl.credit')
+                        ->orderBy('je.entry_date')->orderBy('je.id')->orderBy('jl.id')->get();
+                }
             }
         }
         $currencies = \App\Models\Currency::pluck('code', 'id');
-        return view('finance.documents.reconciliation', compact('type', 'rows', 'currencies', 'unmappedTransactions', 'selectedParty', 'documentBreakdown', 'paymentBreakdown', 'filters'));
+        return view('finance.documents.reconciliation', compact('type', 'rows', 'currencies', 'unmappedTransactions', 'selectedParty', 'documentBreakdown', 'paymentBreakdown', 'journalBreakdown', 'filters'));
     }
 }
