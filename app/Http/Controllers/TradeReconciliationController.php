@@ -167,6 +167,35 @@ class TradeReconciliationController extends Controller
         return DB::transaction(function () use ($request, $case, $data) {
             $case = ReconciliationCase::whereKey($case->id)->lockForUpdate()->firstOrFail();
             abort_unless($case->status === 'resolved' && $case->approved_at, 422);
+            $partyType = $case->type === 'receivable' ? 'customer' : 'supplier';
+            $ledgerId = DB::table('entity_ledger_accounts')->where('entity_type', $partyType)
+                ->where('entity_id', $case->trade_party_id)->where('currency_id', $case->currency_id)
+                ->where('purpose', $case->type)->value('ledger_account_id');
+            $currentLedger = null;
+            if ($ledgerId) {
+                $totals = DB::table('journal_lines as jl')->join('journal_entries as je', 'je.id', '=', 'jl.journal_entry_id')
+                    ->where('jl.ledger_account_id', $ledgerId)->where('je.currency_id', $case->currency_id)
+                    ->where('je.status', 'posted')->selectRaw('SUM(jl.debit) as debits, SUM(jl.credit) as credits, COUNT(*) as lines')->first();
+                if ($totals && $totals->lines) {
+                    $currentLedger = $case->type === 'receivable'
+                        ? (float)$totals->debits - (float)$totals->credits
+                        : (float)$totals->credits - (float)$totals->debits;
+                }
+            }
+            $ledgerChanged = $currentLedger === null || $case->approved_ledger === null
+                || abs(round($currentLedger, 4) - (float)$case->approved_ledger) > 0.0001;
+            $documents = TradeDocument::where('type', $case->type)->where('trade_party_id', $case->trade_party_id)
+                ->where('currency_id', $case->currency_id)->withSum('allocations', 'amount')->get();
+            $exposure = $documents->sum(fn ($doc) => max(0, (float)$doc->amount - (float)($doc->allocations_sum_amount ?? 0)));
+            if ($ledgerId) {
+                $moneyType = $case->type === 'receivable' ? 'receipt' : 'payment';
+                $payments = MoneyTransaction::where('type', $moneyType)->where('counterpart_ledger_account_id', $ledgerId)
+                    ->where('currency_id', $case->currency_id)->withSum('allocations', 'amount')->get();
+                $exposure -= $payments->sum(fn ($tx) => max(0, (float)$tx->amount - (float)($tx->allocations_sum_amount ?? 0)));
+            }
+            $exposureChanged = $case->approved_exposure === null
+                || abs(round($exposure, 4) - (float)$case->approved_exposure) > 0.0001;
+            abort_unless($ledgerChanged || $exposureChanged, 422, 'Approved balances have not changed.');
             $case->update(['status'=>'investigating','resolved_at'=>null,'approved_at'=>null,
                 'approved_by'=>null,'approved_exposure'=>null,'approved_ledger'=>null,
                 'updated_by'=>$request->user()->id]);
