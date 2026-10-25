@@ -75,6 +75,36 @@
 @media(max-width:680px){.finance-workspace .panel{padding:14px}.finance-workspace .heading h1{font-size:19px}.finance-workspace .heading p{margin-left:0}.finance-workspace .gl-filters{grid-template-columns:1fr!important}}
 /* Unified institutional pagination */
 .k-pagination{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;padding:16px 4px 4px;margin-top:14px;border-top:1px solid #e6edf6;font-size:12px}.k-pagination-info{display:flex;align-items:center;gap:12px;flex-wrap:wrap;color:#647b9f}.k-pagination-total{font-weight:800;color:#1d3f72;background:#eff5ff;border:1px solid #e0eafd;padding:8px 11px;border-radius:8px}.k-pagination-range strong{color:#173d74}.k-pagination-controls,.k-page-numbers{display:flex;align-items:center;gap:5px}.k-page-btn{min-width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 11px;border:1px solid #dce6f4;border-radius:8px;background:#fff;color:#28517e;font-size:12px;font-weight:700;white-space:nowrap;text-decoration:none;transition:background .15s,border-color .15s,box-shadow .15s}.k-page-btn:hover:not(.k-page-disabled):not(.k-page-current){background:#edf5ff;border-color:#9fc2f4;color:#075bb7}.k-page-btn:focus-visible{outline:3px solid #8ebaff;outline-offset:2px}.k-page-current{background:#0a5dbb;border-color:#0a5dbb;color:#fff;box-shadow:0 2px 7px #0a5dbb22}.k-page-disabled{opacity:.43;cursor:not-allowed}.k-page-ellipsis{padding:0 5px;color:#8ca0bc}@media(max-width:700px){.k-pagination{justify-content:center;text-align:center}.k-pagination-info{justify-content:center;width:100%}.k-pagination-controls{justify-content:center;flex-wrap:wrap}.k-page-btn{min-width:34px;height:34px;padding:0 9px}}
+/* Institutional form and dialog system shared by all ERP modules. */
+:root{--k-form-border:#d5e1ee;--k-form-ink:#1d3658;--k-form-muted:#6c809a;--k-form-focus:#2877cb}
+.content form:not(.inline):not(.search) label,.k-modal label,.k-create-dialog label{font-size:12px;font-weight:700;line-height:1.5;color:#344f71}
+.content form:not(.inline) input:not([type=checkbox]):not([type=radio]):not([type=hidden]),.content form:not(.inline) textarea,.content form:not(.inline) select,.k-modal input:not([type=checkbox]):not([type=radio]),.k-modal textarea,.k-create-dialog input:not([type=checkbox]):not([type=radio]),.k-create-dialog textarea{box-sizing:border-box;max-width:100%;border:1px solid var(--k-form-border);border-radius:9px;color:var(--k-form-ink);background:#fff;transition:border-color .16s,box-shadow .16s}
+.content form:not(.inline) input:focus-visible,.content form:not(.inline) textarea:focus-visible,.k-modal input:focus-visible,.k-modal textarea:focus-visible,.k-create-dialog input:focus-visible,.k-create-dialog textarea:focus-visible{outline:0;border-color:var(--k-form-focus);box-shadow:0 0 0 3px #2877cb1b}
+.content form:not(.inline) input:disabled,.content form:not(.inline) textarea:disabled,.k-modal input:disabled,.k-create-dialog input:disabled{background:#f2f5f9;color:#8090a5;cursor:not-allowed}
+.content form:not(.inline) input::placeholder,.k-modal input::placeholder,.k-create-dialog input::placeholder{color:#99a9bb}
+.k-create-dialog,.k-modal{border:1px solid #d9e4f0!important;border-radius:16px!important;box-shadow:0 30px 90px #11274752!important;background:#fff;max-width:calc(100vw - 28px);max-height:min(92dvh,920px)}
+.k-create-dialog::backdrop,.k-modal::backdrop{background:#102846a8;backdrop-filter:blur(3px)}
+.k-create-dialog{width:min(720px,calc(100vw - 28px))!important;overflow:hidden}
+.k-create-dialog .k-create-head{padding:18px 24px;background:linear-gradient(180deg,#fff,#f8fbff);border-bottom:1px solid #e4edf6}
+.k-create-dialog .k-create-head h2{font-size:18px;line-height:1.4;color:#1b365b;letter-spacing:-.25px}
+.k-create-dialog .k-create-head button{display:grid;place-items:center;width:36px;height:36px;transition:background .16s,color .16s}
+.k-create-dialog .k-create-head button:hover{background:#dfeafb;color:#164f91}
+.k-create-dialog .k-create-body{padding:22px 24px 24px;max-height:calc(92dvh - 76px);overscroll-behavior:contain}
+.k-create-dialog .k-create-body>p{font-size:12px;line-height:1.7;color:var(--k-form-muted);margin:0 0 16px}
+.k-create-dialog form{gap:16px!important}
+.k-create-dialog form>label,.k-create-dialog form>div>label{display:grid;gap:7px;min-width:0}
+.k-create-dialog form input:not([type=checkbox]):not([type=radio]),.k-create-dialog form textarea{min-height:44px;padding:10px 13px;font-size:13px}
+.k-create-dialog form textarea{min-height:90px;resize:vertical}
+.k-create-dialog form button[type=submit]{width:100%;padding:11px 16px;min-height:46px;margin-top:6px;box-shadow:0 4px 12px #125ca520;transition:background .16s,transform .16s}
+.k-create-dialog form button[type=submit]:hover{background:#0c4c90;transform:translateY(-1px)}
+.k-create-dialog .select2-container--default .select2-selection--single{height:44px!important;min-height:44px!important}
+.k-create-dialog .select2-dropdown,.k-modal .select2-dropdown{border-color:#b9d1e9;box-shadow:0 10px 25px #17375a20;border-radius:8px;overflow:hidden}
+.k-create-dialog .select2-search__field,.k-modal .select2-search__field{border-radius:7px!important;padding:8px!important;min-height:36px!important}
+.k-modal .modal-body{max-height:calc(92dvh - 160px);overflow-y:auto;overscroll-behavior:contain}
+.k-modal .modal-form{max-width:100%}
+.k-modal .modal-body label{min-width:0}
+.k-modal .modal-body input:not([type=checkbox]),.k-modal .modal-body textarea{width:100%;min-height:44px}
+@media(max-width:650px){.k-create-dialog .k-create-head{padding:14px 16px}.k-create-dialog .k-create-body{padding:16px}.k-create-dialog{width:calc(100vw - 18px)!important}.k-modal{max-width:calc(100vw - 18px)!important}}
 /* Consistent accessible creation dialogs across ERP pages. */
 .k-create-dialog{border:1px solid #dbe6f2;border-radius:14px;padding:0;width:min(650px,calc(100vw - 28px));max-height:92vh;box-shadow:0 24px 80px #102b5044;color:#203b61}
 .k-create-dialog::backdrop{background:#0d224d9c}
@@ -197,14 +227,14 @@
    if(form.closest('dialog'))return;
    const panel=form.closest('section.panel');if(!panel)return;
    const heading=panel.querySelector('h2');const title=heading?.textContent.trim()||'New Entry';
-   const dialog=document.createElement('dialog');dialog.className='k-create-dialog';dialog.id='k-create-'+index;
+   const dialog=document.createElement('dialog');dialog.className='k-create-dialog';dialog.id='k-create-'+index;dialog.setAttribute('aria-labelledby',dialog.id+'-title');
    const head=document.createElement('div');head.className='k-create-head';
-   const label=document.createElement('h2');label.textContent=title;const close=document.createElement('button');close.type='button';close.setAttribute('aria-label','Close dialog');close.textContent='×';close.addEventListener('click',()=>dialog.close());head.append(label,close);
+   const label=document.createElement('h2');label.id=dialog.id+'-title';label.textContent=title;const close=document.createElement('button');close.type='button';close.setAttribute('aria-label','Close dialog');close.textContent='×';close.addEventListener('click',()=>dialog.close());head.append(label,close);
    const body=document.createElement('div');body.className='k-create-body';
    const intro=[...panel.children].filter(child=>child.tagName==='P');intro.forEach(el=>body.append(el));
    body.append(form);dialog.append(head,body);document.body.append(dialog);
    const trigger=document.createElement('button');trigger.type='button';trigger.className='k-create-trigger';trigger.innerHTML='<i class="fa-solid fa-plus"></i> '+title;
-   trigger.addEventListener('click',()=>{dialog.showModal();enhanceSelects(dialog);});
+   trigger.setAttribute('aria-haspopup','dialog');trigger.setAttribute('aria-controls',dialog.id);trigger.addEventListener('click',()=>{dialog.showModal();enhanceSelects(dialog);});
    // Place the action inside the full-width register card header, not the form card.
    const container=panel.parentElement;
    const register=[...container.children].find(el=>el!==panel&&el.matches?.('section.panel'));
