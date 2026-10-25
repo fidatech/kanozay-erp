@@ -1,7 +1,39 @@
 @extends('layouts.kanozay')
 @section('content')
-<div class="heading"><h1>User Management</h1></div>
-@if(session('status'))<p>{{ session('status') }}</p>@endif @if($errors->any())<div class="panel error">{{ implode(' | ', $errors->all()) }}</div>@endif
-@can('users.create')<section class="panel"><h2>Create employee account</h2><form method="POST" action="{{ route('admin.users.store') }}">@csrf<input name="name" placeholder="Full name" required><input name="email" type="email" placeholder="Email" required><input name="password" type="password" placeholder="Password (12+ characters)" minlength="12" required><input name="password_confirmation" type="password" placeholder="Confirm password" required><select name="role" required>@foreach($roles as $role)<option value="{{ $role->name }}">{{ $role->name }}</option>@endforeach</select><button>Create user</button></form></section>@endcan
-<section class="panel"><h2>Users</h2><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Actions</th></tr></thead><tbody>@forelse($users as $user)<tr><td>{{ $user->name }}</td><td>{{ $user->email }}</td><td>{{ $user->roles->pluck('name')->join(', ') ?: 'Unassigned' }}</td><td>@can('users.update')<details><summary>Edit</summary><form method="POST" action="{{ route('admin.users.update',$user) }}">@csrf @method('PUT')<input name="name" value="{{ $user->name }}" required><input name="email" type="email" value="{{ $user->email }}" required><input name="password" type="password" placeholder="New password (optional)"><input name="password_confirmation" type="password" placeholder="Confirm password"><select name="role">@foreach($roles as $role)<option value="{{ $role->name }}" @selected($user->hasRole($role->name))>{{ $role->name }}</option>@endforeach</select><button>Save</button></form></details>@endcan @can('users.delete')<form class="inline" method="POST" action="{{ route('admin.users.destroy',$user) }}" onsubmit="return confirm('Delete this account?')">@csrf @method('DELETE')<button>Delete</button></form>@endcan</td></tr>@empty<tr><td colspan="4">No users yet.</td></tr>@endforelse</tbody></table>{{ $users->links() }}</section>
+<div class="heading"><div><h1>User Management</h1><p>Manage employee accounts and access levels</p></div>@can('users.create')<button class="btn" type="button" data-modal-open="create-user"><i class="fa-solid fa-plus"></i> Add User</button>@endcan</div>
+@if(session('status'))<div class="panel" role="status">{{ session('status') }}</div>@endif
+@if($errors->any())<div class="panel error" role="alert">{{ implode(' | ', $errors->all()) }}</div>@endif
+<section class="panel"><h2>Employee Accounts</h2><div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Actions</th></tr></thead><tbody>
+@forelse($users as $user)
+<tr><td><strong>{{ $user->name }}</strong></td><td>{{ $user->email }}</td><td><span class="status">{{ $user->roles->pluck('name')->join(', ') ?: 'Unassigned' }}</span></td><td>
+@can('users.update')<button type="button" class="btn" data-modal-open="edit-user-{{ $user->id }}"><i class="fa-solid fa-pen"></i> Edit</button>@endcan
+@can('users.delete')<form class="inline delete-user-form" method="POST" action="{{ route('admin.users.destroy',$user) }}">@csrf @method('DELETE')<button type="submit" class="btn danger-btn"><i class="fa-solid fa-trash"></i> Delete</button></form>@endcan
+</td></tr>
+@empty<tr><td colspan="4" class="empty">No employee accounts yet.</td></tr>@endforelse
+</tbody></table></div>{{ $users->links() }}</section>
+@can('users.create')
+<dialog class="k-modal" id="create-user" aria-labelledby="create-user-title"><form method="POST" action="{{ route('admin.users.store') }}" class="modal-form">@csrf
+<div class="modal-head"><h2 id="create-user-title">Add Employee</h2><button type="button" class="modal-close" data-modal-close aria-label="Close">×</button></div>
+<div class="modal-body"><label>Full Name<input name="name" value="{{ old('name') }}" required maxlength="255"></label><label>Email Address<input type="email" name="email" value="{{ old('email') }}" required></label><label>Password<input type="password" name="password" minlength="12" autocomplete="new-password" required></label><label>Confirm Password<input type="password" name="password_confirmation" minlength="12" autocomplete="new-password" required></label><label>Role<select name="role" required>@foreach($roles as $role)<option value="{{ $role->name }}" @selected(old('role')===$role->name)>{{ $role->name }}</option>@endforeach</select></label></div>
+<div class="modal-foot"><button type="button" class="btn btn-light" data-modal-close>Cancel</button><button class="btn" type="submit">Create Employee</button></div></form></dialog>
+@endcan
+@can('users.update')
+@foreach($users as $user)
+<dialog class="k-modal" id="edit-user-{{ $user->id }}" aria-labelledby="edit-title-{{ $user->id }}"><form method="POST" action="{{ route('admin.users.update',$user) }}" class="modal-form">@csrf @method('PUT')
+<div class="modal-head"><h2 id="edit-title-{{ $user->id }}">Edit Employee</h2><button type="button" class="modal-close" data-modal-close aria-label="Close">×</button></div>
+<div class="modal-body"><label>Full Name<input name="name" value="{{ $user->name }}" required maxlength="255"></label><label>Email Address<input type="email" name="email" value="{{ $user->email }}" required></label><label>New Password <small>(leave blank to keep current)</small><input type="password" name="password" minlength="12" autocomplete="new-password"></label><label>Confirm New Password<input type="password" name="password_confirmation" autocomplete="new-password"></label><label>Role<select name="role" required>@foreach($roles as $role)<option value="{{ $role->name }}" @selected($user->hasRole($role->name))>{{ $role->name }}</option>@endforeach</select></label></div>
+<div class="modal-foot"><button type="button" class="btn btn-light" data-modal-close>Cancel</button><button class="btn" type="submit">Save Changes</button></div></form></dialog>
+@endforeach
+@endcan
 @endsection
+@push('scripts')
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+document.querySelectorAll('.delete-user-form').forEach(form => form.addEventListener('submit', async e => {
+ e.preventDefault();
+ if (typeof Swal === 'undefined') { if(window.confirm('Delete this employee account?')) form.submit(); return; }
+ const result = await Swal.fire({title:'Delete employee?',text:'This account will lose access to Kanozay ERP.',icon:'warning',showCancelButton:true,confirmButtonColor:'#d92d20',confirmButtonText:'Yes, delete',cancelButtonText:'Cancel',reverseButtons:true});
+ if(result.isConfirmed) form.submit();
+}));
+</script>
+@endpush

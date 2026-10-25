@@ -60,4 +60,13 @@ class AdminAccessTest extends TestCase
         $employee = User::where('email', 'employee@example.test')->firstOrFail();
         $this->assertTrue($employee->hasRole('Viewer'));
     }
+    public function test_language_switcher_requires_login_and_rejects_unsupported_languages(): void
+    {
+        $this->post(route('language.update'), ['locale' => 'fa'])->assertRedirect('/login');
+        $user = User::factory()->create();
+        $this->actingAs($user)->post(route('language.update'), ['locale' => 'fa'])->assertRedirect();
+        $this->assertSame('fa', session('locale'));
+        $this->actingAs($user)->post(route('language.update'), ['locale' => 'invalid'])->assertSessionHasErrors('locale');
+    }
+
 }
