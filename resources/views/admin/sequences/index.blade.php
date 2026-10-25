@@ -9,14 +9,14 @@
 <section class="panel"><h2>Create Numbering Series</h2><p class="sequence-help">Example: PO-00001. Each issued number is reserved within a database transaction.</p>
 @can('administration.update')
 <form class="sequence-form" method="POST" action="{{ route('admin.sequences.store') }}">@csrf
-<label>Document Type<select name="document_type" required><option value="">Select document</option>
+<label>Document Type<select name="document_type" id="document-type" class="enhanced-select" required><option value="">Select document</option>
 @foreach($types as $type)
 @if(!$sequences->contains('document_type',$type))
 <option value="{{ $type }}">{{ ucwords(str_replace('_',' ',$type)) }}</option>
 @endif
 @endforeach
 </select></label>
-<label>Prefix<input name="prefix" maxlength="20" pattern="[A-Za-z0-9-]+" required placeholder="PO-" value="{{ old('prefix') }}"></label>
+<label>Generated Prefix<input id="generated-prefix" readonly placeholder="Select document type"></label>
 <label>Starting Number<input name="next_number" type="number" min="1" max="999999999" value="{{ old('next_number',1) }}" required></label>
 <label>Minimum Digits<input name="padding" type="number" min="2" max="12" value="{{ old('padding',5) }}" required></label>
 <button class="btn" type="submit"><i class="fa-solid fa-plus"></i> Create Series</button>
@@ -36,10 +36,17 @@
 @foreach($sequences as $sequence)
 <dialog id="sequence-{{ $sequence->id }}" style="border:1px solid #dae5f2;border-radius:12px;padding:24px;max-width:430px;width:90%;box-shadow:0 20px 60px #17365c33"><h2>{{ ucwords(str_replace('_',' ',$sequence->document_type)) }}</h2><p class="sequence-help">Next number cannot be reset from this page.</p>
 <form class="sequence-form" method="POST" action="{{ route('admin.sequences.update',$sequence) }}">@csrf @method('PUT')
-<label>Prefix<input name="prefix" maxlength="20" pattern="[A-Za-z0-9-]+" required value="{{ $sequence->prefix }}"></label>
+<label>Generated Prefix<input value="{{ $sequence->prefix }}" readonly></label>
 <label>Minimum Digits<input name="padding" type="number" min="2" max="12" required value="{{ $sequence->padding }}"></label>
-<label>Status<select name="is_active"><option value="1" @selected($sequence->is_active)>Active</option><option value="0" @selected(!$sequence->is_active)>Disabled</option></select></label>
+<label>Status<select name="is_active" class="enhanced-select"><option value="1" @selected($sequence->is_active)>Active</option><option value="0" @selected(!$sequence->is_active)>Disabled</option></select></label>
 <div style="display:flex;gap:10px"><button class="btn" type="submit">Save Changes</button><button type="button" onclick="this.closest('dialog').close()">Cancel</button></div></form></dialog>
 @endforeach
 @endcan
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<style>.select2-container{width:100%!important}.select2-container .select2-selection--single{height:43px;border:1px solid #d7e3f1;border-radius:7px}.select2-container .select2-selection--single .select2-selection__rendered{line-height:41px;padding-left:12px}.select2-container .select2-selection--single .select2-selection__arrow{height:41px}</style>
+<script>
+document.addEventListener('DOMContentLoaded',function(){const prefixes=@json($prefixes),type=document.getElementById('document-type'),prefix=document.getElementById('generated-prefix');function sync(){prefix.value=prefixes[type.value]||'';}type.addEventListener('change',sync);sync();if(window.jQuery&&jQuery.fn.select2){jQuery('.enhanced-select').each(function(){const dialog=this.closest('dialog');jQuery(this).select2({width:'100%',dropdownParent:dialog?jQuery(dialog):jQuery(document.body)});});jQuery(type).on('change',sync);}});
+</script>
 @endsection

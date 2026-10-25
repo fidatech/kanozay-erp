@@ -13,7 +13,7 @@ class FinancialSettingController extends Controller {
         abort_unless($request->user()->can('administration.update'),403);
         $data=$request->validate([
             'base_currency_id'=>['nullable',Rule::exists('currencies','id')->where('is_active',true)],
-            'fiscal_year_start'=>['required','date_format:m-d'],
+            'fiscal_year_start'=>['required','date_format:m-d',function($attribute,$value,$fail){if(!preg_match('/^(\d{2})-(\d{2})$/',$value,$parts)||!checkdate((int)$parts[1],(int)$parts[2],2024))$fail('Select a valid fiscal month and day.');}],
             'allow_negative_stock'=>['required','boolean'],
             'require_payment_approval'=>['required','boolean'],
             'require_purchase_approval'=>['required','boolean'],
