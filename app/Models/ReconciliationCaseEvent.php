@@ -9,6 +9,7 @@ class ReconciliationCaseEvent extends Model {
  }
  protected static function booted():void {
   static::creating(function(self $event){
+   if (\Illuminate\Support\Facades\DB::transactionLevel() < 1) throw new \LogicException('Reconciliation audit events require an active database transaction.');
    \Illuminate\Support\Facades\DB::table('reconciliation_cases')->where('id',$event->reconciliation_case_id)->lockForUpdate()->first();
    $previous=self::where('reconciliation_case_id',$event->reconciliation_case_id)->orderByDesc('id')->first();
    if($previous && !$previous->event_hash) throw new \LogicException('Unsigned historical audit events require review before appending new events.');
