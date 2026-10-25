@@ -118,8 +118,16 @@ class TradeReconciliationController extends Controller
             if ($exposure !== null && $ledger !== null && $case->approved_exposure !== null && $case->approved_ledger !== null
                 && abs($exposure - (float) $case->approved_exposure) <= 0.0001
                 && abs($ledger - (float) $case->approved_ledger) <= 0.0001) continue;
-            $case->update(['status'=>'investigating','resolved_at'=>null,'approved_at'=>null,'approved_by'=>null]);
-            ReconciliationCaseEvent::create(['reconciliation_case_id'=>$case->id,'action'=>'auto_reopened','old_status'=>'resolved','new_status'=>'investigating','notes'=>'Balances changed or the posted ledger is unavailable.']);
+            DB::transaction(function () use ($case) {
+                $locked = ReconciliationCase::whereKey($case->id)->lockForUpdate()->firstOrFail();
+                if ($locked->status !== 'resolved' || !$locked->approved_at) return;
+                $locked->update(['status'=>'investigating','resolved_at'=>null,'approved_at'=>null,'approved_by'=>null,
+                    'approved_exposure'=>null,'approved_ledger'=>null]);
+                ReconciliationCaseEvent::create(['reconciliation_case_id'=>$locked->id,'action'=>'auto_reopened',
+                    'old_status'=>'resolved','new_status'=>'investigating',
+                    'notes'=>'Balances changed or the posted ledger is unavailable.']);
+                $case->refresh();
+            });
         }
         $selectedCaseEvents = isset($filters['party_id'], $filters['currency_id'])
             ? ($cases->get($filters['party_id'].':'.$filters['currency_id'])?->events()->with('actor')->limit(30)->get() ?? collect())
@@ -151,6 +159,8 @@ class TradeReconciliationController extends Controller
         $data['resolved_at'] = null;
         $data['approved_by'] = null;
         $data['approved_at'] = null;
+        $data['approved_exposure'] = null;
+        $data['approved_ledger'] = null;
         $case->fill($data)->save();
         ReconciliationCaseEvent::create(['reconciliation_case_id'=>$case->id,'actor_id'=>$request->user()->id,
             'action'=>'updated','old_status'=>$oldStatus,'new_status'=>$case->status,'notes'=>$case->notes]);
