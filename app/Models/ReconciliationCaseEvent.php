@@ -9,7 +9,9 @@ class ReconciliationCaseEvent extends Model {
  }
  protected static function booted():void {
   static::creating(function(self $event){
+   \Illuminate\Support\Facades\DB::table('reconciliation_cases')->where('id',$event->reconciliation_case_id)->lockForUpdate()->first();
    $previous=self::where('reconciliation_case_id',$event->reconciliation_case_id)->orderByDesc('id')->first();
+   if($previous && !$previous->event_hash) throw new \LogicException('Unsigned historical audit events require review before appending new events.');
    $event->previous_hash=$previous?->event_hash;
    $event->event_hash=self::signature($event,$event->previous_hash);
   });
