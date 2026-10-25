@@ -5,6 +5,15 @@
 .reconciliation-review-link{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid #cbdff4;border-radius:7px;background:#f2f8ff;color:#1d5d9c;font-size:11px;font-weight:750;text-decoration:none;white-space:nowrap}
 .reconciliation-review-link:hover,.reconciliation-review-link:focus-visible{background:#e2efff;border-color:#8cb8e8;color:#144b81}
 .reconciliation-difference{display:inline-flex;align-items:center;gap:5px;color:#b45309;font-size:11px;font-weight:750;white-space:nowrap}
+.reconciliation-summary{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:15px 0}
+.reconciliation-summary>div{padding:13px;border:1px solid #e0e9f3;border-radius:9px;background:#f8fbff;min-width:0}
+.reconciliation-summary>div>span{display:block;color:#6c819b;font-size:11px;margin-bottom:8px}
+.reconciliation-summary>div>strong{display:block;color:#1c456e;font-size:15px;overflow-wrap:anywhere}
+.reconciliation-summary-status{display:flex;align-items:flex-start;gap:9px;padding:11px 14px;border-radius:8px;margin:0 0 15px;font-size:12px;font-weight:650}
+.reconciliation-summary-status.is-matched{background:#eaf8ef;color:#167142;border:1px solid #bde5cd}
+.reconciliation-summary-status.needs-review{background:#fff7e8;color:#96580c;border:1px solid #f1d8aa}
+@media(max-width:1100px){.reconciliation-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.reconciliation-summary{grid-template-columns:1fr}}
 </style>
 <div class="heading"><div><h1><i class="fa-solid fa-scale-balanced"></i> Settlement Reconciliation</h1><p>Finance / Controls / Reconciliation · Review unapplied payments and outstanding customer or supplier documents.</p></div><div class="actions"><a class="btn btn-light" href="{{ route('finance.documents.index',['type'=>$type]) }}"><i class="fa-solid fa-arrow-left"></i> Documents</a></div></div>
 <div class="report-tabs"><a class="{{ $type==='receivable'?'active':'' }}" href="{{ route('finance.reconciliation.index',['type'=>'receivable']) }}"><i class="fa-solid fa-users"></i> Customers</a><a class="{{ $type==='payable'?'active':'' }}" href="{{ route('finance.reconciliation.index',['type'=>'payable']) }}"><i class="fa-solid fa-truck-field"></i> Suppliers</a></div>
@@ -14,6 +23,23 @@
 
 @if($selectedParty)
 <section class="panel report-panel" id="reconciliation-breakdown"><div class="report-section-head"><div><h2>Transaction Breakdown · {{ $selectedParty->name }}</h2><p>{{ $currencies[$filters['currency_id']] ?? 'Currency' }} · Source transactions and all posted ledger lines for the selected party account.</p></div><a class="reconciliation-review-link" href="{{ route('finance.reconciliation.index', ['type'=>$type]) }}"><i class="fa-solid fa-xmark"></i> Close breakdown</a></div>
+@if($reconciliationSummary)
+<div class="reconciliation-summary" aria-label="Selected party reconciliation summary">
+<div><span>Outstanding documents</span><strong><x-finance-amount :amount="$reconciliationSummary['outstanding']" /></strong></div>
+<div><span>Unapplied payments</span><strong><x-finance-amount :amount="$reconciliationSummary['unapplied']" /></strong></div>
+<div><span>Net settlement exposure</span><strong><x-finance-amount :amount="$reconciliationSummary['exposure']" /></strong></div>
+<div><span>Posted ledger balance</span><strong>@if($reconciliationSummary['ledger'] !== null)<x-finance-amount :amount="$reconciliationSummary['ledger']" />@else Not available @endif</strong></div>
+<div><span>Exposure vs. ledger difference</span><strong>@if($reconciliationSummary['difference'] !== null)<x-finance-amount :amount="$reconciliationSummary['difference']" :direction="abs($reconciliationSummary['difference']) > 0.0001 ? 'out' : 'neutral'" />@else — @endif</strong></div>
+</div>
+<div class="reconciliation-summary-status {{ $reconciliationSummary['status'] === 'matched' ? 'is-matched' : 'needs-review' }}" role="status">
+@if($reconciliationSummary['status'] === 'matched')<i class="fa-solid fa-circle-check"></i> Matched: settlement exposure equals the posted party ledger balance within 0.0001.
+@elseif($reconciliationSummary['status'] === 'missing_mapping')<i class="fa-solid fa-triangle-exclamation"></i> Missing party ledger mapping. Link the correct account before comparing balances.
+@elseif($reconciliationSummary['status'] === 'no_postings')<i class="fa-solid fa-circle-info"></i> No posted journal lines found for this party account and currency. A ledger comparison is unavailable.
+@elseif($reconciliationSummary['status'] === 'allocation_exception')<i class="fa-solid fa-triangle-exclamation"></i> Excess allocation detected. Review document and payment allocations before accepting the comparison.
+@else<i class="fa-solid fa-triangle-exclamation"></i> Difference detected. Compare the source transactions below against posted journal lines, including manual adjustments and opening balances.
+@endif
+</div>
+@endif
 <div class="table-wrap"><table><thead><tr><th>Source</th><th>Reference</th><th>Date</th><th>Original Amount</th><th>Allocated</th><th>Remaining</th></tr></thead><tbody>
 @foreach($documentBreakdown as $document)@php($allocated=(float)($document->allocations_sum_amount??0))<tr><td>Document</td><td>{{ $document->number }}</td><td>{{ $document->document_date }}</td><td><x-finance-amount :amount="$document->amount" /></td><td><x-finance-amount :amount="$allocated" /></td><td><x-finance-amount :amount="max(0,(float)$document->amount-$allocated)" /></td></tr>@endforeach
 @foreach($paymentBreakdown as $payment)@php($allocated=(float)($payment->allocations_sum_amount??0))<tr><td>{{ $type==='receivable'?'Receipt':'Payment' }}</td><td>{{ $payment->reference ?: '#'.$payment->id }}</td><td>{{ $payment->transaction_date }}</td><td><x-finance-amount :amount="$payment->amount" /></td><td><x-finance-amount :amount="$allocated" /></td><td><x-finance-amount :amount="max(0,(float)$payment->amount-$allocated)" /></td></tr>@endforeach

@@ -75,6 +75,7 @@ class TradeReconciliationController extends Controller
         $documentBreakdown = collect();
         $paymentBreakdown = collect();
         $journalBreakdown = collect();
+        $reconciliationSummary = null;
         if (isset($filters['party_id'], $filters['currency_id'])) {
             $party = $parties->firstWhere('id', (int) $filters['party_id']);
             $key = $filters['party_id'] . ':' . $filters['currency_id'];
@@ -83,6 +84,16 @@ class TradeReconciliationController extends Controller
                 $documentBreakdown = $documents->filter(fn ($doc) => (int) $doc->trade_party_id === (int) $party->id && (int) $doc->currency_id === (int) $filters['currency_id'])->values();
                 $mappedLedger = $rows[$key]['ledger_account_id'];
                 $paymentBreakdown = $transactions->filter(fn ($tx) => $mappedLedger && (int) $tx->counterpart_ledger_account_id === (int) $mappedLedger && (int) $tx->currency_id === (int) $filters['currency_id'])->values();
+                $selectedRow = $rows[$key];
+                $reconciliationSummary = [
+                    'outstanding' => round($selectedRow['outstanding'], 4),
+                    'unapplied' => round($selectedRow['unapplied'], 4),
+                    'exposure' => round($selectedRow['outstanding'] - $selectedRow['unapplied'], 4),
+                    'ledger' => $selectedRow['ledger_balance'],
+                    'difference' => $selectedRow['difference'],
+                    'issues' => $selectedRow['issues'],
+                    'status' => !$mappedLedger ? 'missing_mapping' : ($selectedRow['ledger_balance'] === null ? 'no_postings' : ($selectedRow['issues'] > 0 ? 'allocation_exception' : (abs($selectedRow['difference']) > 0.0001 ? 'difference' : 'matched'))),
+                ];
                 if ($mappedLedger) {
                     $journalBreakdown = \Illuminate\Support\Facades\DB::table('journal_lines as jl')
                         ->join('journal_entries as je', 'je.id', '=', 'jl.journal_entry_id')
@@ -95,6 +106,6 @@ class TradeReconciliationController extends Controller
             }
         }
         $currencies = \App\Models\Currency::pluck('code', 'id');
-        return view('finance.documents.reconciliation', compact('type', 'rows', 'currencies', 'unmappedTransactions', 'selectedParty', 'documentBreakdown', 'paymentBreakdown', 'journalBreakdown', 'filters'));
+        return view('finance.documents.reconciliation', compact('type', 'rows', 'currencies', 'unmappedTransactions', 'selectedParty', 'documentBreakdown', 'paymentBreakdown', 'journalBreakdown', 'reconciliationSummary', 'filters'));
     }
 }
