@@ -18,6 +18,8 @@ Route::post('/language', function (\Illuminate\Http\Request $request) {
 })->middleware('auth')->name('language.update');
 
 Route::middleware('auth')->post('/purchases/orders', [\App\Http\Controllers\PurchaseOrderController::class,'store'])->name('purchases.orders.store');
+Route::middleware('auth')->post('/purchases/orders/{order}/expenses', [\App\Http\Controllers\PurchaseOrderController::class,'addExpense'])->name('purchases.orders.expenses.store');
+Route::middleware('auth')->post('/purchases/orders/{order}/advances', [\App\Http\Controllers\PurchaseOrderController::class,'addAdvance'])->name('purchases.orders.advances.store');
 Route::middleware('auth')->get('/purchases/orders/{order}', [\App\Http\Controllers\PurchaseOrderController::class,'show'])->name('purchases.orders.show');
 Route::middleware('auth')->get('/purchases/orders', [\App\Http\Controllers\PurchaseOrderController::class,'index'])->name('purchases.orders.index');
 

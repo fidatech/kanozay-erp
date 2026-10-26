@@ -39,6 +39,30 @@ class PurchaseOrderController extends Controller {
  }
  public function show(Request $request,PurchaseOrder $order) {
   abort_unless($request->user()->can('administration.view'),403);
-  return view('purchases.show', ['order'=>$order->load(['supplier','currency','items'])]);
+  return view('purchases.show', ['order'=>$order->load(['supplier','currency','items','expenses','advances'])]);
+ }
+ public function addExpense(Request $request,PurchaseOrder $order) {
+  abort_unless($request->user()->can('administration.view'),403);
+  abort_unless($order->status==='draft',422,'Only draft orders can be edited.');
+  $data=$request->validate([
+   'category'=>['required',Rule::in(['transport','loading','customs','insurance','freight','handling','other'])],
+   'description'=>['nullable','string','max:255'],
+   'amount'=>['required','numeric','gt:0','max:999999999999'],
+   'expense_date'=>['required','date'],
+  ]);
+  $order->expenses()->create($data+['created_by'=>$request->user()->id]);
+  return back()->with('success','Purchase expense added.');
+ }
+ public function addAdvance(Request $request,PurchaseOrder $order) {
+  abort_unless($request->user()->can('administration.view'),403);
+  abort_unless($order->status==='draft',422,'Only draft orders can be edited.');
+  $data=$request->validate([
+   'payment_date'=>['required','date'],
+   'amount'=>['required','numeric','gt:0','max:999999999999'],
+   'reference'=>['nullable','string','max:100'],
+   'notes'=>['nullable','string','max:2000'],
+  ]);
+  $order->advances()->create($data+['created_by'=>$request->user()->id]);
+  return back()->with('success','Supplier advance recorded on this order (not yet posted to finance).');
  }
 }

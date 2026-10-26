@@ -6,4 +6,6 @@ class PurchaseOrder extends Model {
  public function supplier(){return $this->belongsTo(TradeParty::class,'supplier_id');}
  public function currency(){return $this->belongsTo(Currency::class);}
  public function items(){return $this->hasMany(PurchaseOrderItem::class);}
+ public function expenses(){return $this->hasMany(PurchaseOrderExpense::class);}
+ public function advances(){return $this->hasMany(PurchaseOrderAdvance::class);}
 }
