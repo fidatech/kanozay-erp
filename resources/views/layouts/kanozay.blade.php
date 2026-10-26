@@ -369,6 +369,62 @@
    jQuery(this).select2({width:'100%',dropdownAutoWidth:false,dropdownParent:dialog?jQuery(dialog):jQuery(document.body)});
   });
  }
+ // Shared entity creation for searchable record selectors. Only explicit, supported entity types are offered.
+ function setupEntityQuickCreate(){
+  const endpoints={currency:@json(route('purchases.quick-currency')),supplier:@json(route('purchases.quick-supplier'))};
+  const canCreate=@json(auth()->check() && auth()->user()->can('administration.update'));
+  if(!canCreate)return;
+  const modal=document.createElement('dialog');modal.className='k-create-dialog';modal.id='k-entity-quick-create';
+  modal.innerHTML='<div class="k-create-head"><h2 id="k-entity-quick-title">Add New</h2><button type="button" data-close aria-label="Close">×</button></div><div class="k-create-body"><form id="k-entity-quick-form"><div id="k-entity-quick-fields"></div><p id="k-entity-quick-error" role="alert" style="color:#a83232" hidden></p><button type="submit" class="btn">Save and Select</button></form></div>';
+  document.body.append(modal);modal.querySelector('[data-close]').onclick=()=>modal.close();
+  let target=null,kind=null;
+  const labels={currency:'Currency',supplier:'Supplier'};
+  const fieldHtml={currency:'<label>Code (3 letters)<input name="code" required maxlength="3"></label><label>Name<input name="name" required maxlength="100"></label><label>Symbol<input name="symbol" maxlength="12"></label>',supplier:'<label>Supplier name<input name="name" required maxlength="180"></label><label>Phone<input name="phone" maxlength="80"></label>'};
+  function show(select,type){
+   target=select;kind=type;modal.querySelector('h2').textContent='Add New '+labels[type];modal.querySelector('#k-entity-quick-fields').innerHTML=fieldHtml[type];modal.querySelector('form').reset();modal.querySelector('#k-entity-quick-error').hidden=true;
+   if(type==='supplier'){
+    const currency=select.form?.querySelector('select[name="currency_id"]');
+    if(!currency?.value){alert('Select a currency first, then add the supplier.');return;}
+   }
+   modal.showModal();
+  }
+  function register(root){
+   root.querySelectorAll('select').forEach(select=>{
+    if(select.dataset.quickRegistered==='1'||select.disabled||select.multiple||!select.form||select.form.method.toLowerCase()==='get'||select.closest('#k-entity-quick-create'))return;
+    const name=select.name||'';
+    const type=select.dataset.createEntity||(name==='supplier_id'?'supplier':name==='currency_id'||name==='from_currency_id'||name==='to_currency_id'?'currency':'');
+    if(!endpoints[type]||select.closest('.po-combo'))return;
+    select.dataset.quickRegistered='1';
+    const opt=new Option('+ Add New '+labels[type]+'…','__create_new__');
+    opt.dataset.quickCreate=type;select.add(opt);
+    const previous=select.value==='__create_new__'?'':select.value;
+    let last=previous;
+    select.addEventListener('change',()=>{
+     if(select.value==='__create_new__'){select.value=last;if(window.jQuery)jQuery(select).trigger('change.select2');show(select,type)}
+     else last=select.value;
+    });
+   });
+  }
+  register(document.body);
+  modal.querySelector('form').addEventListener('submit',async e=>{
+   e.preventDefault();const form=e.currentTarget,button=form.querySelector('button[type="submit"]'),error=modal.querySelector('#k-entity-quick-error'),data=new FormData(form);
+   if(kind==='supplier')data.append('currency_id',target.form?.querySelector('select[name="currency_id"]')?.value||'');
+   data.append('_token',document.querySelector('input[name="_token"]')?.value||@json(csrf_token()));
+   button.disabled=true;error.hidden=true;
+   try{
+    const response=await fetch(endpoints[kind],{method:'POST',headers:{Accept:'application/json','X-Requested-With':'XMLHttpRequest'},body:data});
+    const result=await response.json();
+    if(!response.ok)throw new Error(Object.values(result.errors||{}).flat().join(' ')||result.message||'Could not save');
+    document.querySelectorAll('select').forEach(s=>{
+     if(s===target||s.name===target.name){
+      s.add(new Option(result.text,result.id,s===target,s===target));
+      if(s===target){s.value=result.id;if(window.jQuery)jQuery(s).trigger('change');}
+     }
+    });
+    modal.close();
+   }catch(ex){error.textContent=ex.message;error.hidden=false}finally{button.disabled=false}
+  });
+ }
  function setupCreationDialogs(){
   document.querySelectorAll('form[data-new-entry-form]').forEach((form,index)=>{
    if(form.closest('dialog'))return;
@@ -397,7 +453,7 @@
   });
  }
  document.addEventListener('DOMContentLoaded',()=>{
-  setupCreationDialogs();enhanceSelects(document.body);
+  setupCreationDialogs();enhanceSelects(document.body);setupEntityQuickCreate();
   // Select2 consumes native change handling differently across browsers.
   // Bind filters to the enhanced selection and submit the correct GET form.
   if(window.jQuery&&jQuery.fn.select2){
