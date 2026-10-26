@@ -22,7 +22,7 @@ class ModulePageStructureTest extends TestCase
             foreach($data['pages'] as $page=>$label){
                 $this->actingAs($user)->get(route('workspace.page',[$module,$page]))
                     ->assertOk()->assertSee($page === 'overview' ? $data['label'] : $label)
-                    ->assertSee($page === 'overview' ? 'Daily operations' : ($module === 'purchases' && $page === 'orders' ? 'Create Purchase Order' : 'Workflow pending'));
+                    ->assertSee($page === 'overview' ? 'Daily operations' : ($module === 'purchases' && $page === 'orders' ? 'New Purchase Order' : 'Workflow pending'));
             }
         }
     }

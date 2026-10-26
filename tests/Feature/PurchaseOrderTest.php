@@ -12,15 +12,17 @@ class PurchaseOrderTest extends TestCase {
   $user->givePermissionTo('administration.view');
   $supplier=TradeParty::create(['type'=>'supplier','name'=>'Test Supplier','code'=>'SUP-001','is_active'=>true,'created_by'=>$user->id]);
   $currency=Currency::create(['code'=>'AFN','name'=>'Afghani','symbol'=>'؋','decimal_places'=>2,'is_active'=>true,'is_base'=>true]);
-  $payload=['number'=>'PO-TEST-1','supplier_id'=>$supplier->id,'currency_id'=>$currency->id,'source'=>'foreign','order_date'=>'2026-10-27','items'=>[['description'=>'Flour','quantity'=>10,'unit_price'=>200]]];
+  $payload=['supplier_id'=>$supplier->id,'currency_id'=>$currency->id,'source'=>'foreign','order_date'=>'2026-10-27','items'=>[['description'=>'Flour','quantity'=>10,'unit_price'=>200]]];
   $this->actingAs($user)->post(route('purchases.orders.store'),$payload)->assertRedirect(route('purchases.orders.index'));
   $order=PurchaseOrder::firstOrFail();
   $this->assertSame('draft',$order->status);
   $this->assertSame('foreign',$order->source);
   $this->assertSame('Flour',$order->items()->firstOrFail()->description);
   $this->actingAs($user)->get(route('purchases.orders.show',$order))->assertOk()->assertSee('Flour');
-  $this->actingAs($user)->post(route('purchases.orders.store'),$payload)->assertSessionHasErrors('number');
-  $this->assertSame(1,PurchaseOrder::count());
+  $this->assertSame('PO-000001',$order->number);
+  $this->actingAs($user)->post(route('purchases.orders.store'),$payload)->assertRedirect(route('purchases.orders.index'));
+  $this->assertSame('PO-000002',PurchaseOrder::latest('id')->first()->number);
+  $this->assertSame(2,PurchaseOrder::count());
  }
  public function test_expenses_and_advances_are_recorded_on_order_without_finance_postings():void {
   $user=User::factory()->create();
@@ -38,6 +40,23 @@ class PurchaseOrderTest extends TestCase {
   $this->actingAs($user)->post(route('purchases.orders.expenses.store',$order),['category'=>'invalid','amount'=>100,'expense_date'=>'2026-10-27'])->assertSessionHasErrors('category');
   $order->update(['status'=>'confirmed']);
   $this->actingAs($user)->post(route('purchases.orders.advances.store',$order),['amount'=>10,'payment_date'=>'2026-10-27'])->assertStatus(422);
+ }
+ public function test_inline_currency_creation_and_permissions():void {
+  $user=User::factory()->create();
+  Permission::findOrCreate('administration.update','web');
+  $this->actingAs($user)->postJson(route('purchases.quick-currency'),['code'=>'EUR','name'=>'Euro'])->assertForbidden();
+  $user->givePermissionTo('administration.update');
+  $this->actingAs($user)->postJson(route('purchases.quick-currency'),['code'=>'EUR','name'=>'Euro'])->assertCreated()->assertJsonPath('text','EUR — Euro');
+  $this->assertDatabaseHas('currencies',['code'=>'EUR','name'=>'Euro']);
+  $this->actingAs($user)->postJson(route('purchases.quick-currency'),['code'=>'eur','name'=>'Duplicate'])->assertUnprocessable()->assertJsonValidationErrors('code');
+ }
+ public function test_inline_supplier_requires_update_permission_and_currency():void {
+  $user=User::factory()->create();
+  Permission::findOrCreate('administration.update','web');
+  $currency=Currency::create(['code'=>'AFN','name'=>'Afghani','symbol'=>'؋','decimal_places'=>2,'is_active'=>true,'is_base'=>true]);
+  $this->actingAs($user)->postJson(route('purchases.quick-supplier'),['name'=>'New Supplier','currency_id'=>$currency->id])->assertForbidden();
+  $user->givePermissionTo('administration.update');
+  $this->actingAs($user)->postJson(route('purchases.quick-supplier'),['name'=>'New Supplier'])->assertUnprocessable()->assertJsonValidationErrors('currency_id');
  }
  public function test_unauthorized_user_cannot_create_orders():void {
   $user=User::factory()->create();

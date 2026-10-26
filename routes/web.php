@@ -17,6 +17,8 @@ Route::post('/language', function (\Illuminate\Http\Request $request) {
     return back();
 })->middleware('auth')->name('language.update');
 
+Route::middleware('auth')->post('/purchases/quick-supplier', [\App\Http\Controllers\PurchaseOrderController::class,'quickSupplier'])->name('purchases.quick-supplier');
+Route::middleware('auth')->post('/purchases/quick-currency', [\App\Http\Controllers\PurchaseOrderController::class,'quickCurrency'])->name('purchases.quick-currency');
 Route::middleware('auth')->post('/purchases/orders', [\App\Http\Controllers\PurchaseOrderController::class,'store'])->name('purchases.orders.store');
 Route::middleware('auth')->post('/purchases/orders/{order}/expenses', [\App\Http\Controllers\PurchaseOrderController::class,'addExpense'])->name('purchases.orders.expenses.store');
 Route::middleware('auth')->post('/purchases/orders/{order}/advances', [\App\Http\Controllers\PurchaseOrderController::class,'addAdvance'])->name('purchases.orders.advances.store');
