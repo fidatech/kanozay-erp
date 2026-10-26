@@ -147,6 +147,8 @@
 .coa-grid,.fx-grid,.rate-grid,.fa-layout,.money-layout{display:block!important;width:100%!important;min-width:0!important}
 .coa-grid>section.panel,.fx-grid>section.panel,.rate-grid>section.panel,.fa-layout>section.panel,.money-layout>section.panel{width:100%!important;max-width:none!important;min-width:0!important}
 .k-create-source{display:none!important}
+/* Never hide a creation form when its modal trigger has not been mounted. */
+body:not(.k-create-ready) .k-create-source{display:block!important}
 .k-register-header{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:16px;min-height:42px}
 .k-register-header h2{margin:0!important;padding:0!important;border:0!important}
 .k-register-header .k-create-trigger{margin-left:auto;white-space:nowrap}
@@ -453,7 +455,9 @@
   });
  }
  document.addEventListener('DOMContentLoaded',()=>{
-  setupCreationDialogs();enhanceSelects(document.body);setupEntityQuickCreate();
+  try{setupCreationDialogs();document.body.classList.add('k-create-ready');}catch(error){console.error('Create form initialization failed',error);document.querySelectorAll('.k-create-source').forEach(panel=>panel.classList.remove('k-create-source'));}
+  try{enhanceSelects(document.body);}catch(error){console.error('Select2 initialization failed',error);}
+  try{setupEntityQuickCreate();}catch(error){console.error('Quick create initialization failed',error);}
   // Select2 consumes native change handling differently across browsers.
   // Bind filters to the enhanced selection and submit the correct GET form.
   if(window.jQuery&&jQuery.fn.select2){
