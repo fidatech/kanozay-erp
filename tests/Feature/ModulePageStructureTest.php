@@ -27,6 +27,21 @@ class ModulePageStructureTest extends TestCase
         }
     }
 
+    public function test_additional_workflow_is_highlighted_in_its_module_sidebar(): void
+    {
+        $user = User::factory()->create();
+        Permission::findOrCreate('administration.view', 'web');
+        $user->givePermissionTo('administration.view');
+        foreach (config('erp_pages') as $module => $data) {
+            $additional = array_diff_key($data['pages'], array_flip(config('erp_navigation.'.$module, [])));
+            foreach ($additional as $slug => $label) {
+                $response = $this->actingAs($user)->get(route('workspace.page', [$module, $slug]));
+                $response->assertOk()->assertSee('aria-current="page"', false)
+                    ->assertSee($label);
+            }
+        }
+    }
+
     public function test_finance_and_administration_overviews_are_accessible(): void
     {
         $user = User::factory()->create();
