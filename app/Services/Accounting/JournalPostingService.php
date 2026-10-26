@@ -12,6 +12,7 @@ class JournalPostingService {
    $currencyId=JournalEntry::whereKey($journal->id)->value('currency_id');
    $accountIds=DB::table('journal_lines')->where('journal_entry_id',$journal->id)
     ->pluck('ledger_account_id')->unique()->values()->all();
+   $mapped=collect();
    if ($accountIds) {
     $mapped=DB::table('entity_ledger_accounts')->where('currency_id',$currencyId)
      ->whereIn('ledger_account_id',$accountIds)
@@ -24,6 +25,11 @@ class JournalPostingService {
     }
    }
    $entry=JournalEntry::whereKey($journal->id)->lockForUpdate()->firstOrFail();
+   $currentMappings=DB::table('entity_ledger_accounts')->where('currency_id',$currencyId)
+    ->whereIn('ledger_account_id',$accountIds)->whereIn('purpose',['receivable','payable'])
+    ->whereIn('entity_type',['customer','supplier'])->get();
+   $mappingKey=fn ($item) => $item->entity_type.':'.$item->purpose.':'.$item->entity_id.':'.$item->currency_id.':'.$item->ledger_account_id;
+   if ($currentMappings->map($mappingKey)->sort()->values()->all() !== $mapped->map($mappingKey)->sort()->values()->all()) throw ValidationException::withMessages(['lines'=>'Party account mappings changed during posting. Please retry.']);
    if ((int)$entry->currency_id !== (int)$currencyId) throw ValidationException::withMessages(['currency_id'=>'Journal currency changed during posting. Please retry.']);
    $lockedAccountIds=DB::table('journal_lines')->where('journal_entry_id',$entry->id)->pluck('ledger_account_id')->unique()->values()->all();
    if (array_diff($lockedAccountIds,$accountIds) || array_diff($accountIds,$lockedAccountIds)) throw ValidationException::withMessages(['lines'=>'Journal accounts changed during posting. Please retry.']);
