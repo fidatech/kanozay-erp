@@ -30,6 +30,17 @@
  <div class="overview-hero"><div><h1>{{ $moduleData['label'] }}</h1><p>Overview, daily work, and important supporting operations in one place.</p></div><i class="fa-solid fa-{{ $moduleData['icon'] }}" aria-hidden="true"></i></div>
  @php($daily=array_values(array_filter(config('erp_navigation.'.$module,[]),fn($slug)=>isset($moduleData['pages'][$slug]) && $slug!=='overview')))
  @php($support=array_diff_key($moduleData['pages'],array_flip($daily),['overview'=>true]))
+ @if($module==='purchases' && $purchaseSnapshot)
+ <div class="overview-section"><h2>Purchase accounting snapshot</h2><small>Live finance records, not purchase orders</small></div>
+ <div class="overview-stats">
+  <div class="overview-stat"><small>Active suppliers</small><strong>{{ number_format($purchaseSnapshot['suppliers']) }}</strong><span class="stat-caption">Supplier accounts registered</span></div>
+  <div class="overview-stat"><small>Payable documents</small><strong>{{ number_format($purchaseSnapshot['payables']) }}</strong><span class="stat-caption">Posted trade payables</span></div>
+  <div class="overview-stat"><small>Overdue payables</small><strong>{{ number_format($purchaseSnapshot['overdue']) }}</strong><span class="stat-caption">Past due with an outstanding balance</span></div>
+ </div>
+ <div class="overview-panel"><div class="overview-panel-header"><h2>Recent payable documents</h2><a href="{{ route('finance.documents.index',['type'=>'payable']) }}">View payables</a></div>
+ @forelse($purchaseSnapshot['recent'] as $doc)<div class="overview-activity"><span><strong>{{ $doc->number }}</strong> · {{ $doc->party?->name ?? 'Supplier unavailable' }} · {{ number_format((float)$doc->amount,2) }} {{ $doc->currency?->code }}</span><time>{{ $doc->document_date }}</time></div>@empty<div class="overview-empty">No payable documents recorded yet.</div>@endforelse
+ </div>
+ @endif
  <div class="overview-stats">
   <div class="overview-stat"><small>Daily workflows</small><strong>{{ count($daily) }}</strong><span class="stat-caption">Quick access to essential pages</span></div>
   <div class="overview-stat"><small>Supporting workflows</small><strong>{{ count($support) }}</strong><span class="stat-caption">Available without crowding the sidebar</span></div>

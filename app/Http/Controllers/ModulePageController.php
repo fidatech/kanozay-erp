@@ -17,6 +17,12 @@ class ModulePageController extends Controller
                 'module' => $module,
                 'moduleData' => $modules[$module],
                 'recentActivity' => \App\Models\ActivityLog::query()->latest('id')->limit(5)->get(),
+                'purchaseSnapshot' => $module === 'purchases' ? [
+                    'suppliers' => \App\Models\TradeParty::query()->where('type', 'supplier')->where('is_active', true)->count(),
+                    'payables' => \App\Models\TradeDocument::query()->where('type', 'payable')->count(),
+                    'overdue' => \App\Models\TradeDocument::query()->where('type', 'payable')->whereDate('due_date', '<', today())->whereRaw('amount > (select coalesce(sum(amount), 0) from trade_settlement_allocations where trade_document_id = trade_documents.id)')->count(),
+                    'recent' => \App\Models\TradeDocument::query()->with(['party', 'currency'])->where('type', 'payable')->latest('id')->limit(5)->get(),
+                ] : null,
             ]);
         }
 
