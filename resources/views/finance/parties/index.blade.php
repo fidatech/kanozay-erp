@@ -61,8 +61,7 @@
 .party-register-amount.incoming{color:#15803d!important}.party-register-amount.outgoing{color:#dc2626!important}
 .party-register-amount i{font-size:11px}
 </style>
-<div class="heading"><div><h1><i class="fa-solid fa-address-book"></i> Customers & Suppliers</h1><p>Manage customers and suppliers in one simple register.</p></div></div>
-<div class="party-tabs"><a class="{{ $type==='customer'?'active':'' }}" href="{{ route('finance.parties.index',['type'=>'customer']) }}">Customers</a><a class="{{ $type==='supplier'?'active':'' }}" href="{{ route('finance.parties.index',['type'=>'supplier']) }}">Suppliers</a></div>
+<div class="heading"><div><h1><i class="fa-solid {{ $type==='customer'?'fa-users':'fa-truck-field' }}"></i> {{ $type==='customer'?'Customers':'Suppliers' }}</h1><p>{{ $type==='customer'?'Manage customer profiles, currencies and opening receivables.':'Manage supplier profiles, currencies and opening payables.' }}</p></div></div>
 @if($errors->any())<div class="panel" data-form-errors style="color:#b42318">{{ $errors->first() }}</div>@endif
 <div class="party-list"><section class="panel"><h2>Add {{ ucfirst($type) }}</h2><p class="party-note">Contact information and account setup</p>
 @can('administration.update')<form class="party-form" data-new-entry-form="1" method="POST" action="{{ route('finance.parties.store') }}">@csrf<input type="hidden" name="type" value="{{ $type }}"><label>Name<input name="name" maxlength="180" value="{{ old('name') }}" required></label>

@@ -26,6 +26,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/finance/reconciliation/cases/{case}/reopen', [\App\Http\Controllers\TradeReconciliationController::class, 'reopenCase'])->name('finance.reconciliation.cases.reopen');
     Route::post('/finance/documents', [\App\Http\Controllers\TradeDocumentController::class,'store'])->name('finance.documents.store');
     Route::post('/finance/settlements', [\App\Http\Controllers\TradeSettlementController::class,'store'])->name('finance.settlements.store');
+    Route::get('/finance/customers', [\App\Http\Controllers\TradePartyController::class,'customers'])->name('finance.customers.index');
+    Route::get('/finance/suppliers', [\App\Http\Controllers\TradePartyController::class,'suppliers'])->name('finance.suppliers.index');
     Route::get('/finance/parties', [\App\Http\Controllers\TradePartyController::class,'index'])->name('finance.parties.index');
     Route::post('/finance/parties', [\App\Http\Controllers\TradePartyController::class,'store'])->name('finance.parties.store');
     Route::post('/finance/parties/{party}/opening-balance', [\App\Http\Controllers\TradePartyController::class,'openingBalance'])->name('finance.parties.opening.store');
