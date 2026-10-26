@@ -1,0 +1,7 @@
+@extends('layouts.kanozay')
+@section('content')
+<div class="heading"><div><h1>Purchase Order {{ $order->number }}</h1><p>{{ ucfirst($order->source) }} purchase · {{ ucfirst($order->status) }} · {{ $order->order_date }}</p></div><a href="{{ route('purchases.orders.index') }}">Back to Orders</a></div>
+<div class="panel"><h2>Order Details</h2><p><strong>Supplier:</strong> {{ $order->supplier?->name }} &nbsp; <strong>Currency:</strong> {{ $order->currency?->code }} &nbsp; <strong>Expected delivery:</strong> {{ $order->expected_date ?? 'Not specified' }}</p><p>{{ $order->notes }}</p></div>
+<div class="panel"><h2>Items</h2><div class="table-wrap"><table><thead><tr><th>Description</th><th>Quantity</th><th>Unit Price</th><th>Line Total</th></tr></thead><tbody>@foreach($order->items as $item)<tr><td>{{ $item->description }}</td><td>{{ number_format((float)$item->quantity,4) }}</td><td>{{ number_format((float)$item->unit_price,2) }}</td><td>{{ number_format((float)$item->quantity*(float)$item->unit_price,2) }}</td></tr>@endforeach</tbody><tfoot><tr><th colspan="3">Total ({{ $order->currency?->code }})</th><th>{{ number_format($order->items->sum(fn($i)=>(float)$i->quantity*(float)$i->unit_price),2) }}</th></tr></tfoot></table></div></div>
+<div class="panel"><h2>Next operations</h2><p class="muted">Draft orders do not post inventory or accounting entries. Supplier advances, shipment expenses, customs, landed cost, receiving, and approvals will be connected here in subsequent batches.</p></div>
+@endsection

@@ -17,6 +17,10 @@ Route::post('/language', function (\Illuminate\Http\Request $request) {
     return back();
 })->middleware('auth')->name('language.update');
 
+Route::middleware('auth')->post('/purchases/orders', [\App\Http\Controllers\PurchaseOrderController::class,'store'])->name('purchases.orders.store');
+Route::middleware('auth')->get('/purchases/orders/{order}', [\App\Http\Controllers\PurchaseOrderController::class,'show'])->name('purchases.orders.show');
+Route::middleware('auth')->get('/purchases/orders', [\App\Http\Controllers\PurchaseOrderController::class,'index'])->name('purchases.orders.index');
+
 Route::middleware('auth')->get('/workspace/{module}/{page}', [\App\Http\Controllers\ModulePageController::class, 'show'])->name('workspace.page');
 
 Route::middleware('auth')->group(function () {
