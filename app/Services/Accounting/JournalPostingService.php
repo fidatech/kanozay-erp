@@ -25,6 +25,8 @@ class JournalPostingService {
    }
    $entry=JournalEntry::whereKey($journal->id)->lockForUpdate()->firstOrFail();
    if ((int)$entry->currency_id !== (int)$currencyId) throw ValidationException::withMessages(['currency_id'=>'Journal currency changed during posting. Please retry.']);
+   $lockedAccountIds=DB::table('journal_lines')->where('journal_entry_id',$entry->id)->pluck('ledger_account_id')->unique()->values()->all();
+   if (array_diff($lockedAccountIds,$accountIds) || array_diff($accountIds,$lockedAccountIds)) throw ValidationException::withMessages(['lines'=>'Journal accounts changed during posting. Please retry.']);
    if($entry->status!=='draft')throw ValidationException::withMessages(['status'=>'Only draft journals may be posted.']);
    $lines=$entry->lines()->get();if($lines->count()<2)throw ValidationException::withMessages(['lines'=>'A journal needs at least two lines.']);
    $debits=0;$credits=0;
