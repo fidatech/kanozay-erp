@@ -1,0 +1,14 @@
+@extends('layouts.kanozay')
+@section('content')
+<style>
+.module-overview .overview-hero{display:flex;justify-content:space-between;align-items:center;gap:20px;padding:24px 28px;background:linear-gradient(110deg,#102f61,#1763a6);color:white;border-radius:14px;margin-bottom:18px;flex-wrap:wrap}.module-overview .overview-hero h1{font-size:25px;margin:0 0 9px}.module-overview .overview-hero p{margin:0;color:#d5e7fa;line-height:1.6}.module-overview .overview-hero i{font-size:32px;color:#b7dbff}.module-overview .overview-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:14px}.module-overview .overview-link{display:flex;align-items:center;gap:14px;padding:20px;background:#fff;border:1px solid #dce7f3;border-radius:12px;transition:transform .15s,box-shadow .15s}.module-overview .overview-link:hover{transform:translateY(-2px);box-shadow:0 9px 22px #123f7220}.module-overview .overview-link i{width:42px;height:42px;display:grid;place-items:center;background:#e9f3ff;color:#1763a6;border-radius:10px;font-size:19px}.module-overview .overview-link strong{display:block;font-size:13px}.module-overview .overview-link small{display:block;color:#7185a0;margin-top:5px}.module-overview .overview-section{margin:24px 0 12px;font-size:15px;color:#173a66}.module-overview .overview-note{background:#f4f8fe;border:1px solid #dce7f3;border-radius:10px;padding:14px 18px;color:#54708e;line-height:1.7;margin-top:22px}
+</style>
+<div class="module-overview">
+ <div class="overview-hero"><div><h1>{{ $moduleData['label'] }} Overview</h1><p>Access daily work and related operations from one organized workspace.</p></div><i class="fa-solid fa-{{ $moduleData['icon'] }}" aria-hidden="true"></i></div>
+ <h2 class="overview-section">Daily operations</h2>
+ <div class="overview-grid">@foreach(config('erp_navigation.'.$module,[]) as $slug)@if(isset($moduleData['pages'][$slug]))<a class="overview-link" href="{{ route('workspace.page',[$module,$slug]) }}"><i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i><span><strong>{{ $moduleData['pages'][$slug] }}</strong><small>Open workspace</small></span></a>@endif @endforeach</div>
+ @php($otherPages=array_diff_key($moduleData['pages'],array_flip(config('erp_navigation.'.$module,[])),['overview'=>true]))
+ @if(count($otherPages))<h2 class="overview-section">Additional workflows</h2><div class="overview-grid">@foreach($otherPages as $slug=>$label)<a class="overview-link" href="{{ route('workspace.page',[$module,$slug]) }}"><i class="fa-solid fa-layer-group" aria-hidden="true"></i><span><strong>{{ $label }}</strong><small>Related operation</small></span></a>@endforeach</div>@endif
+ <div class="overview-note"><i class="fa-solid fa-circle-info"></i> These pages are navigation previews. Live operational totals and transaction processing will appear as each workflow is implemented; no figures are fabricated.</div>
+</div>
+@endsection

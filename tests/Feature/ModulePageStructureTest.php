@@ -17,9 +17,12 @@ class ModulePageStructureTest extends TestCase
         Permission::findOrCreate('administration.view','web');
         $user->givePermissionTo('administration.view');
         foreach(config('erp_pages') as $module=>$data){
+            $this->actingAs($user)->get(route('workspace.page',[$module,'overview']))
+                ->assertOk()->assertSee($data['label'].' Overview');
             foreach($data['pages'] as $page=>$label){
                 $this->actingAs($user)->get(route('workspace.page',[$module,$page]))
-                    ->assertOk()->assertSee($label)->assertSee('Workflow pending');
+                    ->assertOk()->assertSee($page === 'overview' ? $data['label'].' Overview' : $label)
+                    ->assertSee($page === 'overview' ? 'Daily operations' : 'Workflow pending');
             }
         }
     }
