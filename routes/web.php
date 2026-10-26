@@ -17,6 +17,8 @@ Route::post('/language', function (\Illuminate\Http\Request $request) {
     return back();
 })->middleware('auth')->name('language.update');
 
+Route::middleware('auth')->get('/workspace/{module}/{page}', [\App\Http\Controllers\ModulePageController::class, 'show'])->name('workspace.page');
+
 Route::middleware('auth')->group(function () {
     Route::get('/finance/documents', [\App\Http\Controllers\TradeDocumentController::class,'index'])->name('finance.documents.index');
     Route::get('/finance/aging', [\App\Http\Controllers\TradeAgingController::class,'index'])->name('finance.aging.index');
