@@ -28,6 +28,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/finance/settlements', [\App\Http\Controllers\TradeSettlementController::class,'store'])->name('finance.settlements.store');
     Route::get('/finance/customers', [\App\Http\Controllers\TradePartyController::class,'customers'])->name('finance.customers.index');
     Route::get('/finance/suppliers', [\App\Http\Controllers\TradePartyController::class,'suppliers'])->name('finance.suppliers.index');
+    Route::get('/finance/customers/{party}', [\App\Http\Controllers\TradePartyController::class,'showCustomer'])->name('finance.customers.show');
+    Route::get('/finance/suppliers/{party}', [\App\Http\Controllers\TradePartyController::class,'showSupplier'])->name('finance.suppliers.show');
     Route::get('/finance/parties', [\App\Http\Controllers\TradePartyController::class,'index'])->name('finance.parties.index');
     Route::post('/finance/parties', [\App\Http\Controllers\TradePartyController::class,'store'])->name('finance.parties.store');
     Route::post('/finance/parties/{party}/opening-balance', [\App\Http\Controllers\TradePartyController::class,'openingBalance'])->name('finance.parties.opening.store');
