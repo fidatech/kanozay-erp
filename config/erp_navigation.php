@@ -12,5 +12,5 @@ return [
     'hr' => ['employees', 'attendance', 'leave', 'payroll', 'advances'],
     'assets' => ['register', 'maintenance', 'depreciation'],
     'documents' => ['library', 'approvals'],
-    'reports' => ['overview', 'production', 'inventory', 'sales', 'finance', 'quality'],
+    'reports' => ['production', 'inventory', 'sales', 'finance', 'quality'],
 ];

@@ -27,6 +27,18 @@ class ModulePageStructureTest extends TestCase
         }
     }
 
+    public function test_finance_and_administration_overviews_are_accessible(): void
+    {
+        $user = User::factory()->create();
+        Permission::findOrCreate('administration.view', 'web');
+        $user->givePermissionTo('administration.view');
+        $this->actingAs($user)->get(route('finance.overview'))
+            ->assertOk()->assertSee('Finance &amp; Accounting Overview', false);
+        $this->actingAs($user)->get(route('admin.index'))
+            ->assertOk()->assertSee('Administration Overview');
+        $this->assertArrayNotHasKey('overview', config('erp_pages.reports.pages'));
+    }
+
     public function test_unknown_pages_and_unauthorized_access_are_rejected(): void
     {
         $user=User::factory()->create();
