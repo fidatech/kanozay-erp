@@ -37,10 +37,10 @@
  </div>
  <div class="overview-section"><h2>Daily operations</h2><small>Choose a workspace</small></div>
  <div class="overview-grid">@foreach($daily as $slug)<a class="overview-link" href="{{ route('workspace.page',[$module,$slug]) }}"><i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i><span><strong>{{ $moduleData['pages'][$slug] }}</strong><small>Open workspace</small></span></a>@endforeach</div>
+ @if(count($support))<details class="overview-more"><summary>Additional workflows ({{ count($support) }})</summary><div class="overview-grid">@foreach($support as $slug=>$label)<a class="overview-link" href="{{ route('workspace.page',[$module,$slug]) }}"><i class="fa-solid fa-layer-group" aria-hidden="true"></i><span><strong>{{ $label }}</strong><small>Related operation</small></span></a>@endforeach</div></details>@endif
  <div class="overview-panel"><div class="overview-panel-header"><h2>Recent system activity</h2><small>Latest recorded events across the ERP</small></div>
  @forelse($recentActivity as $event)<div class="overview-activity"><span>{{ $event->description }}</span><time datetime="{{ $event->created_at?->toIso8601String() }}">{{ $event->created_at?->diffForHumans() }}</time></div>@empty<div class="overview-empty">No recorded activity yet.</div>@endforelse
  </div>
- @if(count($support))<details class="overview-more"><summary>Additional workflows ({{ count($support) }})</summary><div class="overview-grid">@foreach($support as $slug=>$label)<a class="overview-link" href="{{ route('workspace.page',[$module,$slug]) }}"><i class="fa-solid fa-layer-group" aria-hidden="true"></i><span><strong>{{ $label }}</strong><small>Related operation</small></span></a>@endforeach</div></details>@endif
  <p class="overview-note">Operational KPI figures are not shown until their source workflows are implemented. Recent activity is system-wide, not a module-specific transaction report.</p>
 </div>
 @endsection
