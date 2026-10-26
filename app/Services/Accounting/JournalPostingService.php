@@ -17,7 +17,7 @@ class JournalPostingService {
      ->whereIn('ledger_account_id',$accountIds)
      ->whereIn('purpose',['receivable','payable'])
      ->whereIn('entity_type',['customer','supplier'])->get();
-    foreach ($mapped->sortBy(fn ($item) => $item->purpose.':'.$item->entity_id) as $mapping) {
+    foreach ($mapped->unique(fn ($item) => $item->purpose.':'.$item->entity_id.':'.$item->currency_id)->sortBy(fn ($item) => $item->purpose.':'.str_pad((string)$item->entity_id, 20, '0', STR_PAD_LEFT)) as $mapping) {
      DB::table('reconciliation_cases')->where('type',$mapping->purpose)
       ->where('trade_party_id',$mapping->entity_id)
       ->where('currency_id',$currencyId)->lockForUpdate()->first();
