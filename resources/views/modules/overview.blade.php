@@ -30,6 +30,17 @@
  <div class="overview-hero"><div><h1>{{ $moduleData['label'] }}</h1><p>Overview, daily work, and important supporting operations in one place.</p></div><i class="fa-solid fa-{{ $moduleData['icon'] }}" aria-hidden="true"></i></div>
  @php($daily=array_values(array_filter(config('erp_navigation.'.$module,[]),fn($slug)=>isset($moduleData['pages'][$slug]) && $slug!=='overview')))
  @php($support=array_diff_key($moduleData['pages'],array_flip($daily),['overview'=>true]))
+ @if($module==='sales' && $salesSnapshot)
+ <div class="overview-section"><h2>Sales accounting snapshot</h2><small>Live finance records, not sales invoices</small></div>
+ <div class="overview-stats">
+  <div class="overview-stat"><small>Active customers</small><strong>{{ number_format($salesSnapshot['customers']) }}</strong><span class="stat-caption">Registered customer accounts</span></div>
+  <div class="overview-stat"><small>Receivable documents</small><strong>{{ number_format($salesSnapshot['receivables']) }}</strong><span class="stat-caption">Recorded trade receivables</span></div>
+  <div class="overview-stat"><small>Overdue receivables</small><strong>{{ number_format($salesSnapshot['overdue']) }}</strong><span class="stat-caption">Past due with an outstanding balance</span></div>
+ </div>
+ <div class="overview-panel"><div class="overview-panel-header"><h2>Recent receivable documents</h2><a href="{{ route('finance.documents.index',['type'=>'receivable']) }}">View receivables</a></div>
+ @forelse($salesSnapshot['recent'] as $doc)<div class="overview-activity"><span><strong>{{ $doc->number }}</strong> · {{ $doc->party?->name ?? 'Customer unavailable' }} · {{ number_format((float)$doc->amount,2) }} {{ $doc->currency?->code }}</span><time>{{ $doc->document_date }}</time></div>@empty<div class="overview-empty">No receivable documents recorded yet.</div>@endforelse
+ </div>
+ @endif
  @if($module==='purchases' && $purchaseSnapshot)
  <div class="overview-section"><h2>Purchase accounting snapshot</h2><small>Live finance records, not purchase orders</small></div>
  <div class="overview-stats">

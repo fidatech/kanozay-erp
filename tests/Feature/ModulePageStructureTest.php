@@ -42,6 +42,19 @@ class ModulePageStructureTest extends TestCase
         }
     }
 
+    public function test_sales_and_purchase_overviews_show_real_accounting_snapshots(): void
+    {
+        $user = User::factory()->create();
+        Permission::findOrCreate('administration.view', 'web');
+        $user->givePermissionTo('administration.view');
+        $this->actingAs($user)->get(route('workspace.page', ['sales', 'overview']))
+            ->assertOk()->assertSee('Sales accounting snapshot')->assertSee('Recent receivable documents')
+            ->assertSee('No receivable documents recorded yet.');
+        $this->actingAs($user)->get(route('workspace.page', ['purchases', 'overview']))
+            ->assertOk()->assertSee('Purchase accounting snapshot')->assertSee('Recent payable documents')
+            ->assertSee('No payable documents recorded yet.');
+    }
+
     public function test_finance_and_administration_overviews_are_accessible(): void
     {
         $user = User::factory()->create();

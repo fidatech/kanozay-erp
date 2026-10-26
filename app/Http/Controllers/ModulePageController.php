@@ -23,6 +23,12 @@ class ModulePageController extends Controller
                     'overdue' => \App\Models\TradeDocument::query()->where('type', 'payable')->whereDate('due_date', '<', today())->whereRaw('amount > (select coalesce(sum(amount), 0) from trade_settlement_allocations where trade_document_id = trade_documents.id)')->count(),
                     'recent' => \App\Models\TradeDocument::query()->with(['party', 'currency'])->where('type', 'payable')->latest('id')->limit(5)->get(),
                 ] : null,
+                'salesSnapshot' => $module === 'sales' ? [
+                    'customers' => \App\Models\TradeParty::query()->where('type', 'customer')->where('is_active', true)->count(),
+                    'receivables' => \App\Models\TradeDocument::query()->where('type', 'receivable')->count(),
+                    'overdue' => \App\Models\TradeDocument::query()->where('type', 'receivable')->whereDate('due_date', '<', today())->whereRaw('amount > (select coalesce(sum(amount), 0) from trade_settlement_allocations where trade_document_id = trade_documents.id)')->count(),
+                    'recent' => \App\Models\TradeDocument::query()->with(['party', 'currency'])->where('type', 'receivable')->latest('id')->limit(5)->get(),
+                ] : null,
             ]);
         }
 
