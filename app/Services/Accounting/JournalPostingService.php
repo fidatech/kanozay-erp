@@ -24,6 +24,7 @@ class JournalPostingService {
     }
    }
    $entry=JournalEntry::whereKey($journal->id)->lockForUpdate()->firstOrFail();
+   if ((int)$entry->currency_id !== (int)$currencyId) throw ValidationException::withMessages(['currency_id'=>'Journal currency changed during posting. Please retry.']);
    if($entry->status!=='draft')throw ValidationException::withMessages(['status'=>'Only draft journals may be posted.']);
    $lines=$entry->lines()->get();if($lines->count()<2)throw ValidationException::withMessages(['lines'=>'A journal needs at least two lines.']);
    $debits=0;$credits=0;
