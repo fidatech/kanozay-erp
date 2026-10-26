@@ -16,7 +16,6 @@ class ModulePageController extends Controller
             return view('modules.overview', [
                 'module' => $module,
                 'moduleData' => $modules[$module],
-                'recentActivity' => \App\Models\ActivityLog::query()->latest('id')->limit(5)->get(),
                 'purchaseSnapshot' => $module === 'purchases' ? [
                     'suppliers' => \App\Models\TradeParty::query()->where('type', 'supplier')->where('is_active', true)->count(),
                     'payables' => \App\Models\TradeDocument::query()->where('type', 'payable')->count(),

@@ -42,6 +42,18 @@ class ModulePageStructureTest extends TestCase
         }
     }
 
+    public function test_module_overviews_do_not_duplicate_audit_activity(): void
+    {
+        $user = User::factory()->create();
+        Permission::findOrCreate('administration.view', 'web');
+        $user->givePermissionTo('administration.view');
+        foreach (array_keys(config('erp_pages')) as $module) {
+            $this->actingAs($user)->get(route('workspace.page', [$module, 'overview']))
+                ->assertOk()->assertDontSee('Recent system activity');
+        }
+        $this->actingAs($user)->get(route('admin.activity.index'))->assertOk();
+    }
+
     public function test_sales_and_purchase_overviews_show_real_accounting_snapshots(): void
     {
         $user = User::factory()->create();
