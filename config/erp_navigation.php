@@ -8,6 +8,7 @@ return [
     'laboratory' => ['samples', 'tests', 'incoming', 'finished'],
     'sales' => ['invoices', 'quotations', 'orders', 'pricing', 'delivery-notes', 'returns'],
     'crm' => ['leads', 'opportunities', 'follow-ups', 'complaints'],
+    'shareholders' => ['register', 'capital', 'distributions', 'statements', 'ownership', 'resolutions'],
     'hr' => ['employees', 'attendance', 'leave', 'payroll', 'advances'],
     'assets' => ['register', 'maintenance', 'depreciation'],
     'documents' => ['library', 'approvals'],

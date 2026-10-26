@@ -16,6 +16,7 @@ class ModulePageController extends Controller
             return view('modules.overview', [
                 'module' => $module,
                 'moduleData' => $modules[$module],
+                'recentActivity' => \App\Models\ActivityLog::query()->latest('id')->limit(5)->get(),
             ]);
         }
 

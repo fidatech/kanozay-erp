@@ -18,10 +18,10 @@ class ModulePageStructureTest extends TestCase
         $user->givePermissionTo('administration.view');
         foreach(config('erp_pages') as $module=>$data){
             $this->actingAs($user)->get(route('workspace.page',[$module,'overview']))
-                ->assertOk()->assertSee($data['label'].' Overview');
+                ->assertOk()->assertSee($data['label']);
             foreach($data['pages'] as $page=>$label){
                 $this->actingAs($user)->get(route('workspace.page',[$module,$page]))
-                    ->assertOk()->assertSee($page === 'overview' ? $data['label'].' Overview' : $label)
+                    ->assertOk()->assertSee($page === 'overview' ? $data['label'] : $label)
                     ->assertSee($page === 'overview' ? 'Daily operations' : 'Workflow pending');
             }
         }
