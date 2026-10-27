@@ -419,8 +419,9 @@ body:not(.k-create-ready) .k-create-source{display:block!important}
     if(!response.ok)throw new Error(Object.values(result.errors||{}).flat().join(' ')||result.message||'Could not save');
     document.querySelectorAll('select').forEach(s=>{
      if(s===target||s.name===target.name){
-      s.add(new Option(result.text,result.id,s===target,s===target));
-      if(s===target){s.value=result.id;if(window.jQuery)jQuery(s).trigger('change');}
+      const existing=Array.from(s.options).find(option=>option.value===String(result.id));
+      if(existing)existing.text=result.text;else s.add(new Option(result.text,result.id,false,false));
+      if(s===target){s.value=String(result.id);if(window.jQuery)jQuery(s).trigger('change');else s.dispatchEvent(new Event('change',{bubbles:true}));}
      }
     });
     modal.close();
