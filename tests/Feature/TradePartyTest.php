@@ -12,6 +12,17 @@ class TradePartyTest extends TestCase {
  private function makeFixtures():array{$user=User::factory()->create();Permission::findOrCreate('administration.view','web');Permission::findOrCreate('administration.update','web');$user->givePermissionTo(['administration.view','administration.update']);$this->seed(ChartOfAccountsSeeder::class);$afn=Currency::create(['code'=>'AFN','name'=>'Afghani','is_active'=>true]);$usd=Currency::create(['code'=>'USD','name'=>'Dollar','is_active'=>true]);return [$user,$afn,$usd];}
  public function test_supplier_creates_payable_and_advance_accounts():void {[$user,$afn]=$this->makeFixtures();$this->actingAs($user)->post(route('finance.parties.store'),['type'=>'supplier','name'=>'Test Supplier','currency_ids'=>[$afn->id]])->assertRedirect();$party=TradeParty::firstOrFail();$this->assertSame('supplier',$party->type);$this->assertDatabaseCount('entity_ledger_accounts',2);$this->assertDatabaseHas('entity_ledger_accounts',['entity_type'=>'supplier','entity_id'=>$party->id,'purpose'=>'payable']);}
  public function test_customer_can_enable_second_currency():void {[$user,$afn,$usd]=$this->makeFixtures();$this->actingAs($user)->post(route('finance.parties.store'),['type'=>'customer','name'=>'Test Customer','currency_ids'=>[$afn->id]])->assertRedirect();$party=TradeParty::firstOrFail();$this->actingAs($user)->post(route('finance.parties.currencies.store',$party),['currency_id'=>$usd->id])->assertRedirect();$this->assertDatabaseCount('entity_ledger_accounts',4);$this->assertCount(2,$party->fresh()->currencies);}
+ public function test_customer_and_supplier_creation_forms_use_shared_modal_system():void {
+  [$user]=$this->makeFixtures();
+  foreach(['finance.customers.index'=>'customer','finance.suppliers.index'=>'supplier'] as $route=>$type){
+   $this->actingAs($user)->get(route($route))->assertOk()
+    ->assertSee('data-new-entry-form="1"',false)
+    ->assertSee('Create '.ucfirst($type))
+    ->assertSee('setupCreationDialogs()',false)
+    ->assertSee('k-create-trigger',false)
+    ->assertSee('k-create-ready',false);
+  }
+ }
  public function test_customer_register_renders_without_blade_parse_error():void {[$user]=$this->makeFixtures();$this->actingAs($user)->get(route('finance.customers.index'))->assertOk()->assertSee('Customer Register')->assertSee('Manage customer profiles')->assertSee('name="type" value="customer"',false);}
  public function test_supplier_register_renders_without_blade_parse_error():void {[$user]=$this->makeFixtures();$this->actingAs($user)->get(route('finance.suppliers.index'))->assertOk()->assertSee('Supplier Register')->assertSee('Manage supplier profiles')->assertSee('name="type" value="supplier"',false);}
  public function test_customer_and_supplier_pages_ignore_opposite_type_query():void {[$user]=$this->makeFixtures();$this->actingAs($user)->get(route('finance.customers.index',['type'=>'supplier']))->assertOk()->assertSee('Customer Register')->assertSee('name="type" value="customer"',false);$this->actingAs($user)->get(route('finance.suppliers.index',['type'=>'customer']))->assertOk()->assertSee('Supplier Register')->assertSee('name="type" value="supplier"',false);}

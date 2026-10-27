@@ -449,7 +449,13 @@ body:not(.k-create-ready) .k-create-source{display:block!important}
     if(!header){header=document.createElement('div');header.className='k-register-header';const registerTitle=register.querySelector(':scope > h2');if(registerTitle)header.append(registerTitle);register.prepend(header);}
     header.append(trigger);
     panel.classList.add('k-create-source');
-   }else if(heading){heading.insertAdjacentElement('afterend',trigger);}
+   }else{
+    // Some modules have a standalone creation card without a sibling register.
+    // The source panel must remain visible until a reachable trigger is mounted.
+    const pageHeading=document.querySelector('.content .heading')||document.querySelector('.content h1')?.parentElement;
+    if(pageHeading){pageHeading.append(trigger);panel.classList.add('k-create-source');}
+    else {panel.prepend(trigger);panel.classList.remove('k-create-source');}
+   }
    dialog.addEventListener('click',e=>{if(e.target===dialog)dialog.close();});
    if(index===0&&(document.querySelector('.error')||document.querySelector('[data-form-errors]')))dialog.showModal();
   });
