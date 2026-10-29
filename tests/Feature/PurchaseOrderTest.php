@@ -53,12 +53,18 @@ class PurchaseOrderTest extends TestCase {
   $this->actingAs($user)->postJson(route('purchases.quick-currency'),['code'=>'eur','name'=>'Duplicate'])->assertUnprocessable()->assertJsonValidationErrors('code');
  }
  public function test_inline_supplier_requires_update_permission_and_currency():void {
+  $this->seed(ChartOfAccountsSeeder::class);
   $user=User::factory()->create();
   Permission::findOrCreate('administration.update','web');
   $currency=Currency::create(['code'=>'AFN','name'=>'Afghani','symbol'=>'؋','decimal_places'=>2,'is_active'=>true,'is_base'=>true]);
   $this->actingAs($user)->postJson(route('purchases.quick-supplier'),['name'=>'New Supplier','currency_id'=>$currency->id])->assertForbidden();
   $user->givePermissionTo('administration.update');
   $this->actingAs($user)->postJson(route('purchases.quick-supplier'),['name'=>'New Supplier'])->assertUnprocessable()->assertJsonValidationErrors('currency_id');
+  $this->actingAs($user)->postJson(route('purchases.quick-supplier'),['name'=>'New Supplier','currency_id'=>999999])->assertUnprocessable()->assertJsonValidationErrors('currency_id');
+  $this->actingAs($user)->postJson(route('purchases.quick-supplier'),['name'=>'New Supplier','currency_id'=>$currency->id])->assertCreated()->assertJsonPath('text','New Supplier');
+  $supplier=TradeParty::where('type','supplier')->where('name','New Supplier')->firstOrFail();
+  $this->assertTrue($supplier->currencies()->whereKey($currency->id)->exists());
+  $this->assertSame(2,DB::table('entity_ledger_accounts')->where('entity_type','supplier')->where('entity_id',$supplier->id)->where('currency_id',$currency->id)->count());
  }
  public function test_inline_customer_creation_requires_permission_and_provisions_currency():void {
   $this->seed(ChartOfAccountsSeeder::class);
