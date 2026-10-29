@@ -55,6 +55,18 @@ class PurchaseOrderController extends Controller {
   });
   return response()->json(['id'=>$party->id,'text'=>$party->name],201);
  }
+ public function quickCustomer(Request $request) {
+  abort_unless($request->user()->can('administration.update'),403);
+  $data=$request->validate(['name'=>['required','string','max:180'],'phone'=>['nullable','string','max:80'],'currency_id'=>['required',Rule::exists('currencies','id')->where('is_active',true)]]);
+  $party=DB::transaction(function()use($data,$request){
+   $party=TradeParty::create(['type'=>'customer','name'=>$data['name'],'phone'=>$data['phone']??null,'is_active'=>true,'created_by'=>$request->user()->id]);
+   $party->currencies()->attach($data['currency_id']);
+   $party->provisionLedgerAccountsForCurrency((int)$data['currency_id']);
+   ActivityLog::record('trade_party.created','trade_party',$party->id,'Customer created from quick-create: '.$party->name);
+   return $party;
+  });
+  return response()->json(['id'=>$party->id,'text'=>$party->name],201);
+ }
  public function quickCurrency(Request $request) {
   abort_unless($request->user()->can('administration.update'),403);
   $data=$request->validate(['code'=>['required','regex:/^[A-Za-z]{3}$/'],'name'=>['required','string','max:100'],'symbol'=>['nullable','string','max:12']]);

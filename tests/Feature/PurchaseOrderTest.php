@@ -2,6 +2,8 @@
 namespace Tests\Feature;
 use App\Models\{Currency,PurchaseOrder,TradeParty,User};
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Database\Seeders\ChartOfAccountsSeeder;
+use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 class PurchaseOrderTest extends TestCase {
@@ -57,6 +59,20 @@ class PurchaseOrderTest extends TestCase {
   $this->actingAs($user)->postJson(route('purchases.quick-supplier'),['name'=>'New Supplier','currency_id'=>$currency->id])->assertForbidden();
   $user->givePermissionTo('administration.update');
   $this->actingAs($user)->postJson(route('purchases.quick-supplier'),['name'=>'New Supplier'])->assertUnprocessable()->assertJsonValidationErrors('currency_id');
+ }
+ public function test_inline_customer_creation_requires_permission_and_provisions_currency():void {
+  $this->seed(ChartOfAccountsSeeder::class);
+  $user=User::factory()->create();
+  Permission::findOrCreate('administration.update','web');
+  $currency=Currency::create(['code'=>'AFN','name'=>'Afghani','symbol'=>'؋','decimal_places'=>2,'is_active'=>true,'is_base'=>true]);
+  $payload=['name'=>'New Customer','phone'=>'0700000000','currency_id'=>$currency->id];
+  $this->actingAs($user)->postJson(route('purchases.quick-customer'),$payload)->assertForbidden();
+  $user->givePermissionTo('administration.update');
+  $this->actingAs($user)->postJson(route('purchases.quick-customer'),['name'=>'New Customer'])->assertUnprocessable()->assertJsonValidationErrors('currency_id');
+  $this->actingAs($user)->postJson(route('purchases.quick-customer'),$payload)->assertCreated()->assertJsonPath('text','New Customer');
+  $customer=TradeParty::where('type','customer')->where('name','New Customer')->firstOrFail();
+  $this->assertTrue($customer->currencies()->whereKey($currency->id)->exists());
+  $this->assertSame(2,DB::table('entity_ledger_accounts')->where('entity_type','customer')->where('entity_id',$customer->id)->where('currency_id',$currency->id)->count());
  }
  public function test_unauthorized_user_cannot_create_orders():void {
   $user=User::factory()->create();
