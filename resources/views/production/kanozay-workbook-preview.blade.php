@@ -8,5 +8,10 @@
 @foreach($recipe['lines'] as $line)<tr><td>{{ $line['material'] }}</td><td>{{ $line['unit'] }}</td><td>{{ $line['quantity'] }}</td><td>{{ $line['unit_cost'] }}</td><td>{{ $line['cell'] }}</td></tr>@endforeach
 </tbody></table>
 @endforeach
+@if(collect($recipes)->every(fn ($recipe) => empty($recipe['warnings'])))
+<form method="POST" action="{{ route('production.recipes.kanozay-confirm') }}">@csrf<button type="submit" class="btn">Confirm and Save Draft Recipes</button></form>
+@else
+<p role="alert">Confirmation is disabled until every discrepancy is resolved in the source workbook.</p>
+@endif
 <a href="{{ route('production.recipes.index') }}">Back to recipes</a></div>
 @endsection

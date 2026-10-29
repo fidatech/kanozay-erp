@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use App\Models\ProductionRecipe;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class KanozayWorkbookPreviewController extends Controller
@@ -55,9 +57,54 @@ class KanozayWorkbookPreviewController extends Controller
                 ];
             }
             $workbook->disconnectWorksheets();
+            // Keep the parsed snapshot server-side. Confirmation never trusts browser-submitted ingredient data.
+            $request->session()->put('kanozay_recipe_preview', $recipes);
             return view('production.kanozay-workbook-preview', compact('recipes'));
         } catch (\Throwable $exception) {
             return back()->withErrors(['file' => 'Unable to read the expected Kanozay production workbook layout.']);
         }
     }
+    public function confirm(Request $request)
+    {
+        abort_unless($request->user()->can('administration.update'), 403);
+        $recipes = $request->session()->get('kanozay_recipe_preview');
+        if (!is_array($recipes) || count($recipes) !== 2) {
+            return redirect()->route('production.recipes.index')->withErrors(['file' => 'Preview the original workbook again before confirming.']);
+        }
+        foreach ($recipes as $recipe) {
+            if (!empty($recipe['warnings'])) {
+                return redirect()->route('production.recipes.index')->withErrors(['file' => 'Import blocked: resolve all workbook warnings and preview the corrected file again.']);
+            }
+            if (empty($recipe['lines']) || count($recipe['lines']) > 100) {
+                return redirect()->route('production.recipes.index')->withErrors(['file' => 'Import blocked: invalid ingredient count.']);
+            }
+            foreach ($recipe['lines'] as $line) {
+                if (!is_numeric($line['quantity']) || $line['quantity'] <= 0 || !trim($line['material']) || !trim($line['unit'])) {
+                    return redirect()->route('production.recipes.index')->withErrors(['file' => 'Import blocked: invalid ingredient values.']);
+                }
+            }
+        }
+        DB::transaction(function () use ($recipes, $request) {
+            foreach ($recipes as $recipe) {
+                $record = ProductionRecipe::create([
+                    'name' => $recipe['name'], 'method' => $recipe['method'],
+                    'package_weight_kg' => $recipe['weight'], 'package_unit' => $recipe['package_unit'],
+                    'cost_currency_code' => $recipe['method'] === 'powder_blending' ? 'USD' : null,
+                    'source_sheet' => $recipe['sheet'],
+                    'source_reference' => 'Kanozay production workbook (user-uploaded)',
+                    'status' => 'draft', 'created_by' => $request->user()->id,
+                ]);
+                foreach ($recipe['lines'] as $index => $line) {
+                    $record->lines()->create([
+                        'line_number' => $index + 1, 'material_name' => $line['material'],
+                        'unit' => $line['unit'], 'quantity_per_package' => $line['quantity'],
+                        'unit_cost' => $line['unit_cost'], 'source_cell' => $line['cell'],
+                    ]);
+                }
+            }
+        });
+        $request->session()->forget('kanozay_recipe_preview');
+        return redirect()->route('production.recipes.index')->with('success', 'Validated workbook recipes saved as drafts. No inventory or accounting entries posted.');
+    }
+
 }
