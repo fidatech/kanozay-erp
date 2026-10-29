@@ -17,6 +17,7 @@ Route::post('/language', function (\Illuminate\Http\Request $request) {
     return back();
 })->middleware('auth')->name('language.update');
 
+Route::middleware('auth')->post('/production/recipes/kanozay-preview', [\App\Http\Controllers\KanozayWorkbookPreviewController::class, '__invoke'])->name('production.recipes.kanozay-preview');
 Route::middleware('auth')->post('/production/recipes/import-preview', [\App\Http\Controllers\ProductionRecipeImportController::class, 'preview'])->name('production.recipes.import-preview');
 Route::middleware('auth')->get('/production/recipes', [\App\Http\Controllers\ProductionRecipeController::class, 'index'])->name('production.recipes.index');
 Route::middleware('auth')->post('/production/recipes', [\App\Http\Controllers\ProductionRecipeController::class, 'store'])->name('production.recipes.store');
