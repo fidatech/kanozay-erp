@@ -395,7 +395,8 @@ body:not(.k-create-ready) .k-create-source{display:block!important}
     if(select.dataset.quickRegistered==='1'||select.disabled||select.multiple||!select.form||select.form.method.toLowerCase()==='get'||select.closest('#k-entity-quick-create'))return;
     const name=select.name||'';
     const type=select.dataset.createEntity||(name==='supplier_id'?'supplier':name==='currency_id'||name==='from_currency_id'||name==='to_currency_id'?'currency':'');
-    if(!endpoints[type]||select.closest('.po-combo'))return;
+    if(!endpoints[type])return;
+    if(type==='supplier'&&!select.form.querySelector('select[name="currency_id"]'))return;
     select.dataset.quickRegistered='1';
     const opt=new Option('+ Add New '+labels[type]+'…','__create_new__');
     opt.dataset.quickCreate=type;select.add(opt);
