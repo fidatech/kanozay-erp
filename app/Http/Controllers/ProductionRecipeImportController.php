@@ -10,8 +10,25 @@ class ProductionRecipeImportController extends Controller
     public function preview(Request $request)
     {
         abort_unless($request->user()->can('administration.update'), 403);
-        $request->validate(['file' => ['required', 'file', 'mimes:csv,txt', 'max:2048']]);
-        $handle = fopen($request->file('file')->getRealPath(), 'rb');
+        $request->validate(['file' => ['required', 'file', 'mimes:csv,txt,xlsx,xls', 'max:2048']]);
+        $extension = strtolower($request->file('file')->getClientOriginalExtension());
+        if (in_array($extension, ['xlsx', 'xls'], true)) {
+            try {
+                $reader = \PhpOffice\PhpSpreadsheet\IOFactory::createReaderForFile($request->file('file')->getRealPath());
+                $reader->setReadDataOnly(true);
+                $workbook = $reader->load($request->file('file')->getRealPath());
+                $sheet = $workbook->getActiveSheet();
+                $rows = $sheet->toArray(null, true, true, false);
+                $workbook->disconnectWorksheets();
+                $handle = fopen('php://temp', 'w+');
+                foreach ($rows as $row) fputcsv($handle, $row);
+                rewind($handle);
+            } catch (\Throwable $e) {
+                return back()->withErrors(['file' => 'Excel file could not be read. Export the normalized recipe template and try again.']);
+            }
+        } else {
+            $handle = fopen($request->file('file')->getRealPath(), 'rb');
+        }
         if (!$handle) return back()->withErrors(['file' => 'Could not read the uploaded CSV.']);
         try {
             $header = fgetcsv($handle);
