@@ -12,6 +12,10 @@ class ModulePageController extends Controller
         $modules = config('erp_pages', []);
         abort_unless(isset($modules[$module]['pages'][$page]) || ($page === 'overview' && isset($modules[$module])), 404);
 
+        if ($module === 'manufacturing' && $page === 'orders') {
+            return app(ProductionOrderController::class)->index($request);
+        }
+
         if ($module === 'manufacturing' && $page === 'recipes') {
             return app(ProductionRecipeController::class)->index($request);
         }
