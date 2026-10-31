@@ -21,6 +21,8 @@ Route::middleware('auth')->post('/production/recipes/kanozay-confirm', [\App\Htt
 Route::middleware('auth')->post('/production/recipes/kanozay-preview', [\App\Http\Controllers\KanozayWorkbookPreviewController::class, '__invoke'])->name('production.recipes.kanozay-preview');
 Route::middleware('auth')->post('/production/recipes/import-preview', [\App\Http\Controllers\ProductionRecipeImportController::class, 'preview'])->name('production.recipes.import-preview');
 Route::middleware('auth')->get('/production/recipes', [\App\Http\Controllers\ProductionRecipeController::class, 'index'])->name('production.recipes.index');
+Route::middleware('auth')->get('/production/recipes/{recipe}', [\App\Http\Controllers\ProductionRecipeController::class, 'show'])->name('production.recipes.show');
+Route::middleware('auth')->post('/production/recipes/{recipe}/approve', [\App\Http\Controllers\ProductionRecipeController::class, 'approve'])->name('production.recipes.approve');
 Route::middleware('auth')->post('/production/recipes', [\App\Http\Controllers\ProductionRecipeController::class, 'store'])->name('production.recipes.store');
 Route::middleware('auth')->post('/purchases/quick-supplier', [\App\Http\Controllers\PurchaseOrderController::class,'quickSupplier'])->name('purchases.quick-supplier');
 Route::middleware('auth')->post('/purchases/quick-customer', [\App\Http\Controllers\PurchaseOrderController::class,'quickCustomer'])->name('purchases.quick-customer');
