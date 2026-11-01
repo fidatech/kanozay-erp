@@ -33,6 +33,30 @@ class ModuleRoleSeederTest extends TestCase
         $this->assertFalse($viewer->hasPermissionTo('finance.update'));
     }
 
+    public function test_scoped_module_roles_can_open_their_workspace_pages(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $financeUser = \App\Models\User::factory()->create();
+        $financeUser->assignRole(Role::findByName('Finance Manager', 'web'));
+
+        $this->actingAs($financeUser)
+            ->get(route('workspace.page', ['module' => 'reports', 'page' => 'finance']))
+            ->assertOk()
+            ->assertSee('Financial Reports');
+
+        $inventoryUser = \App\Models\User::factory()->create();
+        $inventoryUser->assignRole(Role::findByName('Inventory Officer', 'web'));
+        $this->actingAs($inventoryUser)
+            ->get(route('workspace.page', ['module' => 'inventory', 'page' => 'materials']))
+            ->assertOk()
+            ->assertSee('Raw Materials');
+
+        $unprivilegedUser = \App\Models\User::factory()->create();
+        $this->actingAs($unprivilegedUser)
+            ->get(route('workspace.page', ['module' => 'sales', 'page' => 'invoices']))
+            ->assertForbidden();
+    }
+
     public function test_seeding_preserves_permissions_already_configured_on_a_role(): void
     {
         $this->seed(RolePermissionSeeder::class);

@@ -13,9 +13,16 @@ class ModulePageController extends Controller
             return app(EmployeeProfileController::class)->index($request);
         }
 
-        abort_unless($request->user()->can('administration.view'), 403);
         $modules = config('erp_pages', []);
         abort_unless(isset($modules[$module]['pages'][$page]) || ($page === 'overview' && isset($modules[$module])), 404);
+
+        $permission = match ($module) {
+            'assets' => 'maintenance.view',
+            'crm' => 'sales.view',
+            'documents' => 'administration.view',
+            default => $module.'.view',
+        };
+        abort_unless($request->user()->canAny([$permission, 'administration.view']), 403);
 
         if ($module === 'manufacturing' && $page === 'orders') {
             return app(ProductionOrderController::class)->index($request);
