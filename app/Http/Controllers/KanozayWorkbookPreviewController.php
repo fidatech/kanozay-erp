@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use Brick\Math\BigDecimal;
+use Brick\Math\RoundingMode;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Models\ProductionRecipe;
@@ -41,15 +43,17 @@ class KanozayWorkbookPreviewController extends Controller
                     }
                     $unit = trim((string) $sheet->getCell('C'.$row)->getValue());
                     $cost = $sheet->getCell('E'.$row)->getCalculatedValue();
-                    if ((float) $quantity <= 0) $warnings[] = "Row {$row}: nonpositive quantity {$quantity} for {$material}.";
+                    $quantityValue=BigDecimal::of((string)$quantity);
+                    if ($quantityValue->compareTo(BigDecimal::zero()) <= 0) $warnings[] = "Row {$row}: nonpositive quantity {$quantity} for {$material}.";
+                    $costValue=is_numeric($cost)?(string)BigDecimal::of((string)$cost)->toScale(4,RoundingMode::HalfUp):null;
                     $lines[] = [
-                        'material' => $material, 'unit' => $unit, 'quantity' => (float) $quantity,
-                        'unit_cost' => is_numeric($cost) ? (float) $cost : null, 'cell' => 'F'.$row,
+                        'material' => $material, 'unit' => $unit, 'quantity' => (string)$quantityValue->toScale(6,RoundingMode::HalfUp),
+                        'unit_cost' => $costValue, 'cell' => 'F'.$row,
                     ];
                 }
                 if (!$lines) throw new \RuntimeException('No ingredients found in worksheet.');
-                $sum = array_sum(array_map(fn ($line) => strtolower($line['unit']) === 'kg' ? $line['quantity'] : 0, $lines));
-                if (abs($sum - $definition['weight']) > 0.01) $warnings[] = 'Total ingredient kg '.round($sum, 4).' differs from package kg '.$definition['weight'].'.';
+                $sum=BigDecimal::zero();foreach($lines as $line)if(strtolower($line['unit'])==='kg')$sum=$sum->plus($line['quantity']);
+                if ($sum->minus((string)$definition['weight'])->abs()->compareTo(BigDecimal::of('0.01')) > 0) $warnings[] = 'Total ingredient kg '.(string)$sum->toScale(4,RoundingMode::HalfUp).' differs from package kg '.$definition['weight'].'.';
                 $recipes[] = [
                     'name' => $name, 'sheet' => $definition['sheet'], 'method' => $definition['method'],
                     'weight' => $definition['weight'], 'package_unit' => $definition['unit'],
@@ -79,7 +83,7 @@ class KanozayWorkbookPreviewController extends Controller
                 return redirect()->route('production.recipes.index')->withErrors(['file' => 'Import blocked: invalid ingredient count.']);
             }
             foreach ($recipe['lines'] as $line) {
-                if (!is_numeric($line['quantity']) || $line['quantity'] <= 0 || !trim($line['material']) || !trim($line['unit'])) {
+                if (!is_numeric($line['quantity']) || BigDecimal::of((string)$line['quantity'])->compareTo(BigDecimal::zero()) <= 0 || !trim($line['material']) || !trim($line['unit'])) {
                     return redirect()->route('production.recipes.index')->withErrors(['file' => 'Import blocked: invalid ingredient values.']);
                 }
             }

@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use Brick\Math\BigDecimal;
+use Brick\Math\RoundingMode;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -59,9 +61,9 @@ class ProductionRecipeImportController extends Controller
             $groups = collect($rows)->groupBy(fn ($row) => implode('|', [$row['recipe_name'], $row['method'], $row['package_weight_kg'], $row['package_unit']]));
             $summaries = $groups->map(function ($group) use (&$errors) {
                 $first = $group->first();
-                $weights = $group->filter(fn ($row) => strtolower(trim($row['unit'])) === 'kg')->sum(fn ($row) => (float) $row['quantity_per_package']);
-                if (abs($weights - (float) $first['package_weight_kg']) > 0.01) $errors[] = $first['recipe_name'].': ingredient kg total '.round($weights, 4).' differs from package weight '.$first['package_weight_kg'].' kg (check packaging and water quantities).';
-                return ['name' => $first['recipe_name'], 'method' => $first['method'], 'count' => $group->count(), 'weight' => round($weights, 4), 'package' => $first['package_weight_kg']];
+                $weights=BigDecimal::zero();foreach($group as $row)if(strtolower(trim($row['unit']))==='kg')$weights=$weights->plus((string)$row['quantity_per_package']);
+                if ($weights->minus((string)$first['package_weight_kg'])->abs()->compareTo(BigDecimal::of('0.01')) > 0) $errors[] = $first['recipe_name'].': ingredient kg total '.(string)$weights->toScale(4,RoundingMode::HalfUp).' differs from package weight '.$first['package_weight_kg'].' kg (check packaging and water quantities).';
+                return ['name' => $first['recipe_name'], 'method' => $first['method'], 'count' => $group->count(), 'weight' => (string)$weights->toScale(4,RoundingMode::HalfUp), 'package' => $first['package_weight_kg']];
             })->values();
             return view('production.recipe-import-preview', ['summaries' => $summaries, 'errors' => $errors, 'rowCount' => count($rows)]);
         } finally { fclose($handle); }

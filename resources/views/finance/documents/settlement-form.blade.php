@@ -1,5 +1,5 @@
 @php($remaining=$doc->outstanding_amount)
-@if($remaining<=0)
+@if(\Brick\Math\BigDecimal::of((string)$remaining)->compareTo(\Brick\Math\BigDecimal::zero())<=0)
 <span style="color:#15803d;font-weight:700"><i class="fa-solid fa-circle-check"></i> Settled</span>
 @else
 @can('administration.update')
