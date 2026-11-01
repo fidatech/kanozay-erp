@@ -72,13 +72,8 @@ $balance=$subtotal-$advances;
 @endif
 <div class="table-wrap"><table><thead><tr><th>GRN number</th><th>Date</th><th>Supplier reference</th><th>Lines</th><th>Purchase value snapshot</th><th>Status</th></tr></thead><tbody>
 @forelse($order->receipts as $receipt)
-@php
-$receiptValue = null;
-if ($receipt->cost_currency_code && $receipt->lines->isNotEmpty() && $receipt->lines->every(fn ($line) => $line->line_subtotal_snapshot !== null)) {
-    $receiptValue = $receipt->lines->reduce(fn ($total, $line) => $total->plus((string) $line->line_subtotal_snapshot), \Brick\Math\BigDecimal::zero());
-}
-@endphp
-<tr><td><strong>{{ $receipt->number }}</strong></td><td>{{ $receipt->received_on->format('Y-m-d') }}</td><td>{{ $receipt->supplier_reference ?? '—' }}</td><td>{{ $receipt->lines->count() }}</td><td>{{ $receiptValue === null ? 'Not captured' : rtrim(rtrim((string) $receiptValue->toScale(10), '0'), '.') . ' ' . $receipt->cost_currency_code }}</td><td>{{ ucfirst($receipt->status) }}</td></tr>
+
+<tr><td><strong>{{ $receipt->number }}</strong></td><td>{{ $receipt->received_on->format('Y-m-d') }}</td><td>{{ $receipt->supplier_reference ?? '—' }}</td><td>{{ $receipt->lines->count() }}</td><td>{{ $receipt->purchase_value_snapshot ?? 'Not captured' }}</td><td>{{ ucfirst($receipt->status) }}</td></tr>
 @empty<tr><td colspan="6" class="muted">No goods received yet.</td></tr>@endforelse
 </tbody></table></div>
 </div>

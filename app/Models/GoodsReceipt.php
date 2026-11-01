@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use LogicException;
+use Brick\Math\BigDecimal;
 
 class GoodsReceipt extends Model
 {
@@ -27,6 +28,29 @@ class GoodsReceipt extends Model
                 throw new LogicException('Posted goods receipts cannot be deleted.');
             }
         });
+    }
+
+    /**
+     * Purchase-only snapshot, in the original PO currency. This is not a
+     * landed-cost valuation or a general-ledger amount.
+     */
+    public function getPurchaseValueSnapshotAttribute(): ?string
+    {
+        if (! $this->cost_currency_code) {
+            return null;
+        }
+
+        $lines = $this->relationLoaded('lines') ? $this->lines : $this->lines()->get();
+        if ($lines->isEmpty() || $lines->contains(fn ($line) => $line->line_subtotal_snapshot === null)) {
+            return null;
+        }
+
+        $total = BigDecimal::zero();
+        foreach ($lines as $line) {
+            $total = $total->plus((string) $line->line_subtotal_snapshot);
+        }
+
+        return rtrim(rtrim((string) $total->toScale(10), '0'), '.').' '.$this->cost_currency_code;
     }
 
     public function purchaseOrder()
