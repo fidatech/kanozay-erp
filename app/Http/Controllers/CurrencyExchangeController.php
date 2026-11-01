@@ -1,5 +1,7 @@
 <?php
 namespace App\Http\Controllers;
+use Brick\Math\BigDecimal;
+use Brick\Math\RoundingMode;
 use App\Models\ActivityLog;
 use App\Models\CurrencyExchange;
 use App\Models\DocumentSequence;
@@ -17,7 +19,8 @@ class CurrencyExchangeController extends Controller {
   DB::transaction(function()use($data,$request,$posting){$source=FinancialAccount::whereKey($data['source_account_id'])->lockForUpdate()->firstOrFail();$destination=FinancialAccount::whereKey($data['destination_account_id'])->lockForUpdate()->firstOrFail();if(!$source->is_active||!$destination->is_active||$source->currency_id===$destination->currency_id)throw ValidationException::withMessages(['destination_account_id'=>'Choose active accounts in different currencies.']);
    $rate=isset($data['reference_rate_id'])?ExchangeRate::findOrFail($data['reference_rate_id']):null;if($rate&&($rate->from_currency_id!==$source->currency_id||$rate->to_currency_id!==$destination->currency_id||$rate->effective_date->toDateString()>$data['exchange_date']))throw ValidationException::withMessages(['reference_rate_id'=>'Reference rate must match the currency direction and not be dated after the exchange.']);
    // The entered received amount and applied rate must agree within destination rounding precision.
-   $expected=(float)$data['source_amount']*(float)$data['applied_rate'];if(abs($expected-(float)$data['destination_amount'])>0.00011)throw ValidationException::withMessages(['destination_amount'=>'Received amount must equal source amount multiplied by applied rate (four-decimal precision).']);
+   $expected=BigDecimal::of((string)$data['source_amount'])->multipliedBy((string)$data['applied_rate'])->toScale(4,RoundingMode::HalfUp);
+   if($expected->compareTo(BigDecimal::of((string)$data['destination_amount']))!==0)throw ValidationException::withMessages(['destination_amount'=>'Received amount must equal source amount multiplied by applied rate (rounded to four decimal places).']);
    $linked=function(FinancialAccount $account){$id=DB::table('entity_ledger_accounts')->where(['entity_type'=>$account->type,'entity_id'=>$account->id,'currency_id'=>$account->currency_id,'purpose'=>'cash'])->value('ledger_account_id');$ledger=$id?LedgerAccount::find($id):null;if(!$ledger||!$ledger->is_active||$ledger->is_group)throw ValidationException::withMessages(['source_account_id'=>'A financial account is missing its active posting ledger.']);return $ledger->id;};
    // Currency-specific clearing accounts avoid falsely equating unlike monetary units.
    $clearing=function(int $currencyId){$currency=\App\Models\Currency::findOrFail($currencyId);$parent=LedgerAccount::where('code','1120')->firstOrFail();if(!$parent->is_group||!$parent->is_active)throw ValidationException::withMessages(['source_account_id'=>'Trade Receivables (1120) must be an active group for FX clearing.']);return LedgerAccount::firstOrCreate(['code'=>'1120.FX.'.$currency->code],['name'=>'FX Clearing — '.$currency->code,'type'=>'asset','parent_id'=>$parent->id,'is_group'=>false,'is_active'=>true,'description'=>'Currency-specific clearing for exchange transactions']);};
