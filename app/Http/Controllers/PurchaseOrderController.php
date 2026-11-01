@@ -21,7 +21,7 @@ class PurchaseOrderController extends Controller {
   ]);
  }
  public function store(Request $request) {
-  abort_unless($request->user()->canAny(['administration.view', 'purchases.view']),403);
+  abort_unless($request->user()->canAny(['administration.update', 'purchases.create']),403);
   $data=$request->validate([
 
    'supplier_id'=>['required',Rule::exists('trade_parties','id')->where('type','supplier')->where('is_active',true)],
@@ -113,7 +113,7 @@ class PurchaseOrderController extends Controller {
   return back()->with('success','Purchase order confirmed. No stock or finance postings were made.');
  }
  public function addExpense(Request $request,PurchaseOrder $order) {
-  abort_unless($request->user()->canAny(['administration.view', 'purchases.view']),403);
+  abort_unless($request->user()->canAny(['administration.update', 'purchases.update']),403);
   abort_unless($order->status==='draft',422,'Only draft orders can be edited.');
   $data=$request->validate([
    'category'=>['required',Rule::in(['transport','loading','customs','insurance','freight','handling','other'])],
@@ -125,7 +125,7 @@ class PurchaseOrderController extends Controller {
   return back()->with('success','Purchase expense added.');
  }
  public function addAdvance(Request $request,PurchaseOrder $order) {
-  abort_unless($request->user()->canAny(['administration.view', 'purchases.view']),403);
+  abort_unless($request->user()->canAny(['administration.update', 'purchases.update']),403);
   abort_unless($order->status==='draft',422,'Only draft orders can be edited.');
   $data=$request->validate([
    'payment_date'=>['required','date'],

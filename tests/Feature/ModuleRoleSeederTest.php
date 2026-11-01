@@ -24,6 +24,10 @@ class ModuleRoleSeederTest extends TestCase
         $this->assertFalse($finance->hasPermissionTo('inventory.view'));
 
         $production = Role::findByName('Production Manager', 'web');
+        $inventory = Role::findByName('Inventory Officer', 'web');
+        $this->assertTrue($inventory->hasPermissionTo('purchases.create'));
+        $this->assertTrue($inventory->hasPermissionTo('purchases.view'));
+
         $this->assertTrue($production->hasPermissionTo('manufacturing.create'));
         $this->assertTrue($production->hasPermissionTo('inventory.update'));
         $this->assertFalse($production->hasPermissionTo('administration.view'));

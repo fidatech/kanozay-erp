@@ -11,7 +11,7 @@ class PurchaseOrderTest extends TestCase {
  public function test_authorized_user_can_create_draft_purchase_order_with_items():void {
   $user=User::factory()->create();
   Permission::findOrCreate('administration.view','web');
-  $user->givePermissionTo('administration.view');
+  $user->givePermissionTo(['administration.view', 'administration.update']);
   $supplier=TradeParty::create(['type'=>'supplier','name'=>'Test Supplier','code'=>'SUP-001','is_active'=>true,'created_by'=>$user->id]);
   $currency=Currency::create(['code'=>'AFN','name'=>'Afghani','symbol'=>'؋','decimal_places'=>2,'is_active'=>true,'is_base'=>true]);
   $payload=['supplier_id'=>$supplier->id,'currency_id'=>$currency->id,'source'=>'foreign','order_date'=>'2026-10-27','items'=>[['description'=>'Flour','quantity'=>10,'unit_price'=>200]]];
@@ -29,7 +29,7 @@ class PurchaseOrderTest extends TestCase {
  public function test_expenses_and_advances_are_recorded_on_order_without_finance_postings():void {
   $user=User::factory()->create();
   Permission::findOrCreate('administration.view','web');
-  $user->givePermissionTo('administration.view');
+  $user->givePermissionTo(['administration.view', 'administration.update']);
   $supplier=TradeParty::create(['type'=>'supplier','name'=>'Supplier Two','code'=>'SUP-002','is_active'=>true,'created_by'=>$user->id]);
   $currency=Currency::create(['code'=>'USD','name'=>'US Dollar','symbol'=>'$','decimal_places'=>2,'is_active'=>true,'is_base'=>true]);
   $order=PurchaseOrder::create(['number'=>'PO-COST-1','supplier_id'=>$supplier->id,'currency_id'=>$currency->id,'source'=>'foreign','order_date'=>'2026-10-27','status'=>'draft','created_by'=>$user->id]);
@@ -79,6 +79,24 @@ class PurchaseOrderTest extends TestCase {
   $customer=TradeParty::where('type','customer')->where('name','New Customer')->firstOrFail();
   $this->assertTrue($customer->currencies()->whereKey($currency->id)->exists());
   $this->assertSame(2,DB::table('entity_ledger_accounts')->where('entity_type','customer')->where('entity_id',$customer->id)->where('currency_id',$currency->id)->count());
+ }
+ public function test_purchase_view_permission_cannot_create_order_or_record_costs():void {
+  $user=User::factory()->create();
+  Permission::findOrCreate('purchases.view','web');
+  Permission::findOrCreate('purchases.create','web');
+  Permission::findOrCreate('purchases.update','web');
+  $user->givePermissionTo('purchases.view');
+  $this->actingAs($user)->post(route('purchases.orders.store'),[])->assertForbidden();
+  $this->actingAs($user)->post(route('purchases.orders.expenses.store',1),[])->assertForbidden();
+  $this->actingAs($user)->post(route('purchases.orders.advances.store',1),[])->assertForbidden();
+  $user->givePermissionTo('purchases.create');
+  $supplier=TradeParty::create(['type'=>'supplier','name'=>'Scoped Supplier','is_active'=>true,'created_by'=>$user->id]);
+  $currency=Currency::create(['code'=>'AFN','name'=>'Afghani','is_active'=>true,'is_base'=>true]);
+  $this->actingAs($user)->post(route('purchases.orders.store'),[
+   'supplier_id'=>$supplier->id,'currency_id'=>$currency->id,'source'=>'local','order_date'=>'2026-10-27',
+   'items'=>[['description'=>'Material','quantity'=>1,'unit_price'=>10]],
+  ])->assertRedirect(route('purchases.orders.index'));
+  $this->assertDatabaseCount('purchase_orders',1);
  }
  public function test_unauthorized_user_cannot_create_orders():void {
   $user=User::factory()->create();
