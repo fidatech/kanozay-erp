@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use Brick\Math\BigDecimal;
 use Illuminate\Http\Request;
 
 class ModulePageController extends Controller
@@ -25,21 +26,38 @@ class ModulePageController extends Controller
         }
 
         if ($page === 'overview') {
+            $snapshot = function (string $partyType, string $documentType): array {
+                $baseQuery = \App\Models\TradeDocument::query()->where('type', $documentType);
+                $overdueDocuments = (clone $baseQuery)->whereDate('due_date', '<', today())->with('allocations')->get();
+                $overdue = $overdueDocuments->filter(function ($document) {
+                    $allocated = BigDecimal::zero();
+                    foreach ($document->allocations as $allocation) $allocated = $allocated->plus((string) $allocation->amount);
+                    return BigDecimal::of((string) $document->amount)->compareTo($allocated) > 0;
+                })->count();
+                return [
+                    'partyCount' => \App\Models\TradeParty::query()->where('type', $partyType)->where('is_active', true)->count(),
+                    'documentCount' => (clone $baseQuery)->count(),
+                    'overdue' => $overdue,
+                    'recent' => (clone $baseQuery)->with(['party', 'currency'])->latest('id')->limit(5)->get(),
+                ];
+            };
+            $purchaseData = $module === 'purchases' ? $snapshot('supplier', 'payable') : null;
+            $salesData = $module === 'sales' ? $snapshot('customer', 'receivable') : null;
             return view('modules.overview', [
                 'module' => $module,
                 'moduleData' => $modules[$module],
-                'purchaseSnapshot' => $module === 'purchases' ? [
-                    'suppliers' => \App\Models\TradeParty::query()->where('type', 'supplier')->where('is_active', true)->count(),
-                    'payables' => \App\Models\TradeDocument::query()->where('type', 'payable')->count(),
-                    'overdue' => \App\Models\TradeDocument::query()->where('type', 'payable')->whereDate('due_date', '<', today())->whereRaw('amount > (select coalesce(sum(amount), 0) from trade_settlement_allocations where trade_document_id = trade_documents.id)')->count(),
-                    'recent' => \App\Models\TradeDocument::query()->with(['party', 'currency'])->where('type', 'payable')->latest('id')->limit(5)->get(),
-                ] : null,
-                'salesSnapshot' => $module === 'sales' ? [
-                    'customers' => \App\Models\TradeParty::query()->where('type', 'customer')->where('is_active', true)->count(),
-                    'receivables' => \App\Models\TradeDocument::query()->where('type', 'receivable')->count(),
-                    'overdue' => \App\Models\TradeDocument::query()->where('type', 'receivable')->whereDate('due_date', '<', today())->whereRaw('amount > (select coalesce(sum(amount), 0) from trade_settlement_allocations where trade_document_id = trade_documents.id)')->count(),
-                    'recent' => \App\Models\TradeDocument::query()->with(['party', 'currency'])->where('type', 'receivable')->latest('id')->limit(5)->get(),
-                ] : null,
+                'purchaseSnapshot' => $purchaseData === null ? null : [
+                    'suppliers' => $purchaseData['partyCount'],
+                    'payables' => $purchaseData['documentCount'],
+                    'overdue' => $purchaseData['overdue'],
+                    'recent' => $purchaseData['recent'],
+                ],
+                'salesSnapshot' => $salesData === null ? null : [
+                    'customers' => $salesData['partyCount'],
+                    'receivables' => $salesData['documentCount'],
+                    'overdue' => $salesData['overdue'],
+                    'recent' => $salesData['recent'],
+                ],
             ]);
         }
 

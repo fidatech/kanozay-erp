@@ -28,6 +28,19 @@ class TradeSettlementTest extends TestCase {
   return [$user,$document,$payment,$currency];
  }
  public function test_partial_customer_settlement_preserves_journal_count():void {[$user,$doc,$payment]=$this->fixtures();$before=JournalEntry::count();$this->actingAs($user)->post(route('finance.settlements.store'),['trade_document_id'=>$doc->id,'money_transaction_id'=>$payment->id,'amount'=>'200.50'])->assertRedirect();$this->assertDatabaseHas('trade_settlement_allocations',['trade_document_id'=>$doc->id,'amount'=>'200.5000']);$this->assertSame($before,JournalEntry::count());$this->actingAs($user)->get(route('finance.documents.index'))->assertOk()->assertSee('299.5');}
+ public function test_overview_counts_only_overdue_documents_with_an_exact_remaining_balance():void {
+  [$user,$partial,$partialPayment]=$this->fixtures();
+  $partial->update(['due_date'=>'2020-01-01']);
+  app(TradeSettlementService::class)->allocate($partial->id,$partialPayment->id,'200.0001',$user->id);
+  $fullyPaidJournal=JournalEntry::create(['number'=>'JE-ST-OVERVIEW','entry_date'=>'2020-01-01','description'=>'Paid overdue document','currency_id'=>$partial->currency_id,'created_by'=>$user->id,'status'=>'posted']);
+  $fullyPaid=TradeDocument::create(['type'=>'receivable','number'=>'DOC-ST-PAID','trade_party_id'=>$partial->trade_party_id,'currency_id'=>$partial->currency_id,'document_date'=>'2020-01-01','due_date'=>'2020-01-01','amount'=>'300.0000','description'=>'Paid overdue document','journal_entry_id'=>$fullyPaidJournal->id,'created_by'=>$user->id]);
+  $paymentJournal=JournalEntry::create(['number'=>'JE-ST-OVERVIEW-PAYMENT','entry_date'=>'2020-01-01','description'=>'Payment for overdue document','currency_id'=>$partial->currency_id,'created_by'=>$user->id,'status'=>'posted']);
+  $fullyPaidPayment=MoneyTransaction::create(['type'=>'receipt','transaction_date'=>'2020-01-01','counterpart_ledger_account_id'=>$partialPayment->counterpart_ledger_account_id,'currency_id'=>$partial->currency_id,'amount'=>'300.0000','description'=>'Payment for overdue document','journal_entry_id'=>$paymentJournal->id,'created_by'=>$user->id]);
+  app(TradeSettlementService::class)->allocate($fullyPaid->id,$fullyPaidPayment->id,'300.0000',$user->id);
+
+  $this->actingAs($user)->get(route('workspace.page',['sales','overview']))->assertOk()
+   ->assertSeeTextInOrder(['Receivable documents','2','Overdue receivables','1']);
+ }
  public function test_supplier_settlement_and_overallocation_rejection():void {[$user,$doc,$payment]=$this->fixtures('payable');$service=app(TradeSettlementService::class);$service->allocate($doc->id,$payment->id,'250',$user->id);$this->assertDatabaseCount('trade_settlement_allocations',1);$this->expectException(ValidationException::class);$service->allocate($doc->id,$payment->id,'100',$user->id);}
  public function test_aging_report_and_unapplied_payment_are_visible():void {[$user,$doc,$payment]=$this->fixtures();$this->actingAs($user)->get(route('finance.aging.index',['type'=>'receivable','as_of'=>'2026-12-10']))->assertOk()->assertSee('Settlement Test Party')->assertSee('1–30 days')->assertSee('500');$this->actingAs($user)->get(route('finance.money.index'))->assertOk()->assertSee('Unapplied')->assertSee('300');}
  public function test_partial_allocation_updates_aging_and_unapplied_amount():void {[$user,$doc,$payment]=$this->fixtures();app(TradeSettlementService::class)->allocate($doc->id,$payment->id,'125.125',$user->id);$this->actingAs($user)->get(route('finance.aging.index',['as_of'=>now()->addDays(90)->toDateString()]))->assertOk()->assertSee('374.875');$this->actingAs($user)->get(route('finance.money.index'))->assertOk()->assertSee('174.875');$this->assertDatabaseCount('journal_entries',2);}

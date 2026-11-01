@@ -38,7 +38,7 @@
   <div class="overview-stat"><small>Overdue receivables</small><strong>{{ number_format($salesSnapshot['overdue']) }}</strong><span class="stat-caption">Past due with an outstanding balance</span></div>
  </div>
  <div class="overview-panel"><div class="overview-panel-header"><h2>Recent receivable documents</h2><a href="{{ route('finance.documents.index',['type'=>'receivable']) }}">View receivables</a></div>
- @forelse($salesSnapshot['recent'] as $doc)<div class="overview-activity"><span><strong>{{ $doc->number }}</strong> · {{ $doc->party?->name ?? 'Customer unavailable' }} · {{ number_format((float)$doc->amount,2) }} {{ $doc->currency?->code }}</span><time>{{ $doc->document_date }}</time></div>@empty<div class="overview-empty">No receivable documents recorded yet.</div>@endforelse
+ @forelse($salesSnapshot['recent'] as $doc)<div class="overview-activity"><span><strong>{{ $doc->number }}</strong> · {{ $doc->party?->name ?? 'Customer unavailable' }} · <x-finance-amount :amount="$doc->amount" /> {{ $doc->currency?->code }}</span><time>{{ $doc->document_date }}</time></div>@empty<div class="overview-empty">No receivable documents recorded yet.</div>@endforelse
  </div>
  @endif
  @if($module==='purchases' && $purchaseSnapshot)
@@ -49,7 +49,7 @@
   <div class="overview-stat"><small>Overdue payables</small><strong>{{ number_format($purchaseSnapshot['overdue']) }}</strong><span class="stat-caption">Past due with an outstanding balance</span></div>
  </div>
  <div class="overview-panel"><div class="overview-panel-header"><h2>Recent payable documents</h2><a href="{{ route('finance.documents.index',['type'=>'payable']) }}">View payables</a></div>
- @forelse($purchaseSnapshot['recent'] as $doc)<div class="overview-activity"><span><strong>{{ $doc->number }}</strong> · {{ $doc->party?->name ?? 'Supplier unavailable' }} · {{ number_format((float)$doc->amount,2) }} {{ $doc->currency?->code }}</span><time>{{ $doc->document_date }}</time></div>@empty<div class="overview-empty">No payable documents recorded yet.</div>@endforelse
+ @forelse($purchaseSnapshot['recent'] as $doc)<div class="overview-activity"><span><strong>{{ $doc->number }}</strong> · {{ $doc->party?->name ?? 'Supplier unavailable' }} · <x-finance-amount :amount="$doc->amount" /> {{ $doc->currency?->code }}</span><time>{{ $doc->document_date }}</time></div>@empty<div class="overview-empty">No payable documents recorded yet.</div>@endforelse
  </div>
  @endif
  <div class="overview-stats">
