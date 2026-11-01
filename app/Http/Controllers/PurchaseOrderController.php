@@ -9,6 +9,7 @@ class PurchaseOrderController extends Controller {
   abort_unless($request->user()->can('administration.view'),403);
   return view('purchases.orders',[
    'orders'=>PurchaseOrder::with(['supplier','currency','items'])->latest('id')->paginate(20),
+   'materials'=>\App\Models\InventoryMaterial::where('is_active',true)->orderBy('name')->get(),
    'nextNumber'=>$this->nextNumber(),
    'suppliers'=>TradeParty::where('type','supplier')->where('is_active',true)->orderBy('name')->get(),
    'currencies'=>Currency::where('is_active',true)->orderBy('code')->get(),
@@ -25,6 +26,7 @@ class PurchaseOrderController extends Controller {
    'notes'=>['nullable','string','max:3000'],
    'items'=>['required','array','min:1','max:100'],
    'items.*.description'=>['required','string','max:255'],
+   'items.*.inventory_material_id'=>['nullable',Rule::exists('inventory_materials','id')->where('is_active',true)],
    'items.*.quantity'=>['required','numeric','gt:0','max:999999999'],
    'items.*.unit_price'=>['required','numeric','min:0','max:999999999999'],
   ]);
@@ -81,7 +83,29 @@ class PurchaseOrderController extends Controller {
  }
  public function show(Request $request,PurchaseOrder $order) {
   abort_unless($request->user()->can('administration.view'),403);
-  return view('purchases.show', ['order'=>$order->load(['supplier','currency','items','expenses','advances'])]);
+  return view('purchases.show', ['order'=>$order->load(['supplier','currency','items.inventoryMaterial','expenses','advances','receipts.lines']), 'materials'=>\App\Models\InventoryMaterial::where('is_active',true)->orderBy('name')->get()]);
+ }
+ public function linkMaterial(Request $request, PurchaseOrder $order, \App\Models\PurchaseOrderItem $item) {
+  abort_unless($request->user()->can('purchases.update'),403);
+  abort_unless($item->purchase_order_id===$order->id,404);
+  $data=$request->validate(['inventory_material_id'=>['nullable',Rule::exists('inventory_materials','id')->where('is_active',true)]]);
+  DB::transaction(function()use($order,$item,$data){
+   $locked=PurchaseOrder::whereKey($order->id)->lockForUpdate()->firstOrFail();
+   abort_unless($locked->status==='draft',422,'Only draft purchase orders can be edited.');
+   $lockedItem=$locked->items()->whereKey($item->id)->firstOrFail();
+   $lockedItem->update(['inventory_material_id'=>$data['inventory_material_id']??null]);
+  });
+  return back()->with('success','Purchase item material link saved. No inventory movement occurred.');
+ }
+ public function confirm(Request $request,PurchaseOrder $order) {
+  abort_unless($request->user()->can('purchases.update'),403);
+  DB::transaction(function()use($order){
+   $locked=PurchaseOrder::whereKey($order->id)->lockForUpdate()->firstOrFail();
+   abort_unless($locked->status==='draft',422,'Only draft purchase orders can be confirmed.');
+   abort_unless($locked->items()->exists(),422,'Cannot confirm an empty purchase order.');
+   $locked->update(['status'=>'confirmed']);
+  });
+  return back()->with('success','Purchase order confirmed. No stock or finance postings were made.');
  }
  public function addExpense(Request $request,PurchaseOrder $order) {
   abort_unless($request->user()->can('administration.view'),403);

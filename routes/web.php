@@ -35,6 +35,8 @@ Route::middleware('auth')->post('/purchases/quick-supplier', [\App\Http\Controll
 Route::middleware('auth')->post('/purchases/quick-customer', [\App\Http\Controllers\PurchaseOrderController::class,'quickCustomer'])->name('purchases.quick-customer');
 Route::middleware('auth')->post('/purchases/quick-currency', [\App\Http\Controllers\PurchaseOrderController::class,'quickCurrency'])->name('purchases.quick-currency');
 Route::middleware('auth')->post('/purchases/orders', [\App\Http\Controllers\PurchaseOrderController::class,'store'])->name('purchases.orders.store');
+Route::middleware('auth')->patch('/purchases/orders/{order}/items/{item}/inventory', [\App\Http\Controllers\PurchaseOrderController::class,'linkMaterial'])->name('purchases.orders.items.link');
+Route::middleware('auth')->post('/purchases/orders/{order}/confirm', [\App\Http\Controllers\PurchaseOrderController::class,'confirm'])->name('purchases.orders.confirm');
 Route::middleware('auth')->post('/purchases/orders/{order}/expenses', [\App\Http\Controllers\PurchaseOrderController::class,'addExpense'])->name('purchases.orders.expenses.store');
 Route::middleware('auth')->post('/purchases/orders/{order}/advances', [\App\Http\Controllers\PurchaseOrderController::class,'addAdvance'])->name('purchases.orders.advances.store');
 Route::middleware('auth')->get('/purchases/orders/{order}', [\App\Http\Controllers\PurchaseOrderController::class,'show'])->name('purchases.orders.show');

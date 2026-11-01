@@ -15,19 +15,33 @@ $balance=$subtotal-$advances;
 @if(session('success'))<div class="po-notice">{{ session('success') }}</div>@endif
 @if($errors->any())<div class="po-error"><ul>@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
 <div class="panel"><h2>Purchase Details</h2><p><strong>Supplier:</strong> {{ $order->supplier?->name }} &nbsp; <strong>Currency:</strong> {{ $currency }} &nbsp; <strong>Expected delivery:</strong> {{ $order->expected_date ?? 'Not specified' }}</p><p>{{ $order->notes }}</p></div>
+@if($order->status==='draft')
+@can('purchases.update')
+<form method="POST" action="{{ route('purchases.orders.confirm',$order) }}" style="margin:12px 0">@csrf
+<button type="submit" class="btn" onclick="return confirm('Confirm this purchase order? Material links and purchase details will be locked.')">Confirm purchase order</button>
+</form>
+@endcan
+@endif
 <div class="po-cards">
 <div class="po-card"><small>Items subtotal</small><strong>{{ number_format($subtotal,2) }} {{ $currency }}</strong></div>
 <div class="po-card"><small>Purchase expenses</small><strong>{{ number_format($expenses,2) }} {{ $currency }}</strong></div>
 <div class="po-card"><small>Estimated landed cost</small><strong>{{ number_format($landed,2) }} {{ $currency }}</strong></div>
 <div class="po-card"><small>Supplier balance (unposted)</small><strong>{{ number_format($balance,2) }} {{ $currency }}</strong></div>
 </div>
-<div class="panel"><h2>Items and Estimated Landed Cost</h2><div class="table-wrap"><table><thead><tr><th>Description</th><th>Quantity</th><th>Unit Price</th><th>Line Total</th><th>Allocated Expenses</th><th>Estimated Landed Total</th></tr></thead><tbody>
+<div class="panel"><h2>Items and Estimated Landed Cost</h2><div class="table-wrap"><table><thead><tr><th>Description</th><th>Inventory material</th><th>Quantity</th><th>Unit Price</th><th>Line Total</th><th>Allocated Expenses</th><th>Estimated Landed Total</th></tr></thead><tbody>
 @foreach($order->items as $item)
 @php($line=(float)$item->quantity*(float)$item->unit_price)
 @php($allocated=$subtotal>0 ? $expenses*$line/$subtotal : 0)
-<tr><td>{{ $item->description }}</td><td>{{ number_format((float)$item->quantity,4) }}</td><td>{{ number_format((float)$item->unit_price,4) }}</td><td>{{ number_format($line,2) }}</td><td>{{ $subtotal>0 ? number_format($allocated,2) : 'Pending' }}</td><td>{{ $subtotal>0 ? number_format($line+$allocated,2) : 'Pending' }}</td></tr>
+<tr><td>{{ $item->description }}</td><td>
+@if($order->status==='draft')
+@can('purchases.update')
+<form method="POST" action="{{ route('purchases.orders.items.link',[$order,$item]) }}" style="display:flex;gap:6px;align-items:center">@csrf @method('PATCH')
+<select name="inventory_material_id" aria-label="Inventory material for {{ $item->description }}" style="min-width:160px;padding:8px;border:1px solid #cddbea;border-radius:7px"><option value="">Not linked</option>@foreach($materials as $material)<option value="{{ $material->id }}" @selected($item->inventory_material_id==$material->id)>{{ $material->sku }} · {{ $material->name }} ({{ $material->unit }})</option>@endforeach</select><button class="btn" type="submit">Save</button></form>
+@else {{ $item->inventoryMaterial?->name ?? 'Not linked' }} @endcan
+@else {{ $item->inventoryMaterial?->name ?? 'Not linked' }} {{ $item->inventoryMaterial ? '('.$item->inventoryMaterial->unit.')' : '' }} @endif
+</td><td>{{ number_format((float)$item->quantity,4) }}</td><td>{{ number_format((float)$item->unit_price,4) }}</td><td>{{ number_format($line,2) }}</td><td>{{ $subtotal>0 ? number_format($allocated,2) : 'Pending' }}</td><td>{{ $subtotal>0 ? number_format($line+$allocated,2) : 'Pending' }}</td></tr>
 @endforeach
-</tbody><tfoot><tr><th colspan="3">Total ({{ $currency }})</th><th>{{ number_format($subtotal,2) }}</th><th>{{ $subtotal>0 ? number_format($expenses,2) : 'Pending' }}</th><th>{{ $subtotal>0 ? number_format($landed,2) : 'Pending' }}</th></tr></tfoot></table></div>
+</tbody><tfoot><tr><th colspan="4">Total ({{ $currency }})</th><th>{{ number_format($subtotal,2) }}</th><th>{{ $subtotal>0 ? number_format($expenses,2) : 'Pending' }}</th><th>{{ $subtotal>0 ? number_format($landed,2) : 'Pending' }}</th></tr></tfoot></table></div>
 <p class="muted">Estimated expenses are allocated proportionally by item value. Final allocation will be rounded and posted during receiving. Zero-value orders cannot be allocated.</p></div>
 <div class="panel"><h2>Purchase Expenses</h2>
 @if($order->status==='draft')
