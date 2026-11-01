@@ -15,14 +15,14 @@ use Illuminate\Validation\Rule;
 
 class ProductionOrderController extends Controller {
     public function index(Request $request) {
-        abort_unless($request->user()->can('administration.view'), 403);
+        abort_unless($request->user()->canAny(['administration.view', 'manufacturing.view', 'laboratory.view', 'inventory.view']), 403);
         return view('production.orders', [
             'orders' => ProductionOrder::with('recipe')->latest('id')->paginate(20),
             'recipes' => ProductionRecipe::where('status', 'approved')->orderBy('name')->get(),
         ]);
     }
     public function store(Request $request) {
-        abort_unless($request->user()->can('administration.update'), 403);
+        abort_unless($request->user()->canAny(['administration.update', 'manufacturing.create']), 403);
         $data = $request->validate([
             'production_recipe_id' => ['required', Rule::exists('production_recipes', 'id')->where('status', 'approved')],
             'package_count' => ['required', 'integer', 'min:1', 'max:100000'],
@@ -63,7 +63,7 @@ class ProductionOrderController extends Controller {
         return redirect()->route('production.orders.show', $order)->with('success', 'Production plan created. No stock has been reserved or consumed.');
     }
     public function show(Request $request, ProductionOrder $order) {
-        abort_unless($request->user()->can('administration.view'), 403);
+        abort_unless($request->user()->canAny(['administration.view', 'manufacturing.view', 'laboratory.view', 'inventory.view']), 403);
         $order->load('recipe', 'materials.inventoryMaterial', 'batch.checks', 'batch.finishedGood');
         $ownReservations = [];
         $totalDemand = [];
