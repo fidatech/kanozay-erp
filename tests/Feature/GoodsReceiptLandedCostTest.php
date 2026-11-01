@@ -56,7 +56,10 @@ class GoodsReceiptLandedCostTest extends TestCase
         $cost = app(GoodsReceiptLandedCostService::class)->record($receipt->id, 'freight', '20.00', $user->id);
 
         $allocations = $cost->allocations->sortBy('goods_receipt_line_id')->values();
-        $this->assertSame(['5.00', '15.00'], $allocations->pluck('amount')->all());
+        $formattedAllocations = $allocations->map(
+            fn ($allocation) => (string) BigDecimal::of((string) $allocation->amount)->toScale(2)
+        )->all();
+        $this->assertSame(['5.00', '15.00'], $formattedAllocations);
         $allocationTotal = BigDecimal::of((string) $allocations[0]->amount)
             ->plus((string) $allocations[1]->amount)
             ->toScale(2);
