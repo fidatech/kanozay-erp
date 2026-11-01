@@ -47,7 +47,8 @@
   <td>{{ $material['on_hand'] ?? '—' }}</td><td>{{ $material['available'] ?? '—' }}</td><td>{{ $material['reserved'] }}</td><td>{{ $material['issued'] }}</td>
   <td>
    @if($material['on_hand'] === null)<span class="muted">Not mapped</span>
-   @elseif($material['shortage'] !== '0.000000')<strong style="color:#b42318">Short by {{ $material['shortage'] }}</strong>
+   @elseif($material['combined_line'])<span class="muted">Combined with first row for this SKU</span>
+   @elseif($material['shortage'] !== '0.000000')<strong style="color:#b42318">Short by {{ $material['shortage'] }} (combined demand)</strong>
    @else<span style="color:#08734b">Enough stock</span>@endif
   </td>
  </tr>
@@ -75,6 +76,6 @@
  @endcan
  @endcan
  @can('inventory.view')<p><a href="{{ route('inventory.materials.index') }}">Open raw-material inventory</a></p>@endcan
- <p class="muted">Availability excludes materials reserved by other production orders. Reserving does not consume stock. Posting an issue records actual consumption, but does not create finished goods or financial journals.</p>
+ <p class="muted">Availability combines demand across lines mapped to the same stock item and excludes stock reserved by other production orders. Reserving does not consume stock. Posting an issue records actual consumption, but does not create finished goods or financial journals.</p>
 </div>
 @endsection

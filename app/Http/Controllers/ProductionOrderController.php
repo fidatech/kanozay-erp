@@ -65,14 +65,19 @@ class ProductionOrderController extends Controller {
         abort_unless($request->user()->can('administration.view'), 403);
         $order->load('recipe', 'materials.inventoryMaterial');
         $ownReservations = [];
+        $totalDemand = [];
+        $firstLineForMaterial = [];
         foreach ($order->materials as $line) {
             if ($line->inventory_material_id) {
                 $id = $line->inventory_material_id;
+                $firstLineForMaterial[$id] ??= $line->id;
+                $totalDemand[$id] = ($totalDemand[$id] ?? BigDecimal::zero())
+                    ->plus(BigDecimal::of((string) $line->required_quantity));
                 $ownReservations[$id] = ($ownReservations[$id] ?? BigDecimal::zero())
                     ->plus(BigDecimal::of((string) $line->reserved_quantity));
             }
         }
-        $materials = $order->materials->map(function ($line) use ($ownReservations) {
+        $materials = $order->materials->map(function ($line) use ($ownReservations, $totalDemand, $firstLineForMaterial) {
             $catalog = $line->inventoryMaterial;
             $onHand = $catalog ? (string) $catalog->on_hand_quantity : null;
             $available = $catalog
@@ -81,7 +86,7 @@ class ProductionOrderController extends Controller {
                     ->plus($ownReservations[$catalog->id] ?? BigDecimal::zero())
                 : null;
             $shortage = $available === null ? null
-                : BigDecimal::of((string) $line->required_quantity)->minus($available);
+                : $totalDemand[$catalog->id]->minus($available);
             return [
                 'id' => $line->id,
                 'name' => $line->material_name,
@@ -92,6 +97,7 @@ class ProductionOrderController extends Controller {
                 'sku' => $catalog?->sku,
                 'on_hand' => $onHand,
                 'available' => $available === null ? null : (string) $available->toScale(6),
+                'combined_line' => $catalog && $firstLineForMaterial[$catalog->id] !== $line->id,
                 'reserved' => (string) $line->reserved_quantity,
                 'issued' => (string) $line->issued_quantity,
                 'shortage' => $shortage !== null && $shortage->isGreaterThan(0)

@@ -180,6 +180,8 @@ class ProductionMaterialIssueTest extends TestCase
             'quantity_per_package' => '6', 'required_quantity' => '6',
             'is_packaging' => false, 'inventory_material_id' => $material->id,
         ]);
+        $this->actingAs($this->operator)->get(route('production.orders.show', $order))
+            ->assertOk()->assertSee('Short by 2.000000');
         $this->actingAs($this->operator)->post(route('production.orders.reserve', $order))
             ->assertSessionHasErrors('production_order');
         $this->assertSame('planned', $order->fresh()->status);
