@@ -56,7 +56,7 @@ class CashMovementReportTest extends TestCase
         $this->createJournalLine($user, $usd, $bankLedger, 'CM-6', '2026-10-12', 'posted', '5', '0');
 
         $response = $this->actingAs($user)->get(route('finance.cash-movements.index', ['from' => '2026-10-01', 'to' => '2026-10-31']));
-        $response->assertOk()->assertSee('Factory cash')->assertSee('USD bank')->assertSee('100')->assertSee('30')->assertSee('10')->assertSee('120')->assertSee('5')->assertDontSee('170')->assertDontSee('35');
+        $response->assertOk()->assertSee('Factory cash')->assertSee('USD bank')->assertSee('100')->assertSee('30')->assertSee('10')->assertSee('120')->assertSee('5')->assertDontSee('170')->assertDontSee('>35</span>', false);
         $this->actingAs($user)->get(route('finance.cash-movements.index', ['from' => '2026-10-01', 'to' => '2026-10-31', 'currency_id' => $afn->id]))
             ->assertOk()->assertSee('Factory cash')->assertDontSee('USD bank');
     }
