@@ -38,7 +38,7 @@ class DashboardTest extends TestCase
         JournalEntry::create(['number' => 'DB-JE-3', 'entry_date' => today()->subDays(40), 'description' => 'Outside selected period', 'status' => 'posted', 'currency_id' => $currency->id, 'created_by' => $user->id]);
 
         $this->actingAs($user)->get(route('dashboard', ['from' => today()->toDateString(), 'to' => today()->toDateString()]))
-            ->assertOk()->assertSee('Active employee profiles')->assertSee('Posted journals')->assertSee('Synthetic posted journal')
+            ->assertOk()->assertSee('Active employee profiles')->assertSeeInOrder(['Posted journals', '>1</strong>'], false)
             ->assertDontSee('Synthetic draft journal')->assertDontSee('Outside selected period')
             ->assertDontSee('Total Revenue')->assertDontSee('Net Profit')->assertDontSee('Inventory Value');
     }
