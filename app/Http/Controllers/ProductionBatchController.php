@@ -58,7 +58,7 @@ class ProductionBatchController extends Controller
         abort_unless($request->user()->can('inventory.update'), 403);
         abort_unless($batch->production_order_id === $order->id, 404);
         $data = $request->validate([
-            'occurred_on' => ['required', 'date', 'before_or_equal:today'],
+            'occurred_on' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
         ]);
         if ($batch->decided_at && $data['occurred_on'] < $batch->decided_at->toDateString()) {
             throw \Illuminate\Validation\ValidationException::withMessages([
