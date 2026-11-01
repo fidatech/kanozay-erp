@@ -5,7 +5,11 @@
  <h2>Production plan {{ $order->number }}</h2>
  @if(session('success'))<p role="status" style="color:#08734b">{{ session('success') }}</p>@endif
  @if($errors->any())<p role="alert" style="color:#b42318">{{ $errors->first() }}</p>@endif
- <p>Recipe: <a href="{{ route('production.recipes.show', $order->recipe) }}">{{ $order->recipe->name }}</a> · {{ $order->package_count }} packages · {{ $order->package_count * $order->recipe->package_weight_kg }} kg planned output</p>
+ @php($plannedOutput = $order->planned_package_weight_kg === null ? null : (string) \Brick\Math\BigDecimal::of((string) $order->planned_package_weight_kg)->multipliedBy((string) $order->package_count)->toScale(4))
+ <p>Recipe: <a href="{{ route('production.recipes.show', $order->recipe) }}">{{ $order->planned_recipe_name }}</a> · {{ $order->package_count }} packages · {{ $plannedOutput ?? 'Not captured' }} kg planned output</p>
+ @if($order->package_weight_kg_snapshot === null)
+ <p class="muted" role="status">Legacy plan: recipe package specifications were not captured when this order was created. Confirm the original recipe before submitting a finished-goods batch.</p>
+ @endif
  <p><strong>Status:</strong> {{ ucfirst($order->status) }}</p>
  @can('administration.update')
  @can('inventory.update')
@@ -112,7 +116,7 @@
     <select name="finished_good_id" required>
      <option value="">Choose product</option>
      @foreach($finishedGoods as $good)
-      @if($good->package_unit === $order->recipe->package_unit && \Brick\Math\BigDecimal::of((string) $good->package_weight_kg)->compareTo(\Brick\Math\BigDecimal::of((string) $order->recipe->package_weight_kg)) === 0 && (blank($order->recipe->product_code) || $good->sku === $order->recipe->product_code))
+      @if($good->package_unit === $order->planned_package_unit && \Brick\Math\BigDecimal::of((string) $good->package_weight_kg)->compareTo(\Brick\Math\BigDecimal::of((string) $order->planned_package_weight_kg)) === 0 && (blank($order->planned_product_code) || $good->sku === $order->planned_product_code))
       <option value="{{ $good->id }}">{{ $good->sku }} — {{ $good->name }}</option>
       @endif
      @endforeach
