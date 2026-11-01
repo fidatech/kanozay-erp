@@ -3,14 +3,14 @@
 **Decision: NO-GO for employee acceptance testing**  
 **Review date:** 2 November 2026  
 **Branch:** `development/kanozay-completion`  
-**Latest verified commit:** `5d9de831cad4fea7954647d69710145647ab469d`
+**Latest verified code commit:** `17817ca6b89e5e8d15cee9392134c766717702fa`
 
 ## Evidence reviewed
 
 - Repository source, migrations, controllers, services, Blade views, routes, seeders, tests, Composer and npm configuration, and GitHub Actions workflow.
 - The branch contains 47 Laravel test files and a push/pull-request Laravel test workflow configured for PHP 8.4, SQLite tests, and a Vite build.
 - The current execution workspace has no PHP, Composer, `vendor/`, or `node_modules/`. Consequently, `php artisan test` stopped with `php: command not found`; `npm run build` stopped with `vite: not found`. Neither result is a passing test or build.
-- GitHub Actions run **#74** for commit `5d9de831cad4fea7954647d69710145647ab469d` completed successfully. The workflow reports **185 passed, 1 skipped, 1502 assertions** and the frontend asset build completed successfully. This verifies the tested branch state at that commit; later changes require a new successful run.
+- GitHub Actions [run #41353498352](https://github.com/fidatech/kanozay-erp/actions/runs/41353498352) for commit `17817ca6b89e5e8d15cee9392134c766717702fa` completed successfully. The workflow reports **196 passed, 1 skipped, 1543 assertions**, and the frontend asset build completed successfully. This verifies the tested branch state at that commit; later changes require a new successful run.
 - No authorized staging/UAT deployment was identified or created. No production deployment was attempted.
 
 ## Client workbook review
@@ -48,11 +48,19 @@
 - Removed the default seeder's predictable `test@example.com` login. The database seeder now installs reference roles and permissions only; first-admin creation remains interactive through `php artisan kanozay:admin`.
 - Added a regression test for the no-default-user seeding rule. It is **not executed** because PHP and Composer are unavailable in this workspace.
 - Corrected landed-cost rounding enum compatibility and expanded the GRN landed-cost tests for proportional allocation, reconciliation, duplicate component protection, and permissions. The branch CI passed on run #74.
-- A follow-on change now replaces float-based journal balancing and trade settlement arithmetic with `brick/math` decimal operations and enforces four decimal places on journal inputs. Its regression tests have been added but are **pending CI verification**.
+- A follow-on change now replaces float-based journal balancing and trade settlement arithmetic with `brick/math` decimal operations and enforces four decimal places on journal inputs. Its regression tests are included in the successful branch CI run.
+
+## Production planning verification update
+
+- New production plans capture the approved recipe name, product code, package weight and package unit as immutable creation-time snapshots. Existing orders retain NULL snapshots and show a legacy warning rather than receiving invented historical values.
+- Material requirement multiplication now uses `brick/math` exact decimals with a supported stock quantity range guard.
+- Finished-goods batch submission validates against the production plan's saved package specification, even if the linked recipe is later edited.
+- Recipe approval now checks the 0.01 kg ingredient-weight tolerance using exact decimals, including the six-decimal boundary case.
+- These changes passed the automated Laravel suite and frontend build in GitHub Actions run #41353498352. They have **not** undergone client UAT or an authorized staging migration rehearsal.
 
 ## Next implementation order
 
-1. Wait for CI to verify the exact-decimal accounting changes, then continue removing floating-point arithmetic from financial posting paths.
+1. Continue removing floating-point arithmetic from remaining financial posting paths and validate stock valuation without inventing historical costs.
 2. Validate migrations and the current purchase-to-GRN and manufacturing-to-QC flows on a clean SQLite test database and synthetic data.
 3. Finish the agreed initial-release gaps in sales/invoices, payroll, shareholder ledger, fixed assets, and transaction-backed reports.
 4. Obtain the missing invoice sample and client recipe approvals, then build validated import and print acceptance around those confirmed sources.
