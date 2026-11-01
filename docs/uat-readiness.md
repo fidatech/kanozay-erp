@@ -3,7 +3,7 @@
 **Decision: NO-GO for employee acceptance testing**  
 **Review date:** 1 November 2026
 **Branch:** `development/kanozay-completion`  
-**Latest verified commit:** `a9a808a8a1c9aace324c339d1dd03d6afaaca5a2`
+**Latest verified code commit:** `a9a808a8a1c9aace324c339d1dd03d6afaaca5a2` (trial balance implementation is pending CI)
 
 ## Evidence reviewed
 
@@ -55,11 +55,12 @@
 - Commit `28cf1110e256affa1c7a192b86f9ed5e25942854` uses exact decimal allocation totals in sales and purchase overview overdue counts, formats amounts with the shared finance component, and tests fully paid versus partially settled overdue receivables. CI run #92 passed.
 - Commit `f93086fa5ff2ae4a64a03adaec3e179f677315af` adds a permission-gated employee register and a two-step payroll workbook import preview. Personal names, phone, national ID, and taxpayer ID are encrypted using `APP_KEY`. The source deduction column is excluded, salary currency is explicitly selected, duplicate employee numbers block import, and preview files are not retained. CI run #95 passed. Payroll periods, attendance, payroll calculation, approval, payment, and journal posting remain incomplete.
 - Commit `a9a808a8a1c9aace324c339d1dd03d6afaaca5a2` adds immutable stock adjustments with reason, permission enforcement, exact quantities, reservation/negative-stock protection, transaction rollback, and idempotency coverage. CI run #97 passed.
+- A new posted-only trial balance report is being added with an as-of date, currency-separated exact decimal balances, access control, and CSV export. Its feature tests and backend CI result are pending; do not treat it as verified until a successful run is available.
 
 ## Next implementation order
 
 1. Wait for CI to verify the exact-decimal accounting changes, then continue removing floating-point arithmetic from financial posting paths.
 2. Validate migrations and the current purchase-to-GRN and manufacturing-to-QC flows on a clean SQLite test database and synthetic data.
-3. Finish the agreed initial-release gaps in sales/invoices, payroll, shareholder ledger, fixed assets, and transaction-backed reports.
+3. Finish the agreed initial-release gaps in sales/invoices, payroll, shareholder ledger, fixed assets, and transaction-backed reports; obtain a CI result for the trial balance change.
 4. Obtain the missing invoice sample and client recipe approvals, then build validated import and print acceptance around those confirmed sources.
 5. Deploy only to an isolated UAT target, prepare named test users, and run the employee UAT checklist.
