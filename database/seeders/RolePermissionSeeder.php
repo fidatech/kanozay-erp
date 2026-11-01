@@ -24,6 +24,7 @@ class RolePermissionSeeder extends Seeder
                 Permission::findOrCreate($module.'.'.$action, 'web');
             }
         }
+        Permission::findOrCreate('hr.import', 'web');
 
         $admin = Role::findOrCreate('Super Administrator', 'web');
         $admin->syncPermissions(Permission::where('guard_name', 'web')->get());

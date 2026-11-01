@@ -59,6 +59,8 @@ Route::middleware('auth')->get('/purchases/orders', [\App\Http\Controllers\Purch
 Route::middleware('auth')->get('/workspace/{module}/{page}', [\App\Http\Controllers\ModulePageController::class, 'show'])->name('workspace.page');
 Route::middleware('auth')->post('/hr/employees', [\App\Http\Controllers\EmployeeProfileController::class, 'store'])->name('hr.employees.store');
 Route::middleware('auth')->patch('/hr/employees/{employee}/status', [\App\Http\Controllers\EmployeeProfileController::class, 'update'])->name('hr.employees.update');
+Route::middleware('auth')->post('/hr/employees/import-preview', [\App\Http\Controllers\EmployeeProfileController::class, 'importPreview'])->name('hr.employees.import-preview');
+Route::middleware('auth')->post('/hr/employees/import-confirm', [\App\Http\Controllers\EmployeeProfileController::class, 'importConfirm'])->name('hr.employees.import-confirm');
 
 Route::middleware('auth')->group(function () {
     Route::get('/finance/documents', [\App\Http\Controllers\TradeDocumentController::class,'index'])->name('finance.documents.index');

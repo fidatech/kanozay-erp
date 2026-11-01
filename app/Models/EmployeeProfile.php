@@ -8,7 +8,7 @@ class EmployeeProfile extends Model
 {
     protected $fillable = [
         'employee_number', 'full_name', 'father_name', 'gender', 'position',
-        'phone', 'national_id', 'taxpayer_id', 'monthly_salary', 'is_active', 'created_by',
+        'phone', 'national_id', 'taxpayer_id', 'monthly_salary', 'salary_currency_id', 'is_active', 'created_by',
     ];
 
     protected function casts(): array
@@ -22,5 +22,10 @@ class EmployeeProfile extends Model
             'monthly_salary' => 'decimal:4',
             'is_active' => 'boolean',
         ];
+    }
+
+    public function salaryCurrency()
+    {
+        return $this->belongsTo(Currency::class, 'salary_currency_id');
     }
 }

@@ -15,7 +15,8 @@ class ModulePageStructureTest extends TestCase
     {
         $user=User::factory()->create();
         Permission::findOrCreate('administration.view','web');
-        $user->givePermissionTo('administration.view');
+        Permission::findOrCreate('hr.view','web');
+        $user->givePermissionTo(['administration.view', 'hr.view']);
         foreach(config('erp_pages') as $module=>$data){
             $this->actingAs($user)->get(route('workspace.page',[$module,'overview']))
                 ->assertOk()->assertSee($data['label']);
@@ -31,7 +32,8 @@ class ModulePageStructureTest extends TestCase
     {
         $user = User::factory()->create();
         Permission::findOrCreate('administration.view', 'web');
-        $user->givePermissionTo('administration.view');
+        Permission::findOrCreate('hr.view', 'web');
+        $user->givePermissionTo(['administration.view', 'hr.view']);
         foreach (config('erp_pages') as $module => $data) {
             $additional = array_diff_key($data['pages'], array_flip(config('erp_navigation.'.$module, [])));
             foreach ($additional as $slug => $label) {

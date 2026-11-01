@@ -19,6 +19,7 @@ return new class extends Migration
             $table->text('national_id')->nullable();
             $table->text('taxpayer_id')->nullable();
             $table->decimal('monthly_salary', 20, 4);
+            $table->foreignId('salary_currency_id')->constrained('currencies')->restrictOnDelete();
             $table->boolean('is_active')->default(true);
             $table->foreignId('created_by')->constrained('users')->restrictOnDelete();
             $table->timestamps();

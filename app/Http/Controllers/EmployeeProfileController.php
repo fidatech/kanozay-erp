@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\ActivityLog;
+use App\Models\Currency;
 use App\Models\EmployeeProfile;
+use App\Services\PayrollWorkbookImportService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -28,7 +30,10 @@ class EmployeeProfileController extends Controller
             $query->where('is_active', false);
         }
 
-        return view('hr.employees.index', ['employees' => $query->paginate(20)->withQueryString()]);
+        return view('hr.employees.index', [
+            'employees' => $query->with('salaryCurrency')->paginate(20)->withQueryString(),
+            'currencies' => Currency::query()->where('is_active', true)->orderBy('code')->get(),
+        ]);
     }
 
     public function store(Request $request)
@@ -37,13 +42,11 @@ class EmployeeProfileController extends Controller
         $request->merge(['monthly_salary' => $this->normalizeNumber($request->input('monthly_salary'))]);
         $data = $request->validate($this->rules());
         $data['created_by'] = $request->user()->id;
-        $employee = DB::transaction(function () use ($data) {
+        DB::transaction(function () use ($data) {
             $employee = EmployeeProfile::create($data);
             ActivityLog::record('hr.employee.created', 'employee_profile', $employee->id, 'Created employee profile', [
                 'employee_number' => $employee->employee_number,
             ]);
-
-            return $employee;
         });
 
         return redirect()->route('workspace.page', ['hr', 'employees'])->with('success', 'Employee profile added. Payroll rules have not been applied.');
@@ -64,6 +67,46 @@ class EmployeeProfileController extends Controller
         return redirect()->route('workspace.page', ['hr', 'employees'])->with('success', 'Employee profile updated.');
     }
 
+    public function importPreview(Request $request, PayrollWorkbookImportService $importer)
+    {
+        abort_unless($request->user()->can('hr.import'), 403);
+        $data = $request->validate([
+            'file' => ['required', 'file', 'mimes:xlsx', 'max:2048'],
+            'salary_currency_id' => ['required', Rule::exists('currencies', 'id')->where('is_active', true)],
+        ]);
+        $path = $data['file']->getRealPath();
+        $preview = $importer->preview($path, (int) $data['salary_currency_id']);
+
+        return view('hr.employees.import-preview', [
+            'preview' => $preview,
+            'previewToken' => $importer->tokenFor($path, (int) $data['salary_currency_id']),
+            'salaryCurrencyId' => (int) $data['salary_currency_id'],
+            'salaryCurrency' => Currency::findOrFail($data['salary_currency_id']),
+        ]);
+    }
+
+    public function importConfirm(Request $request, PayrollWorkbookImportService $importer)
+    {
+        abort_unless($request->user()->can('hr.import'), 403);
+        $data = $request->validate([
+            'file' => ['required', 'file', 'mimes:xlsx', 'max:2048'],
+            'preview_token' => ['required', 'string', 'max:256'],
+            'salary_currency_id' => ['required', Rule::exists('currencies', 'id')->where('is_active', true)],
+            'confirm_import' => ['accepted'],
+        ]);
+
+        $count = DB::transaction(function () use ($data, $request, $importer) {
+            $count = $importer->confirm($data['file']->getRealPath(), $data['preview_token'], (int) $data['salary_currency_id'], $request->user());
+            ActivityLog::record('hr.employee.imported', 'employee_profile', null, 'Imported employee profiles from the reviewed payroll workbook', [
+                'record_count' => $count,
+            ]);
+
+            return $count;
+        });
+
+        return redirect()->route('workspace.page', ['hr', 'employees'])->with('success', $count.' employee profiles imported. The source deduction formula was not applied.');
+    }
+
     private function rules(): array
     {
         return [
@@ -76,6 +119,7 @@ class EmployeeProfileController extends Controller
             'national_id' => ['nullable', 'string', 'max:100'],
             'taxpayer_id' => ['nullable', 'string', 'max:100'],
             'monthly_salary' => ['required', 'numeric', 'min:0', 'max:999999999999.9999', 'decimal:0,4'],
+            'salary_currency_id' => ['required', Rule::exists('currencies', 'id')->where('is_active', true)],
         ];
     }
 

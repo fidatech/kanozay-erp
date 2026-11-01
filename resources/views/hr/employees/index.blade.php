@@ -19,7 +19,19 @@
   <label>National ID<input name="national_id" value="{{ old('national_id') }}" maxlength="100" autocomplete="off"></label>
   <label>Taxpayer ID<input name="taxpayer_id" value="{{ old('taxpayer_id') }}" maxlength="100" autocomplete="off"></label>
   <label>Monthly salary<input name="monthly_salary" type="text" inputmode="decimal" value="{{ old('monthly_salary') }}" required></label>
+  <label>Salary currency<select name="salary_currency_id" required><option value="">Select currency</option>@foreach($currencies as $currency)<option value="{{ $currency->id }}" @selected(old('salary_currency_id')==$currency->id)>{{ $currency->code }} — {{ $currency->name }}</option>@endforeach</select></label>
   <div><button class="btn" type="submit">Save employee</button></div>
+ </form>
+</div>
+@endcan
+@can('hr.import')
+<div class="card" style="padding:18px;margin-bottom:16px">
+ <h2>Import from Kanozay payroll workbook</h2>
+ <p class="muted">Upload the original .xlsx file to validate the employee fields. A separate confirmation is required before records are saved. The source tax/transport formula is not imported or calculated.</p>
+ <form method="POST" action="{{ route('hr.employees.import-preview') }}" enctype="multipart/form-data" class="filters">@csrf
+  <input type="file" name="file" accept=".xlsx" required aria-label="Kanozay payroll workbook">
+  <select name="salary_currency_id" required aria-label="Salary currency"><option value="">Select salary currency</option>@foreach($currencies as $currency)<option value="{{ $currency->id }}">{{ $currency->code }} — {{ $currency->name }}</option>@endforeach</select>
+  <button class="btn" type="submit">Preview workbook</button>
  </form>
 </div>
 @endcan
@@ -31,7 +43,7 @@
  </form></div>
  <div class="table-wrap"><table><thead><tr><th>Employee number</th><th>Name</th><th>Position</th><th>Monthly salary</th><th>Status</th><th>Action</th></tr></thead><tbody>
  @forelse($employees as $employee)
-  <tr><td>{{ $employee->employee_number }}</td><td>{{ $employee->full_name }}</td><td>{{ $employee->position ?: '—' }}</td><td><x-finance-amount :amount="$employee->monthly_salary" /></td><td>{{ $employee->is_active ? 'Active' : 'Inactive' }}</td>
+  <tr><td>{{ $employee->employee_number }}</td><td>{{ $employee->full_name }}</td><td>{{ $employee->position ?: '—' }}</td><td><x-finance-amount :amount="$employee->monthly_salary" /> {{ $employee->salaryCurrency?->code }}</td><td>{{ $employee->is_active ? 'Active' : 'Inactive' }}</td>
    <td>@can('hr.update')<form method="POST" action="{{ route('hr.employees.update',$employee) }}">@csrf @method('PATCH')<input type="hidden" name="is_active" value="{{ $employee->is_active ? '0' : '1' }}"><button class="btn btn-secondary" type="submit">{{ $employee->is_active ? 'Deactivate' : 'Activate' }}</button></form>@else — @endcan</td></tr>
  @empty<tr><td colspan="6">No employee profiles match this filter.</td></tr>@endforelse
  </tbody></table></div>
