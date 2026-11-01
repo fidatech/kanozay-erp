@@ -22,7 +22,7 @@
  @endcan
  @endcan
  <p><strong>Material requirements (saved when the plan was created)</strong></p>
- <div class="table-wrap"><table><thead><tr><th>Material</th><th>Required</th><th>Unit</th><th>Packaging</th><th>Stock item</th><th>On hand</th><th>Available</th><th>Reserved</th><th>Issued</th><th>Availability</th></tr></thead><tbody>
+ <div class="table-wrap"><table><thead><tr><th>Material</th><th>Required</th><th>Unit</th><th>Packaging</th><th>Stock item</th><th>On hand</th><th>Available</th><th>Reserved</th><th>Issued</th><th>Rejected / waste</th><th>Availability</th></tr></thead><tbody>
  @forelse($materials as $material)
  <tr>
   <td>{{ $material['name'] }}</td><td>{{ $material['quantity'] }}</td><td>{{ $material['unit'] }}</td><td>{{ $material['packaging'] ? 'Yes' : 'No' }}</td>
@@ -45,6 +45,21 @@
    @endcan
   </td>
   <td>{{ $material['on_hand'] ?? '—' }}</td><td>{{ $material['available'] ?? '—' }}</td><td>{{ $material['reserved'] }}</td><td>{{ $material['issued'] }}</td>
+  <td>{{ $material['waste'] }}
+  @can('manufacturing.update')
+  @if(in_array($order->status, ['issued', 'pending_qc'], true) && (float) $material['issued'] > 0)
+   <details><summary>Record waste</summary>
+    <form method="POST" action="{{ route('production.orders.materials.waste', [$order, $material['id']]) }}" style="display:grid;gap:6px;min-width:150px;margin-top:6px">
+     @csrf
+     <input type="hidden" name="submission_token" value="{{ \Illuminate\Support\Str::uuid() }}">
+     <label>Quantity<input name="quantity" inputmode="decimal" placeholder="0.000000" required></label>
+     <label>Reason<input name="reason" maxlength="2000" minlength="5" required></label>
+     <button class="btn" type="submit">Record</button>
+    </form>
+   </details>
+  @endif
+  @endcan
+  </td>
   <td>
    @if($material['on_hand'] === null)<span class="muted">Not mapped</span>
    @elseif($material['combined_line'])<span class="muted">Combined with first row for this SKU</span>
@@ -52,7 +67,7 @@
    @else<span style="color:#08734b">Enough stock</span>@endif
   </td>
  </tr>
- @empty<tr><td colspan="10">No saved material requirements are available for this older plan. Do not use its recipe for purchasing or production without reviewing and recreating the plan.</td></tr>@endforelse
+ @empty<tr><td colspan="11">No saved material requirements are available for this older plan. Do not use its recipe for purchasing or production without reviewing and recreating the plan.</td></tr>@endforelse
  </tbody></table></div>
  @can('administration.update')
  @can('inventory.update')
@@ -156,6 +171,6 @@
 </div>
 
  @can('inventory.view')<p><a href="{{ route('inventory.materials.index') }}">Open raw-material inventory</a></p>@endcan
- <p class="muted">Availability combines demand across lines mapped to the same stock item and excludes stock reserved by other production orders. Reserving does not consume stock. Posting an issue records actual consumption. Finished goods are added only after laboratory approval and a separate warehouse release. Inventory valuation and financial journals are not yet posted.</p>
+ <p class="muted">Availability combines demand across lines mapped to the same stock item and excludes stock reserved by other production orders. Reserving does not consume stock. Waste quantities classify materials already issued and do not deduct stock again. Finished goods are added only after laboratory approval and a separate warehouse release. Inventory valuation and financial journals are not yet posted.</p>
 </div>
 @endsection
