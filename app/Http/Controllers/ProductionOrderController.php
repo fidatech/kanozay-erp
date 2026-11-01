@@ -5,6 +5,7 @@ use App\Models\ProductionOrder;
 use App\Services\ProductionMaterialService;
 use App\Models\ProductionRecipe;
 use App\Models\InventoryMaterial;
+use App\Models\FinishedGood;
 use App\Models\ProductionOrderMaterial;
 use Brick\Math\BigDecimal;
 use Illuminate\Validation\ValidationException;
@@ -63,7 +64,7 @@ class ProductionOrderController extends Controller {
     }
     public function show(Request $request, ProductionOrder $order) {
         abort_unless($request->user()->can('administration.view'), 403);
-        $order->load('recipe', 'materials.inventoryMaterial');
+        $order->load('recipe', 'materials.inventoryMaterial', 'batch.checks', 'batch.finishedGood');
         $ownReservations = [];
         $totalDemand = [];
         $firstLineForMaterial = [];
@@ -107,7 +108,10 @@ class ProductionOrderController extends Controller {
         $catalogMaterials = $request->user()->can('inventory.update')
             ? InventoryMaterial::where('is_active', true)->orderBy('name')->get()
             : collect();
-        return view('production.order-show', compact('order', 'materials', 'catalogMaterials'));
+        $finishedGoods = $order->status === 'issued' && $request->user()->can('manufacturing.update')
+            ? FinishedGood::where('is_active', true)->orderBy('sku')->get()
+            : collect();
+        return view('production.order-show', compact('order', 'materials', 'catalogMaterials', 'finishedGoods'));
     }
 
     public function linkMaterial(Request $request, ProductionOrder $order, ProductionOrderMaterial $materialLine) {
