@@ -3,7 +3,7 @@
 **Decision: NO-GO for employee acceptance testing**  
 **Review date:** 1 November 2026
 **Branch:** `development/kanozay-completion`  
-**Latest verified code commit:** `72ee7f52aa1c7e3b57ddfbe111b51702e2728793`
+**Latest verified code commit:** `56e725381522494828d72b5d0d932ac62599dd78`
 
 ## Evidence reviewed
 
@@ -14,6 +14,7 @@
 - GitHub Actions run **#100** for commit `bb2f533c1c95a9ec2b9860f52a3cd788b9e65dd2` completed successfully. The workflow reports **211 passed, 1 skipped, 1638 assertions**, and the frontend asset build completed successfully. Run #99 exposed a test assertion that checked for a currency code still present in the filter dropdown; the assertion was narrowed to the report section and run #100 passed.
 - GitHub Actions run **#102** for commit `d3ef7da44ba3120c56423d7cabf1d9d05fde144e` completed successfully. The workflow reports **214 passed, 1 skipped, 1655 assertions**, and the frontend asset build completed successfully.
 - GitHub Actions run **#104** for commit `72ee7f52aa1c7e3b57ddfbe111b51702e2728793` completed successfully. The workflow reports **217 passed, 1 skipped, 1672 assertions**, and the frontend asset build completed successfully.
+- GitHub Actions run **#108** for commit `56e725381522494828d72b5d0d932ac62599dd78` completed successfully. The workflow reports **219 passed, 1 skipped, 1691 assertions**, and the frontend asset build completed successfully. Runs #106 and #107 caught a test helper name collision and an overly broad HTML assertion; both were corrected before run #108.
 - No authorized staging/UAT deployment was identified or created. No production deployment was attempted.
 
 ## Client workbook review
@@ -28,7 +29,7 @@
 
 ## Blocking issues for UAT
 
-1. **Runtime verification:** PHP is unavailable in this local workspace, so local migrations and tests were not run. CI run #104 verifies code commit `72ee7f52aa1c7e3b57ddfbe111b51702e2728793`; every later backend change requires a fresh successful run.
+1. **Runtime verification:** PHP is unavailable in this local workspace, so local migrations and tests were not run. CI run #108 verifies code commit `56e725381522494828d72b5d0d932ac62599dd78`; every later backend change requires a fresh successful run.
 2. **Workflow coverage:** the current application contains functional accounting, customer/supplier, purchase order, GRN, raw-material stock receipts/issues and adjustments, landed-cost, recipe approval, production planning, material reservation/issue, batch, and QC code. Physical stock counts and transfers are not implemented. The HR employee register and confirmed import flow are implemented, but payroll periods, attendance, payroll calculation, approval, payment, and journals are not implemented. Sales invoicing/dispatch/returns, shareholder transaction posting, fixed-asset depreciation, and complete management reports are not ready to validate end to end.
 3. **Invoice acceptance:** obtain the client’s actual customer invoice sample and confirm required fields, currency/number formats, and approval/signature layout before implementing the print/PDF template.
 4. **Recipe approval:** obtain written Kanozay confirmation of the two formula discrepancies before importing or approving those recipes.
@@ -61,6 +62,7 @@
 - The posted-only trial balance report provides an as-of date, currency-separated exact decimal balances, access control, and CSV export. Its date, draft exclusion, currency filter, CSV, and permission tests passed in run #100. The report does not replace a reviewed balance sheet or period-close control.
 - The Profit and Loss report summarizes posted income and expense accounts within a date range, uses exact decimal arithmetic, keeps currencies separate, and offers CSV export. Its date-range, draft exclusion, currency separation, decimal total, CSV, and permission tests passed in run #102. It does not translate currencies or calculate a balance sheet.
 - The Balance Sheet report includes posted asset, liability, and equity balances through the selected date, plus current earnings from the configured fiscal-year start. Currency totals remain separate; CSV, permissions, fiscal-year calculations, draft/future exclusion, and reconciliation fixtures passed in run #104. Historical client balances and fiscal-year policy still need reconciliation in UAT.
+- The cash/bank/sarafi movement report uses linked financial-account ledger mappings, includes opening balances, reports posted inflows/outflows and closing balances by account/currency, and flags missing ledger mappings. Date, currency, draft/future exclusion, exact decimal, CSV, and permission tests passed in run #108. It is a movement register and does not classify inflows/outflows into operating, investing, or financing categories.
 
 ## Next implementation order
 
