@@ -1,15 +1,54 @@
 @extends('layouts.kanozay')
 @section('content')
-<div class="heading"><div><h1>Good {{ now()->hour < 12 ? 'morning' : (now()->hour < 17 ? 'afternoon' : 'evening') }}, {{ explode(' ', auth()->user()->name)[0] }}.</h1><p>Here's what's happening across Kanozay Foods today.</p></div><div class="actions"><span class="control"><i class="fa-regular fa-building"></i> &nbsp; Main Factory &nbsp; <i class="fa-solid fa-chevron-down" style="float:right"></i></span><span class="control"><i class="fa-regular fa-calendar"></i> &nbsp; {{ now()->format('D, d M Y') }}</span><button class="btn" type="button" onclick="document.getElementById('quick-actions').hidden=!document.getElementById('quick-actions').hidden"><i class="fa-solid fa-plus"></i> &nbsp; Quick Actions &nbsp;⌄</button></div></div>
-<div id="quick-actions" class="panel" hidden style="margin-bottom:12px">@can('users.create')<a href="{{ route('admin.users.index') }}">Create employee account</a>@endcan @can('roles.create') &nbsp; <a href="{{ route('admin.roles.index') }}">Manage roles</a>@endcan</div>
-@php($pendingApprovals = \App\Models\ApprovalRequest::query()->when(!auth()->user()->hasRole('Super Administrator') && !auth()->user()->can('administration.update'), fn($query) => $query->where('requested_by', auth()->id()))->where('status','pending')->count())
-@php($metrics=[['Total Revenue','fa-cart-shopping','finance'],['Total Purchases','fa-coins','purchases'],['Net Profit','fa-chart-pie','finance'],['Active Employees','fa-users','hr'],['Inventory Value','fa-cube','inventory'],['Open Approvals','fa-file-lines','approvals']])
-<div class="cards">@foreach($metrics as $metric)<div class="card"><div class="metric"><div class="metric-icon"><i class="fa-solid {{ $metric[1] }}"></i></div><div><div class="metric-label">{{ $metric[0] }}</div><div class="metric-value">{{ $metric[0] === 'Open Approvals' ? number_format($pendingApprovals) : '—' }}</div></div></div><div class="metric-foot">{{ $metric[0] === 'Open Approvals' ? 'Pending decisions' : 'No recorded data yet' }}</div></div>@endforeach</div>
-<div class="grid-main">
-<section class="panel" id="production"><h3>Production Output Trend <span style="float:right;color:#006bea;font-weight:400">View Details &nbsp; →</span></h3><div class="empty"><i class="fa-solid fa-chart-line" style="font-size:30px;margin-bottom:15px;display:block"></i>Production data will appear when manufacturing is configured.</div></section>
-<section class="panel"><h3>Sales by Product Category <span style="float:right;color:#006bea;font-weight:400">View Details &nbsp; →</span></h3><div class="empty"><i class="fa-solid fa-chart-pie" style="font-size:30px;margin-bottom:15px;display:block"></i>No sales categories recorded yet.</div></section>
-<section class="panel calendar-panel" id="tasks"><h3>Calendar & Tasks <span style="float:right;color:#006bea;font-weight:400">View All &nbsp; →</span></h3><div style="text-align:center;font-weight:bold;margin:14px 0">{{ now()->format('F Y') }}</div><div class="calendar">@foreach(['Sun','Mon','Tue','Wed','Thu','Fri','Sat'] as $day)<b>{{ $day }}</b>@endforeach @for($blank=0;$blank<now()->startOfMonth()->dayOfWeek;$blank++)<span></span>@endfor @for($day=1;$day<=now()->daysInMonth;$day++)<span class="{{ $day === now()->day ? 'today' : '' }}">{{ $day }}</span>@endfor</div><div class="empty" style="padding:18px"><a href="{{ route('approvals.index') }}">Open approval requests →</a></div></section>
+<style>
+.k-dashboard .k-dashboard-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:18px}
+.k-dashboard .k-dashboard-hero h1{margin:0 0 6px;color:#17395f;font-size:24px}
+.k-dashboard .k-dashboard-hero p{margin:0;color:#71859c;font-size:13px}
+.k-dashboard .k-dashboard-filters{display:flex;align-items:end;gap:10px;flex-wrap:wrap}
+.k-dashboard .k-dashboard-filters label{display:grid;gap:5px;color:#355573;font-size:11px;font-weight:700}
+.k-dashboard .k-dashboard-filters input{height:38px;border:1px solid #d9e4ef;border-radius:8px;padding:7px 10px}
+.k-dashboard .k-dashboard-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(205px,1fr));gap:12px;margin-bottom:18px}
+.k-dashboard .k-dashboard-card{display:flex;align-items:center;gap:12px;min-height:86px;padding:15px;border:1px solid #dce7f3;border-radius:11px;background:#fff;text-decoration:none;color:inherit}
+.k-dashboard .k-dashboard-card:hover{border-color:#aac9e5;box-shadow:0 4px 14px #193b5b0a}
+.k-dashboard .k-dashboard-icon{display:grid;place-items:center;flex:0 0 40px;height:40px;border-radius:10px;background:#edf5fd;color:#2166a0}
+.k-dashboard .k-dashboard-value{display:block;color:#17385e;font-size:22px;font-weight:800;font-variant-numeric:tabular-nums}
+.k-dashboard .k-dashboard-label{display:block;color:#355573;font-size:12px;font-weight:700}
+.k-dashboard .k-dashboard-hint{display:block;margin-top:3px;color:#8092a7;font-size:10px}
+.k-dashboard .k-dashboard-table{padding:0;overflow:hidden}
+.k-dashboard .k-dashboard-table-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:16px 20px;border-bottom:1px solid #e6edf5}
+.k-dashboard .k-dashboard-table-head h2{margin:0;color:#1e4167;font-size:15px}
+.k-dashboard .k-dashboard-table .table-wrap{margin:0!important;width:100%!important}
+@media(max-width:600px){.k-dashboard .k-dashboard-hero h1{font-size:21px}.k-dashboard .k-dashboard-table .table-wrap{overflow-x:auto}}
+</style>
+<div class="k-dashboard">
+    <div class="k-dashboard-hero">
+        <div><h1>Good {{ now()->hour < 12 ? 'morning' : (now()->hour < 17 ? 'afternoon' : 'evening') }}, {{ explode(' ', auth()->user()->name)[0] }}.</h1><p>Kanozay operations recorded from {{ $from }} through {{ $to }}.</p></div>
+        <form class="k-dashboard-filters" method="GET" action="{{ route('dashboard') }}">
+            <label>From<input type="date" name="from" value="{{ $from }}" required></label>
+            <label>To<input type="date" name="to" value="{{ $to }}" required></label>
+            <button class="btn" type="submit"><i class="fa-solid fa-filter"></i> Apply</button>
+        </form>
+    </div>
+
+    @if(count($cards))
+        <div class="k-dashboard-cards">
+            @foreach($cards as $card)
+                <a class="k-dashboard-card" href="{{ $card['url'] }}"><span class="k-dashboard-icon"><i class="fa-solid {{ $card['icon'] }}"></i></span><span><span class="k-dashboard-label">{{ $card['label'] }}</span><strong class="k-dashboard-value">{{ is_numeric($card['value']) ? number_format((int)$card['value']) : $card['value'] }}</strong><small class="k-dashboard-hint">{{ $card['hint'] }}</small></span></a>
+            @endforeach
+        </div>
+    @else
+        <section class="panel"><div class="k-empty-state"><div class="k-empty-icon"><i class="fa-solid fa-gauge-high"></i></div><strong>No dashboard data is available for your permissions</strong><p>Ask an administrator to assign access to the modules you use.</p></div></section>
+    @endif
+
+    <section class="panel k-dashboard-table">
+        <div class="k-dashboard-table-head"><div><h2>Recent recorded activity</h2><small>Operational records and posted journals in the selected period.</small></div></div>
+        <div class="table-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Reference</th><th>Party / Description</th><th>Status / Currency</th><th>Open</th></tr></thead><tbody>
+            @forelse($recent as $row)
+                <tr><td>{{ $row['date'] }}</td><td>{{ $row['type'] }}</td><td><strong>{{ $row['reference'] }}</strong></td><td>{{ $row['party'] }}</td><td>{{ $row['status'] }}</td><td><a class="btn btn-light" href="{{ $row['url'] }}">View</a></td></tr>
+            @empty
+                <tr><td colspan="6"><div class="k-empty-state" role="status"><div class="k-empty-icon"><i class="fa-solid fa-receipt"></i></div><strong>No recent activity found</strong><p>Accessible records will appear here when transactions are entered.</p></div></td></tr>
+            @endforelse
+        </tbody></table></div>
+    </section>
 </div>
-<div class="grid-secondary"><section class="panel"><h3>Order Fulfillment Status <span style="float:right;color:#006bea;font-weight:400">View Details &nbsp; →</span></h3><div class="empty">Order statuses will appear after sales setup.</div></section><section class="panel"><h3>Alerts & Notifications <span style="float:right;color:#006bea;font-weight:400">View All &nbsp; →</span></h3><div class="empty">No alerts available yet.</div></section></div>
-<section class="panel dashboard-table"><h3>Recent Transactions</h3><div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px"><input style="flex:2;min-width:220px" placeholder="Search by PO No, SO No, Invoice No, Vendor, Customer..." disabled><select disabled><option>All Transactions</option></select><select disabled><option>Last 30 Days</option></select><button class="btn" disabled style="margin-left:auto;opacity:.55"><i class="fa-solid fa-download"></i> Export</button></div><div class="table-wrap"><table><thead><tr><th>Ref No.</th><th>Date</th><th>Type</th><th>Party / Vendor</th><th>Description</th><th>Amount</th><th>Status</th><th>Company</th><th>Actions</th></tr></thead><tbody><tr><td colspan="9" class="empty"><div class="k-empty-state" role="status"><div class="k-empty-icon"><i class="fa-solid fa-receipt" aria-hidden="true"></i></div><strong>No transactions yet</strong><p>Transactions will appear here as financial activity is recorded.</p></div></td></tr></tbody></table></div></section>
 @endsection
