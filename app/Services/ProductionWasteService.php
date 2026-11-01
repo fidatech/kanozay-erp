@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\ProductionOrder;
 use App\Models\ProductionOrderMaterial;
+use App\Models\ProductionMaterialWaste;
 use Brick\Math\BigDecimal;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -25,7 +26,7 @@ class ProductionWasteService
             if ($line->production_order_id !== $order->id) {
                 $this->reject('The material line does not belong to this production order.');
             }
-            if ($line->wastes()->where('submission_token', $token)->exists()) {
+            if (ProductionMaterialWaste::query()->where('submission_token', $token)->exists()) {
                 $this->reject('This waste submission has already been recorded.');
             }
             $amount = BigDecimal::of($quantity);
