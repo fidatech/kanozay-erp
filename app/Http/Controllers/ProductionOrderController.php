@@ -3,6 +3,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ProductionOrder;
 use App\Services\ProductionMaterialService;
+use App\Services\ProductionWasteService;
 use App\Models\ProductionRecipe;
 use App\Models\InventoryMaterial;
 use App\Models\FinishedGood;
@@ -64,7 +65,7 @@ class ProductionOrderController extends Controller {
     }
     public function show(Request $request, ProductionOrder $order) {
         abort_unless($request->user()->canAny(['administration.view', 'manufacturing.view', 'laboratory.view', 'inventory.view']), 403);
-        $order->load('recipe', 'materials.inventoryMaterial', 'batch.checks', 'batch.finishedGood');
+        $order->load('recipe', 'materials.inventoryMaterial', 'materials.wastes', 'batch.checks', 'batch.finishedGood');
         $ownReservations = [];
         $totalDemand = [];
         $firstLineForMaterial = [];
@@ -101,6 +102,7 @@ class ProductionOrderController extends Controller {
                 'combined_line' => $catalog && $firstLineForMaterial[$catalog->id] !== $line->id,
                 'reserved' => (string) $line->reserved_quantity,
                 'issued' => (string) $line->issued_quantity,
+                'waste' => (string) $line->wastes->reduce(fn ($total, $waste) => $total->plus(BigDecimal::of((string) $waste->quantity)), BigDecimal::zero())->toScale(6),
                 'shortage' => $shortage !== null && $shortage->isGreaterThan(0)
                     ? (string) $shortage->toScale(6) : '0.000000',
             ];
@@ -155,6 +157,18 @@ class ProductionOrderController extends Controller {
         ]);
         $service->issue($order, $data['actual_quantities'], $request->user()->id, $data['occurred_on']);
         return back()->with('success', 'Actual materials issued to production and stock ledger updated.');
+    }
+
+    public function waste(Request $request, ProductionOrder $order, ProductionOrderMaterial $materialLine, ProductionWasteService $service) {
+        abort_unless($request->user()->can('manufacturing.update'), 403);
+        abort_unless($materialLine->production_order_id === $order->id, 404);
+        $data = $request->validate([
+            'submission_token' => ['required', 'uuid'],
+            'quantity' => ['required', 'regex:/^(?:0|[1-9][0-9]{0,13})(?:\\.[0-9]{1,6})?$/'],
+            'reason' => ['required', 'string', 'min:5', 'max:2000'],
+        ]);
+        $service->record($order, $materialLine, $data['quantity'], $data['reason'], $data['submission_token'], $request->user()->id);
+        return back()->with('success', 'Material waste recorded against the issued quantity. Stock was not deducted again.');
     }
 
     public function cancel(Request $request, ProductionOrder $order, ProductionMaterialService $service) {
