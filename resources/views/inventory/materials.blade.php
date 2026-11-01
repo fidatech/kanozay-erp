@@ -2,7 +2,7 @@
 @section('content')
 <div class="heading">
  <div><h1><i class="fa-solid fa-boxes-stacked"></i> Raw materials</h1>
- <p>Material catalog and opening stock. Quantities are tracked in the recorded unit, without automatic conversions.</p></div>
+ <p>Material catalog, on-hand stock, production reservations and available balances. Quantities use the recorded unit without automatic conversions.</p></div>
  @can('inventory.create')
  <button type="button" class="btn" onclick="document.getElementById('create-material-modal').showModal()"><i class="fa-solid fa-plus"></i> Add material</button>
  @endcan
@@ -10,12 +10,12 @@
 <div class="card" style="padding:22px">
  @if(session('success'))<p role="status" style="color:#08734b">{{ session('success') }}</p>@endif
  @if($errors->any())<p role="alert" style="color:#b42318">{{ $errors->first() }}</p>@endif
- <div class="table-wrap"><table><thead><tr><th>SKU</th><th>Material</th><th>Type</th><th>Unit</th><th>On hand</th><th>Status</th><th>Opening stock</th></tr></thead><tbody>
+ <div class="table-wrap"><table><thead><tr><th>SKU</th><th>Material</th><th>Type</th><th>Unit</th><th>On hand</th><th>Reserved</th><th>Available</th><th>Status</th><th>Opening stock</th></tr></thead><tbody>
  @forelse($materials as $material)
  <tr>
   <td><strong>{{ $material->sku }}</strong></td><td>{{ $material->name }}</td>
   <td>{{ $material->is_packaging ? 'Packaging' : 'Ingredient' }}</td><td>{{ $material->unit }}</td>
-  <td>{{ $material->on_hand_quantity }}</td><td>{{ $material->is_active ? 'Active' : 'Inactive' }}</td>
+  <td>{{ $material->on_hand_quantity }}</td><td>{{ $material->reserved_quantity }}</td><td>{{ $material->available_quantity }}</td><td>{{ $material->is_active ? 'Active' : 'Inactive' }}</td>
   <td>
    @if($material->has_opening)Recorded
    @elseif(!$material->is_active)Inactive
@@ -38,10 +38,10 @@
    @endif
   </td>
  </tr>
- @empty<tr><td colspan="7" class="empty">No materials yet. Add a material to begin recording inventory.</td></tr>@endforelse
+ @empty<tr><td colspan="9" class="empty">No materials yet. Add a material to begin recording inventory.</td></tr>@endforelse
  </tbody></table></div>
  {{ $materials->links() }}
- <p class="muted" style="margin-top:18px">Production plans do not reserve or consume stock. Confirmed purchase-order receipts increase stock through posted GRNs. Production consumption and stock adjustments remain separate workflows.</p>
+ <p class="muted" style="margin-top:18px">Reserving production materials reduces available stock without changing on-hand stock. Posting a production material issue reduces on-hand stock and releases its reservation. Confirmed purchase-order receipts increase stock through posted GRNs.</p>
 </div>
 @can('inventory.create')
 <dialog class="k-modal" id="create-material-modal">
