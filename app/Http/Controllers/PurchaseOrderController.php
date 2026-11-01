@@ -1,5 +1,7 @@
 <?php
 namespace App\Http\Controllers;
+use Brick\Math\BigDecimal;
+use Brick\Math\RoundingMode;
 use App\Models\{PurchaseOrder,TradeParty,Currency,ActivityLog};
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -7,8 +9,10 @@ use Illuminate\Validation\Rule;
 class PurchaseOrderController extends Controller {
  public function index(Request $request) {
   abort_unless($request->user()->can('administration.view'),403);
+  $orders=PurchaseOrder::with(['supplier','currency','items'])->latest('id')->paginate(20);
+  foreach($orders as $order){$total=BigDecimal::zero();foreach($order->items as $item)$total=$total->plus(BigDecimal::of((string)$item->quantity)->multipliedBy((string)$item->unit_price)->toScale(4,RoundingMode::HalfUp));$order->setAttribute('order_total',(string)$total);}
   return view('purchases.orders',[
-   'orders'=>PurchaseOrder::with(['supplier','currency','items'])->latest('id')->paginate(20),
+   'orders'=>$orders,
    'materials'=>\App\Models\InventoryMaterial::where('is_active',true)->orderBy('name')->get(),
    'materialOptions'=>\App\Models\InventoryMaterial::where('is_active',true)->orderBy('name')->get(['id','sku','name','unit'])->map(fn($m)=>['id'=>$m->id,'label'=>sprintf('%s · %s (%s)', $m->sku, $m->name, $m->unit)])->values(),
    'nextNumber'=>$this->nextNumber(),
@@ -28,8 +32,8 @@ class PurchaseOrderController extends Controller {
    'items'=>['required','array','min:1','max:100'],
    'items.*.description'=>['required','string','max:255'],
    'items.*.inventory_material_id'=>['nullable',Rule::exists('inventory_materials','id')->where('is_active',true)],
-   'items.*.quantity'=>['required','numeric','gt:0','max:999999999'],
-   'items.*.unit_price'=>['required','numeric','min:0','max:999999999999'],
+   'items.*.quantity'=>['required','numeric','gt:0','decimal:0,4','max:999999999999.9999'],
+   'items.*.unit_price'=>['required','numeric','min:0','decimal:0,4','max:999999999999.9999'],
   ]);
   DB::transaction(function()use($data,$request){
    $order=PurchaseOrder::create([
@@ -114,7 +118,7 @@ class PurchaseOrderController extends Controller {
   $data=$request->validate([
    'category'=>['required',Rule::in(['transport','loading','customs','insurance','freight','handling','other'])],
    'description'=>['nullable','string','max:255'],
-   'amount'=>['required','numeric','gt:0','max:999999999999'],
+   'amount'=>['required','numeric','gt:0','decimal:0,4','max:999999999999.9999'],
    'expense_date'=>['required','date'],
   ]);
   $order->expenses()->create($data+['created_by'=>$request->user()->id]);
@@ -125,7 +129,7 @@ class PurchaseOrderController extends Controller {
   abort_unless($order->status==='draft',422,'Only draft orders can be edited.');
   $data=$request->validate([
    'payment_date'=>['required','date'],
-   'amount'=>['required','numeric','gt:0','max:999999999999'],
+   'amount'=>['required','numeric','gt:0','decimal:0,4','max:999999999999.9999'],
    'reference'=>['nullable','string','max:100'],
    'notes'=>['nullable','string','max:2000'],
   ]);

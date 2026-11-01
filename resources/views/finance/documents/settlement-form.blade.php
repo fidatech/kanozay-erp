@@ -1,4 +1,4 @@
-@php($remaining=max(0,(float)$doc->amount-(float)($doc->allocations_sum_amount??0)))
+@php($remaining=$doc->outstanding_amount)
 @if($remaining<=0)
 <span style="color:#15803d;font-weight:700"><i class="fa-solid fa-circle-check"></i> Settled</span>
 @else
@@ -13,7 +13,7 @@
 @php($mapping=$settlementLedgerMap->get($doc->trade_party_id.':'.$doc->currency_id))
 @if($mapping && $payment->currency_id===$doc->currency_id && (int)$payment->counterpart_ledger_account_id===(int)$mapping->ledger_account_id)
 @php($eligibleCount++)
-<option value="{{ $payment->id }}">#{{ $payment->id }} · {{ rtrim(rtrim(number_format((float)$payment->amount-(float)($payment->allocations_sum_amount??0),4,'.',','),'0'),'.') }} available</option>
+<option value="{{ $payment->id }}">#{{ $payment->id }} · {{ $payment->unapplied_amount }} available</option>
 @endif
 @endforeach
 @if($eligibleCount===0)<option value="" disabled>No eligible unapplied payment</option>@endif

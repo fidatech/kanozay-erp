@@ -38,7 +38,7 @@ class PurchaseOrderTest extends TestCase {
   $this->actingAs($user)->post(route('purchases.orders.advances.store',$order),['amount'=>250,'payment_date'=>'2026-10-27','reference'=>'TX-01'])->assertRedirect();
   $this->assertSame(1,$order->expenses()->count());
   $this->assertSame(1,$order->advances()->count());
-  $this->actingAs($user)->get(route('purchases.orders.show',$order))->assertOk()->assertSee('1,100.00')->assertSee('750.00')->assertSee('TX-01');
+  $this->actingAs($user)->get(route('purchases.orders.show',$order))->assertOk()->assertSee('1,100')->assertSee('750')->assertSee('TX-01');
   $this->actingAs($user)->post(route('purchases.orders.expenses.store',$order),['category'=>'invalid','amount'=>100,'expense_date'=>'2026-10-27'])->assertSessionHasErrors('category');
   $order->update(['status'=>'confirmed']);
   $this->actingAs($user)->post(route('purchases.orders.advances.store',$order),['amount'=>10,'payment_date'=>'2026-10-27'])->assertStatus(422);
@@ -84,5 +84,13 @@ class PurchaseOrderTest extends TestCase {
   $user=User::factory()->create();
   $this->actingAs($user)->get(route('purchases.orders.index'))->assertForbidden();
   $this->actingAs($user)->post(route('purchases.orders.store'),[])->assertForbidden();
+ }
+ public function test_purchase_prices_reject_more_than_four_decimal_places():void {
+  Permission::findOrCreate('administration.view','web');$user=User::factory()->create();$user->givePermissionTo('administration.view');
+  $supplier=TradeParty::create(['type'=>'supplier','name'=>'Precision Supplier','is_active'=>true,'created_by'=>$user->id]);
+  $currency=Currency::create(['code'=>'AFN','name'=>'Afghani','is_active'=>true,'is_base'=>true]);
+  $payload=['supplier_id'=>$supplier->id,'currency_id'=>$currency->id,'source'=>'local','order_date'=>'2026-10-27','items'=>[['description'=>'Material','quantity'=>'1','unit_price'=>'1.00001']]];
+  $this->actingAs($user)->post(route('purchases.orders.store'),$payload)->assertSessionHasErrors('items.0.unit_price');
+  $this->assertDatabaseCount('purchase_orders',0);
  }
 }

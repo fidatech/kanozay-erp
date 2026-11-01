@@ -5,11 +5,13 @@
 </style>
 @php
 $currency=$order->currency?->code;
-$subtotal=$order->items->sum(fn($i)=>(float)$i->quantity*(float)$i->unit_price);
-$expenses=$order->expenses->sum('amount');
-$advances=$order->advances->sum('amount');
-$landed=$subtotal+$expenses;
-$balance=$subtotal-$advances;
+$subtotal=\Brick\Math\BigDecimal::zero();
+foreach($order->items as $i){$subtotal=$subtotal->plus(\Brick\Math\BigDecimal::of((string)$i->quantity)->multipliedBy((string)$i->unit_price)->toScale(4,\Brick\Math\RoundingMode::HalfUp));}
+$expenses=\Brick\Math\BigDecimal::zero();foreach($order->expenses as $expense){$expenses=$expenses->plus((string)$expense->amount);}
+$advances=\Brick\Math\BigDecimal::zero();foreach($order->advances as $advance){$advances=$advances->plus((string)$advance->amount);}
+$landed=$subtotal->plus($expenses);
+$balance=$subtotal->minus($advances);
+$hasSubtotal=$subtotal->compareTo(\Brick\Math\BigDecimal::zero())>0;
 @endphp
 <div class="heading"><div><h1>Purchase Order {{ $order->number }}</h1><p>{{ ucfirst($order->source) }} purchase · {{ ucfirst($order->status) }} · {{ $order->order_date }}</p></div><a href="{{ route('purchases.orders.index') }}">Back to Orders</a></div>
 @if(session('success'))<div class="po-notice">{{ session('success') }}</div>@endif
@@ -23,15 +25,15 @@ $balance=$subtotal-$advances;
 @endcan
 @endif
 <div class="po-cards">
-<div class="po-card"><small>Items subtotal</small><strong>{{ number_format($subtotal,2) }} {{ $currency }}</strong></div>
-<div class="po-card"><small>Purchase expenses</small><strong>{{ number_format($expenses,2) }} {{ $currency }}</strong></div>
-<div class="po-card"><small>Estimated landed cost</small><strong>{{ number_format($landed,2) }} {{ $currency }}</strong></div>
-<div class="po-card"><small>Supplier balance (unposted)</small><strong>{{ number_format($balance,2) }} {{ $currency }}</strong></div>
+<div class="po-card"><small>Items subtotal</small><strong><x-finance-amount :amount="$subtotal" /> {{ $currency }}</strong></div>
+<div class="po-card"><small>Purchase expenses</small><strong><x-finance-amount :amount="$expenses" /> {{ $currency }}</strong></div>
+<div class="po-card"><small>Estimated landed cost</small><strong><x-finance-amount :amount="$landed" /> {{ $currency }}</strong></div>
+<div class="po-card"><small>Supplier balance (unposted)</small><strong><x-finance-amount :amount="$balance" /> {{ $currency }}</strong></div>
 </div>
 <div class="panel"><h2>Items and Estimated Landed Cost</h2><div class="table-wrap"><table><thead><tr><th>Description</th><th>Inventory material</th><th>Quantity</th><th>Unit Price</th><th>Line Total</th><th>Allocated Expenses</th><th>Estimated Landed Total</th></tr></thead><tbody>
 @foreach($order->items as $item)
-@php($line=(float)$item->quantity*(float)$item->unit_price)
-@php($allocated=$subtotal>0 ? $expenses*$line/$subtotal : 0)
+@php($line=\Brick\Math\BigDecimal::of((string)$item->quantity)->multipliedBy((string)$item->unit_price)->toScale(4,\Brick\Math\RoundingMode::HalfUp))
+@php($allocated=$hasSubtotal ? $expenses->multipliedBy($line)->dividedBy($subtotal,4,\Brick\Math\RoundingMode::HalfUp) : \Brick\Math\BigDecimal::zero())
 <tr><td>{{ $item->description }}</td><td>
 @if($order->status==='draft')
 @can('purchases.update')
@@ -39,9 +41,9 @@ $balance=$subtotal-$advances;
 <select name="inventory_material_id" aria-label="Inventory material for {{ $item->description }}" style="min-width:160px;padding:8px;border:1px solid #cddbea;border-radius:7px"><option value="">Not linked</option>@foreach($materials as $material)<option value="{{ $material->id }}" @selected($item->inventory_material_id==$material->id)>{{ $material->sku }} · {{ $material->name }} ({{ $material->unit }})</option>@endforeach</select><button class="btn" type="submit">Save</button></form>
 @else {{ $item->inventoryMaterial?->name ?? 'Not linked' }} @endcan
 @else {{ $item->inventoryMaterial?->name ?? 'Not linked' }} {{ $item->inventoryMaterial ? '('.$item->inventoryMaterial->unit.')' : '' }} @endif
-</td><td>{{ number_format((float)$item->quantity,4) }}</td><td>{{ number_format((float)$item->unit_price,4) }}</td><td>{{ number_format($line,2) }}</td><td>{{ $subtotal>0 ? number_format($allocated,2) : 'Pending' }}</td><td>{{ $subtotal>0 ? number_format($line+$allocated,2) : 'Pending' }}</td></tr>
+</td><td>{{ number_format((float)$item->quantity,4) }}</td><td><x-finance-amount :amount="$item->unit_price" /></td><td><x-finance-amount :amount="$line" /></td><td>{{ $hasSubtotal ? '' : 'Pending' }}@if($hasSubtotal)<x-finance-amount :amount="$allocated" />@endif</td><td>{{ $hasSubtotal ? '' : 'Pending' }}@if($hasSubtotal)<x-finance-amount :amount="$line->plus($allocated)" />@endif</td></tr>
 @endforeach
-</tbody><tfoot><tr><th colspan="4">Total ({{ $currency }})</th><th>{{ number_format($subtotal,2) }}</th><th>{{ $subtotal>0 ? number_format($expenses,2) : 'Pending' }}</th><th>{{ $subtotal>0 ? number_format($landed,2) : 'Pending' }}</th></tr></tfoot></table></div>
+</tbody><tfoot><tr><th colspan="4">Total ({{ $currency }})</th><th><x-finance-amount :amount="$subtotal" /></th><th>{{ $hasSubtotal ? '' : 'Pending' }}@if($hasSubtotal)<x-finance-amount :amount="$expenses" />@endif</th><th>{{ $hasSubtotal ? '' : 'Pending' }}@if($hasSubtotal)<x-finance-amount :amount="$landed" />@endif</th></tr></tfoot></table></div>
 <p class="muted">Estimated expenses are allocated proportionally by item value. Expense allocation is an estimate only. Goods receipts post stock quantities and preserve purchase-value snapshots without inventory valuation or finance entries. Zero-value orders cannot be allocated.</p></div>
 <div class="panel">
 <h2>Goods Received Notes</h2>
@@ -87,7 +89,7 @@ $balance=$subtotal-$advances;
 <strong>{{ $receipt->number }} — landed-cost components ({{ $receipt->cost_currency_code }})</strong>
 @php($recordedCosts = \App\Models\GoodsReceiptLandedCost::where('goods_receipt_id', $receipt->id)->with('allocations')->get())
 @if($recordedCosts->isNotEmpty())
-<ul>@foreach($recordedCosts as $cost)<li>{{ ucfirst($cost->component) }}: {{ number_format((float)$cost->amount,2) }} {{ $cost->currency_code }} ({{ $cost->allocations->count() }} allocated lines)</li>@endforeach</ul>
+<ul>@foreach($recordedCosts as $cost)<li>{{ ucfirst($cost->component) }}: <x-finance-amount :amount="$cost->amount" /> {{ $cost->currency_code }} ({{ $cost->allocations->count() }} allocated lines)</li>@endforeach</ul>
 @endif
 @can('inventory.update')
 @if($recordedCosts->count() < 6)
@@ -119,7 +121,7 @@ $balance=$subtotal-$advances;
 <button type="submit">Add Expense</button>
 </form>
 @endif
-<div class="table-wrap"><table><thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Amount ({{ $currency }})</th></tr></thead><tbody>@forelse($order->expenses as $expense)<tr><td>{{ $expense->expense_date }}</td><td>{{ ucfirst($expense->category) }}</td><td>{{ $expense->description }}</td><td>{{ number_format((float)$expense->amount,2) }}</td></tr>@empty<tr><td colspan="4">No purchase expenses recorded.</td></tr>@endforelse</tbody></table></div></div>
+<div class="table-wrap"><table><thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Amount ({{ $currency }})</th></tr></thead><tbody>@forelse($order->expenses as $expense)<tr><td>{{ $expense->expense_date }}</td><td>{{ ucfirst($expense->category) }}</td><td>{{ $expense->description }}</td><td><x-finance-amount :amount="$expense->amount" /></td></tr>@empty<tr><td colspan="4">No purchase expenses recorded.</td></tr>@endforelse</tbody></table></div></div>
 <div class="panel"><h2>Supplier Advances</h2>
 @if($order->status==='draft')
 <form method="POST" action="{{ route('purchases.orders.advances.store',$order) }}" class="po-form">@csrf
@@ -130,6 +132,6 @@ $balance=$subtotal-$advances;
 <button type="submit">Record Advance</button>
 </form>
 @endif
-<div class="table-wrap"><table><thead><tr><th>Date</th><th>Reference</th><th>Notes</th><th>Amount ({{ $currency }})</th></tr></thead><tbody>@forelse($order->advances as $advance)<tr><td>{{ $advance->payment_date }}</td><td>{{ $advance->reference }}</td><td>{{ $advance->notes }}</td><td>{{ number_format((float)$advance->amount,2) }}</td></tr>@empty<tr><td colspan="4">No supplier advances recorded.</td></tr>@endforelse</tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>Date</th><th>Reference</th><th>Notes</th><th>Amount ({{ $currency }})</th></tr></thead><tbody>@forelse($order->advances as $advance)<tr><td>{{ $advance->payment_date }}</td><td>{{ $advance->reference }}</td><td>{{ $advance->notes }}</td><td><x-finance-amount :amount="$advance->amount" /></td></tr>@empty<tr><td colspan="4">No supplier advances recorded.</td></tr>@endforelse</tbody></table></div>
 <div class="po-notice">Recorded advances are purchase-level tracking entries only. They do not transfer money or create accounting postings. Supplier balance excludes third-party expenses and is not a verified payable balance. All values are in the order currency.</div></div>
 @endsection
