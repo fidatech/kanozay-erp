@@ -25,6 +25,7 @@ Route::middleware('auth')->get('/inventory/materials/{material}', [\App\Http\Con
 Route::middleware('auth')->post('/inventory/materials', [\App\Http\Controllers\InventoryMaterialController::class, 'store'])->name('inventory.materials.store');
 Route::middleware('auth')->post('/inventory/materials/{material}/opening', [\App\Http\Controllers\InventoryMaterialController::class, 'opening'])->name('inventory.materials.opening');
 Route::middleware('auth')->get('/production/finished-goods', [\App\Http\Controllers\FinishedGoodController::class, 'index'])->name('production.finished-goods.index');
+Route::middleware('auth')->get('/production/finished-goods/{good}', [\App\Http\Controllers\FinishedGoodController::class, 'show'])->name('production.finished-goods.show');
 Route::middleware('auth')->post('/production/finished-goods', [\App\Http\Controllers\FinishedGoodController::class, 'store'])->name('production.finished-goods.store');
 Route::middleware('auth')->post('/production/orders/{order}/batches', [\App\Http\Controllers\ProductionBatchController::class, 'store'])->name('production.orders.batches.store');
 Route::middleware('auth')->post('/production/orders/{order}/batches/{batch}/checks', [\App\Http\Controllers\ProductionBatchController::class, 'check'])->name('production.orders.batches.checks.store');
