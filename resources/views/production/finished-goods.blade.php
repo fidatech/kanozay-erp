@@ -26,7 +26,7 @@
   <thead><tr><th>SKU</th><th>Product</th><th>Unit</th><th>Weight (kg)</th><th>Packages on hand</th><th>Status</th></tr></thead>
   <tbody>
   @forelse($goods as $good)
-  <tr><td><strong>{{ $good->sku }}</strong></td><td>{{ $good->name }}</td><td>{{ $good->package_unit }}</td>
+  <tr><td><a href="{{ route('production.finished-goods.show', $good) }}"><strong>{{ $good->sku }}</strong></a></td><td>{{ $good->name }}</td><td>{{ $good->package_unit }}</td>
    <td>{{ $good->package_weight_kg }}</td><td>{{ number_format($good->on_hand_packages) }}</td>
    <td>{{ $good->is_active ? 'Active' : 'Inactive' }}</td></tr>
   @empty<tr><td colspan="6">No finished goods are registered yet.</td></tr>@endforelse
