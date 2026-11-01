@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ProductionRecipe;
+use Brick\Math\BigDecimal;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -61,12 +62,17 @@ class ProductionRecipeController extends Controller
             if ($recipe->status !== 'draft') return 'Only draft recipes may be approved.';
             $lines = $recipe->lines()->get();
             if ($lines->isEmpty()) return 'Recipe has no ingredients.';
-            if ($lines->contains(fn ($line) => (float) $line->quantity_per_package <= 0 || !trim($line->material_name) || !trim($line->unit))) {
+            if ($lines->contains(fn ($line) => ! BigDecimal::of((string) $line->quantity_per_package)->isGreaterThan(0)
+                || ! trim($line->material_name) || ! trim($line->unit))) {
                 return 'Recipe contains invalid ingredient quantities or missing details.';
             }
-            $weight = $lines->filter(fn ($line) => strtolower(trim($line->unit)) === 'kg' && !$line->is_packaging)
-                ->sum(fn ($line) => (float) $line->quantity_per_package);
-            if (abs($weight - (float) $recipe->package_weight_kg) > 0.01) {
+            $weight = $lines
+                ->filter(fn ($line) => strtolower(trim($line->unit)) === 'kg' && ! $line->is_packaging)
+                ->reduce(
+                    fn (BigDecimal $total, $line) => $total->plus((string) $line->quantity_per_package),
+                    BigDecimal::zero()
+                );
+            if ($weight->minus((string) $recipe->package_weight_kg)->abs()->isGreaterThan(BigDecimal::of('0.01'))) {
                 return 'Ingredient weight differs from the package weight. Review the formula before approval.';
             }
             $recipe->update(['status' => 'approved', 'approved_by' => $request->user()->id, 'approved_at' => now()]);
