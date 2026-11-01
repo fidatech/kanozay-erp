@@ -42,7 +42,7 @@ The uploaded payroll and account workbooks contain confidential personal and fin
 
 ## Current implementation boundary
 
-The repository contains implementation code and tests for authentication, permissions, accounting foundations, customers/suppliers, purchases, GRNs, materials, recipes, production orders, material reservations/issues, batches, QC decisions, and landed costs. GitHub Actions verified the SQLite suite and Vite build through commit `5d9de831cad4fea7954647d69710145647ab469d` (185 passed, 1 skipped, 1502 assertions); subsequent decimal-safety changes are pending CI verification. Sales invoicing/dispatch, HR/payroll, shareholder posting, fixed assets, and many reports remain incomplete or represented by generic workspace pages. Consult the readiness report rather than treating navigation entries as completed modules.
+The repository contains implementation code and tests for authentication, permissions, accounting foundations, customers/suppliers, purchases, GRNs, materials, recipes, production orders, material reservations/issues, batches, QC decisions, and landed costs. GitHub Actions verified the SQLite suite and Vite build through commit `5d9de831cad4fea7954647d69710145647ab469d` (185 passed, 1 skipped, 1502 assertions); `npm ci` and `npm run build` also passed locally on the current branch. PHP is unavailable in this workspace, and later backend changes are pending a full Laravel CI run. Sales invoicing/dispatch, HR/payroll, shareholder posting, fixed assets, and many reports remain incomplete or represented by generic workspace pages. Consult the readiness report rather than treating navigation entries as completed modules.
 
 ## Backup and recovery
 

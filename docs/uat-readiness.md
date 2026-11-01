@@ -1,7 +1,7 @@
 # Kanozay ERP UAT readiness report
 
 **Decision: NO-GO for employee acceptance testing**  
-**Review date:** 2 November 2026  
+**Review date:** 1 November 2026
 **Branch:** `development/kanozay-completion`  
 **Latest verified commit:** `5d9de831cad4fea7954647d69710145647ab469d`
 
@@ -9,7 +9,7 @@
 
 - Repository source, migrations, controllers, services, Blade views, routes, seeders, tests, Composer and npm configuration, and GitHub Actions workflow.
 - The branch contains 47 Laravel test files and a push/pull-request Laravel test workflow configured for PHP 8.4, SQLite tests, and a Vite build.
-- The current execution workspace has no PHP, Composer, `vendor/`, or `node_modules/`. Consequently, `php artisan test` stopped with `php: command not found`; `npm run build` stopped with `vite: not found`. Neither result is a passing test or build.
+- The current execution workspace has Node.js but no PHP, Composer, or `vendor/`. `npm ci --no-audit --no-fund` completed and `npm run build` passed locally on the current development branch. Laravel tests and migrations cannot run here because `php` is unavailable.
 - GitHub Actions run **#74** for commit `5d9de831cad4fea7954647d69710145647ab469d` completed successfully. The workflow reports **185 passed, 1 skipped, 1502 assertions** and the frontend asset build completed successfully. This verifies the tested branch state at that commit; later changes require a new successful run.
 - No authorized staging/UAT deployment was identified or created. No production deployment was attempted.
 
@@ -22,7 +22,7 @@
 
 ## Blocking issues for UAT
 
-1. **Runtime verification:** install the project’s supported PHP/Composer dependencies in a controlled build environment, then run migrations, the complete Laravel suite, and frontend build. Fix every failure and attach actual CI evidence.
+1. **Runtime verification:** install the project’s supported PHP/Composer dependencies in a controlled build environment, then run migrations and the complete Laravel suite. The frontend build has passed locally; the latest full Laravel CI pass remains run #74 before later changes.
 2. **Workflow coverage:** the current application contains functional accounting, customer/supplier, purchase order, GRN, raw-material stock, landed-cost, recipe approval, production planning, material reservation/issue, batch, and QC code. However, several business areas still route to generic module pages. Sales invoicing/dispatch/returns, payroll, shareholder transaction posting, fixed-asset depreciation, and complete management reports are not ready to validate end to end.
 3. **Invoice acceptance:** obtain the client’s actual customer invoice sample and confirm required fields, currency/number formats, and approval/signature layout before implementing the print/PDF template.
 4. **Recipe approval:** obtain written Kanozay confirmation of the two formula discrepancies before importing or approving those recipes.
