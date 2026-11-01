@@ -150,6 +150,42 @@ class ProductionMaterialIssueTest extends TestCase
             ->assertOk()->assertSee('Short by 1.000000');
     }
 
+    public function test_multiple_lines_using_the_same_stock_item_share_one_reservation(): void
+    {
+        $material = $this->material('RM-107', '10');
+        $order = $this->order($material, '2');
+        $first = $order->materials()->firstOrFail();
+        $second = $order->materials()->create([
+            'line_number' => 2, 'material_name' => 'Flour second stage', 'unit' => 'kg',
+            'quantity_per_package' => '3', 'required_quantity' => '3',
+            'is_packaging' => false, 'inventory_material_id' => $material->id,
+        ]);
+        $this->actingAs($this->operator)->post(route('production.orders.reserve', $order))->assertRedirect();
+        $this->assertSame('5.000000', $material->fresh()->reserved_quantity);
+        $this->actingAs($this->operator)->post(route('production.orders.issue', $order), [
+            'occurred_on' => '2026-11-01',
+            'actual_quantities' => [$first->id => '2', $second->id => '2.5'],
+        ])->assertRedirect();
+        $this->assertSame('5.500000', $material->fresh()->on_hand_quantity);
+        $this->assertSame('0.000000', $material->fresh()->reserved_quantity);
+        $this->assertDatabaseCount('inventory_stock_movements', 3);
+    }
+
+    public function test_reservation_rejects_aggregate_shortage_for_shared_stock_item(): void
+    {
+        $material = $this->material('RM-108', '10');
+        $order = $this->order($material, '6');
+        $order->materials()->create([
+            'line_number' => 2, 'material_name' => 'Flour second stage', 'unit' => 'kg',
+            'quantity_per_package' => '6', 'required_quantity' => '6',
+            'is_packaging' => false, 'inventory_material_id' => $material->id,
+        ]);
+        $this->actingAs($this->operator)->post(route('production.orders.reserve', $order))
+            ->assertSessionHasErrors('production_order');
+        $this->assertSame('planned', $order->fresh()->status);
+        $this->assertSame('0.000000', $material->fresh()->reserved_quantity);
+    }
+
     private function material(string $sku, string $opening): InventoryMaterial
     {
         $material = InventoryMaterial::create(['sku' => $sku, 'name' => 'Flour', 'unit' => 'kg']);
