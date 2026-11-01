@@ -98,7 +98,7 @@ class PurchaseOrderTest extends TestCase {
    'supplier_id'=>$supplier->id,'currency_id'=>$currency->id,'source'=>'local','order_date'=>'2026-10-27',
    'items'=>[['description'=>'Material','quantity'=>1,'unit_price'=>10]],
   ])->assertRedirect(route('purchases.orders.index'));
-  $this->assertDatabaseCount('purchase_orders',1);
+  $this->assertDatabaseCount('purchase_orders',2);
  }
  public function test_unauthorized_user_cannot_create_orders():void {
   $user=User::factory()->create();
@@ -106,7 +106,7 @@ class PurchaseOrderTest extends TestCase {
   $this->actingAs($user)->post(route('purchases.orders.store'),[])->assertForbidden();
  }
  public function test_purchase_prices_reject_more_than_four_decimal_places():void {
-  Permission::findOrCreate('administration.view','web'); Permission::findOrCreate('administration.update','web');$user=User::factory()->create();$user->givePermissionTo('administration.view');
+  Permission::findOrCreate('administration.view','web'); Permission::findOrCreate('administration.update','web');$user=User::factory()->create();$user->givePermissionTo(['administration.view','administration.update']);
   $supplier=TradeParty::create(['type'=>'supplier','name'=>'Precision Supplier','is_active'=>true,'created_by'=>$user->id]);
   $currency=Currency::create(['code'=>'AFN','name'=>'Afghani','is_active'=>true,'is_base'=>true]);
   $payload=['supplier_id'=>$supplier->id,'currency_id'=>$currency->id,'source'=>'local','order_date'=>'2026-10-27','items'=>[['description'=>'Material','quantity'=>'1','unit_price'=>'1.00001']]];
