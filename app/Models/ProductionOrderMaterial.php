@@ -11,7 +11,11 @@ class ProductionOrderMaterial extends Model
         'required_quantity', 'is_packaging',
     ];
 
-    protected $casts = ['is_packaging' => 'boolean'];
+    protected $casts = [
+        'quantity_per_package' => 'decimal:6',
+        'required_quantity' => 'decimal:6',
+        'is_packaging' => 'boolean',
+    ];
 
     public function order()
     {
