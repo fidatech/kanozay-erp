@@ -81,6 +81,33 @@ $balance=$subtotal-$advances;
 </td><td>{{ ucfirst($receipt->status) }}</td></tr>
 @empty<tr><td colspan="7" class="muted">No goods received yet.</td></tr>@endforelse
 </tbody></table></div>
+@foreach($order->receipts as $receipt)
+@if($receipt->status === 'posted' && $receipt->cost_currency_code && $receipt->lines->isNotEmpty() && $receipt->lines->every(fn ($line) => $line->line_subtotal_snapshot !== null))
+<div style="margin:14px 0;padding:14px;border:1px solid #dbe5f0;border-radius:10px">
+<strong>{{ $receipt->number }} — landed-cost components ({{ $receipt->cost_currency_code }})</strong>
+@php($recordedCosts = \App\Models\GoodsReceiptLandedCost::where('goods_receipt_id', $receipt->id)->with('allocations')->get())
+@if($recordedCosts->isNotEmpty())
+<ul>@foreach($recordedCosts as $cost)<li>{{ ucfirst($cost->component) }}: {{ number_format((float)$cost->amount,2) }} {{ $cost->currency_code }} ({{ $cost->allocations->count() }} allocated lines)</li>@endforeach</ul>
+@endif
+@can('inventory.update')
+@if($recordedCosts->count() < 6)
+<form method="POST" action="{{ route('purchases.orders.receipts.landed-costs.store',[$order,$receipt]) }}" class="po-form">
+@csrf
+<label>Cost component<select name="component" required>
+@foreach(['freight'=>'Freight','customs'=>'Customs','transport'=>'Transportation','handling'=>'Handling','insurance'=>'Insurance','other'=>'Other'] as $value=>$label)
+@if(!$recordedCosts->contains('component',$value))<option value="{{ $value }}">{{ $label }}</option>@endif
+@endforeach
+</select></label>
+<label>Amount ({{ $receipt->cost_currency_code }})<input type="number" name="amount" min="0.01" step="0.01" required></label>
+<label>Reference<input type="text" name="reference" maxlength="100"></label>
+<button type="submit" onclick="return confirm('Record this immutable allocation?')">Record allocation</button>
+</form>
+@endif
+@endcan
+<p class="muted">Amounts are allocated using frozen GRN line purchase values. This does not update stock valuation or financial accounts.</p>
+</div>
+@endif
+@endforeach
 </div>
 <div class="panel"><h2>Purchase Expenses</h2>
 @if($order->status==='draft')
