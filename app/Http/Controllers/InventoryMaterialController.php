@@ -20,6 +20,16 @@ class InventoryMaterialController extends Controller
         ]);
     }
 
+    public function show(Request $request, InventoryMaterial $material)
+    {
+        abort_unless($request->user()->can('inventory.view'), 403);
+
+        return view('inventory.material-show', [
+            'material' => $material,
+            'movements' => $material->movements()->orderByDesc('id')->paginate(25),
+        ]);
+    }
+
     public function store(Request $request)
     {
         abort_unless($request->user()->can('inventory.create'), 403);

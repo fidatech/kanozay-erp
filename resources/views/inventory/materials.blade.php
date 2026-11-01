@@ -13,7 +13,7 @@
  <div class="table-wrap"><table><thead><tr><th>SKU</th><th>Material</th><th>Type</th><th>Unit</th><th>On hand</th><th>Reserved</th><th>Available</th><th>Status</th><th>Opening stock</th></tr></thead><tbody>
  @forelse($materials as $material)
  <tr>
-  <td><strong>{{ $material->sku }}</strong></td><td>{{ $material->name }}</td>
+  <td><a href="{{ route('inventory.materials.show', $material) }}"><strong>{{ $material->sku }}</strong></a></td><td>{{ $material->name }}</td>
   <td>{{ $material->is_packaging ? 'Packaging' : 'Ingredient' }}</td><td>{{ $material->unit }}</td>
   <td>{{ $material->on_hand_quantity }}</td><td>{{ $material->reserved_quantity }}</td><td>{{ $material->available_quantity }}</td><td>{{ $material->is_active ? 'Active' : 'Inactive' }}</td>
   <td>
