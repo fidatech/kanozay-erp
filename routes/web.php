@@ -94,6 +94,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/finance/trial-balance', [\App\Http\Controllers\TrialBalanceController::class,'index'])->name('finance.trial-balance.index');
     Route::get('/finance/profit-and-loss', [\App\Http\Controllers\ProfitAndLossController::class,'index'])->name('finance.profit-and-loss.index');
     Route::get('/finance/balance-sheet', [\App\Http\Controllers\BalanceSheetController::class,'index'])->name('finance.balance-sheet.index');
+    Route::get('/finance/cash-movements', [\App\Http\Controllers\CashMovementReportController::class,'index'])->name('finance.cash-movements.index');
     Route::get('/finance/journals', [\App\Http\Controllers\JournalEntryController::class,'index'])->name('finance.journals.index');
     Route::post('/finance/journals', [\App\Http\Controllers\JournalEntryController::class,'store'])->name('finance.journals.store');
     Route::patch('/finance/journals/{journal}/post', [\App\Http\Controllers\JournalEntryController::class,'post'])->name('finance.journals.post');
