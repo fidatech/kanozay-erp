@@ -45,7 +45,7 @@ class ProductionMaterialWasteTest extends TestCase
         $this->assertDatabaseCount('inventory_stock_movements', 0);
         $this->assertSame('5.000000', $line->fresh()->issued_quantity);
         $this->actingAs($this->operator)->get(route('production.orders.show', $order))
-            ->assertOk()->assertSee('5.000000')->assertSee('Record waste');
+            ->assertOk()->assertSee('5.000000')->assertSee('Record waste')->assertSee('Damaged during blending');
     }
 
     public function test_waste_is_frozen_after_lab_approval_and_rejected_for_other_orders(): void
