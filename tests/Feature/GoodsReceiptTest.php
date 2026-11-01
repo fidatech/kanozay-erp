@@ -65,6 +65,19 @@ class GoodsReceiptTest extends TestCase
         $this->assertDatabaseCount('inventory_stock_movements',1);
     }
 
+    public function test_inactive_material_causes_complete_receipt_rollback(): void
+    {
+        [$user,$order,$item,$material]=$this->orderWithMaterial();
+        $material->update(['is_active'=>false]);
+        $this->actingAs($user)->post(route('purchases.orders.receipts.store',$order),
+            $this->payload($item->id,'1.000000',(string)Str::uuid()))
+            ->assertSessionHasErrors('inventory_material_id');
+        $this->assertDatabaseCount('goods_receipts',0);
+        $this->assertDatabaseCount('goods_receipt_lines',0);
+        $this->assertDatabaseCount('inventory_stock_movements',0);
+        $this->assertSame('confirmed',$order->fresh()->status);
+    }
+
     public function test_draft_order_and_user_without_inventory_permission_cannot_receive(): void
     {
         [$user,$order,$item,$material]=$this->orderWithMaterial();

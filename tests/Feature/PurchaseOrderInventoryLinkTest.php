@@ -33,6 +33,17 @@ class PurchaseOrderInventoryLinkTest extends TestCase
         $this->actingAs($user)->patch(route('purchases.orders.items.link',[$order,$item]),['inventory_material_id'=>null])->assertStatus(422);
     }
 
+    public function test_purchase_order_index_renders_material_selection_without_stock_changes(): void
+    {
+        $user=User::factory()->create();
+        Permission::findOrCreate('administration.view','web');
+        $user->givePermissionTo('administration.view');
+        InventoryMaterial::create(['sku'=>'RM-INDEX','name'=>'Sugar','unit'=>'kg']);
+        $this->actingAs($user)->get(route('purchases.orders.index'))->assertOk()
+            ->assertSee('RM-INDEX')->assertSee('po-material-select');
+        $this->assertDatabaseCount('inventory_stock_movements',0);
+    }
+
     public function test_only_authorized_users_can_link_items_and_confirm_orders(): void
     {
         $user=User::factory()->create();

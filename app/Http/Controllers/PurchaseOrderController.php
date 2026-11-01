@@ -10,6 +10,7 @@ class PurchaseOrderController extends Controller {
   return view('purchases.orders',[
    'orders'=>PurchaseOrder::with(['supplier','currency','items'])->latest('id')->paginate(20),
    'materials'=>\App\Models\InventoryMaterial::where('is_active',true)->orderBy('name')->get(),
+   'materialOptions'=>\App\Models\InventoryMaterial::where('is_active',true)->orderBy('name')->get(['id','sku','name','unit'])->map(fn($m)=>['id'=>$m->id,'label'=>$m->sku.' · '.$m->name.' ('.$m->unit.')])->values(),
    'nextNumber'=>$this->nextNumber(),
    'suppliers'=>TradeParty::where('type','supplier')->where('is_active',true)->orderBy('name')->get(),
    'currencies'=>Currency::where('is_active',true)->orderBy('code')->get(),
