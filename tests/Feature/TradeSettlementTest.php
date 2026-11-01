@@ -31,6 +31,13 @@ class TradeSettlementTest extends TestCase {
  public function test_supplier_settlement_and_overallocation_rejection():void {[$user,$doc,$payment]=$this->fixtures('payable');$service=app(TradeSettlementService::class);$service->allocate($doc->id,$payment->id,'250',$user->id);$this->assertDatabaseCount('trade_settlement_allocations',1);$this->expectException(ValidationException::class);$service->allocate($doc->id,$payment->id,'100',$user->id);}
  public function test_aging_report_and_unapplied_payment_are_visible():void {[$user,$doc,$payment]=$this->fixtures();$this->actingAs($user)->get(route('finance.aging.index',['type'=>'receivable','as_of'=>'2026-12-10']))->assertOk()->assertSee('Settlement Test Party')->assertSee('1–30 days')->assertSee('500');$this->actingAs($user)->get(route('finance.money.index'))->assertOk()->assertSee('Unapplied')->assertSee('300');}
  public function test_partial_allocation_updates_aging_and_unapplied_amount():void {[$user,$doc,$payment]=$this->fixtures();app(TradeSettlementService::class)->allocate($doc->id,$payment->id,'125.125',$user->id);$this->actingAs($user)->get(route('finance.aging.index',['as_of'=>now()->addDays(90)->toDateString()]))->assertOk()->assertSee('374.875');$this->actingAs($user)->get(route('finance.money.index'))->assertOk()->assertSee('174.875');$this->assertDatabaseCount('journal_entries',2);}
+ public function test_reconciliation_uses_exact_allocations_and_exposure():void {
+  [$user,$doc,$payment,$currency]=$this->fixtures();
+  app(TradeSettlementService::class)->allocate($doc->id,$payment->id,'125.125',$user->id);
+  \App\Models\JournalLine::create(['journal_entry_id'=>$doc->journal_entry_id,'ledger_account_id'=>$payment->counterpart_ledger_account_id,'debit'=>'200.0000','credit'=>'0']);
+  $this->actingAs($user)->get(route('finance.reconciliation.index',['party_id'=>$doc->trade_party_id,'currency_id'=>$currency->id]))
+   ->assertOk()->assertSee('374.875')->assertSee('174.875')->assertSee('Matched: settlement exposure equals');
+ }
  public function test_fractional_allocations_sum_exactly_to_payment_limit():void {
   [$user,$first,$payment]= $this->fixtures();
   $secondJournal=JournalEntry::create(['number'=>'JE-ST-DECIMAL','entry_date'=>'2026-10-25','description'=>'Second decimal document','currency_id'=>$first->currency_id,'created_by'=>$user->id,'status'=>'posted']);
