@@ -72,6 +72,22 @@ class ProductionBatchQcTest extends TestCase
         $this->assertEquals(15, $good->fresh()->on_hand_packages);
     }
 
+    public function test_finished_goods_catalog_and_batch_views_are_permission_checked(): void
+    {
+        [$order, $good] = $this->setupOrder();
+        $this->actingAs($this->warehouse)->get(route('production.finished-goods.index'))
+            ->assertOk()->assertSee('FG-001');
+        $this->actingAs($this->warehouse)->get(route('production.finished-goods.show', $good))
+            ->assertOk()->assertSee('No finished goods have been released');
+        $this->actingAs($this->operator)->get(route('production.finished-goods.index'))->assertForbidden();
+
+        $batch = $this->submitBatch($order, $good, 3);
+        $this->actingAs($this->laboratory)->get(route('production.orders.show', $order))
+            ->assertOk()->assertSee($batch->batch_number)->assertSee('Record laboratory test');
+        $this->actingAs($this->warehouse)->get(route('production.orders.show', $order))
+            ->assertOk()->assertSee('No laboratory tests have been recorded');
+    }
+
     public function test_failed_lab_check_prevents_approval_and_rejection_does_not_add_stock(): void
     {
         [$order, $good] = $this->setupOrder();
