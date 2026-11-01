@@ -20,6 +20,11 @@ class ProductionOrderMaterial extends Model
         'is_packaging' => 'boolean',
     ];
 
+    public function wastes()
+    {
+        return $this->hasMany(ProductionMaterialWaste::class, 'production_order_material_id');
+    }
+
     public function inventoryMaterial()
     {
         return $this->belongsTo(InventoryMaterial::class, 'inventory_material_id');
