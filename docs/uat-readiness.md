@@ -3,14 +3,14 @@
 **Decision: NO-GO for employee acceptance testing**  
 **Review date:** 1 November 2026
 **Branch:** `development/kanozay-completion`  
-**Latest verified commit:** `28cf1110e256affa1c7a192b86f9ed5e25942854`
+**Latest verified commit:** `f93086fa5ff2ae4a64a03adaec3e179f677315af`
 
 ## Evidence reviewed
 
 - Repository source, migrations, controllers, services, Blade views, routes, seeders, tests, Composer and npm configuration, and GitHub Actions workflow.
 - The branch contains 47 Laravel test files and a push/pull-request Laravel test workflow configured for PHP 8.4, SQLite tests, and a Vite build.
 - The current execution workspace has Node.js but no PHP, Composer, or `vendor/`. `npm ci --no-audit --no-fund` completed and `npm run build` passed locally on the current development branch. Laravel tests and migrations cannot run here because `php` is unavailable.
-- GitHub Actions run **#92** for commit `28cf1110e256affa1c7a192b86f9ed5e25942854` completed successfully. The workflow reports **197 passed, 1 skipped, 1545 assertions**, and the frontend asset build completed successfully.
+- GitHub Actions run **#95** for commit `f93086fa5ff2ae4a64a03adaec3e179f677315af` completed successfully. The workflow reports **204 passed, 1 skipped, 1593 assertions**, and the frontend asset build completed successfully.
 - No authorized staging/UAT deployment was identified or created. No production deployment was attempted.
 
 ## Client workbook review
@@ -23,7 +23,7 @@
 
 ## Blocking issues for UAT
 
-1. **Runtime verification:** PHP is unavailable in this local workspace, so local migrations and tests were not run. CI run #92 verifies commit `28cf1110e256affa1c7a192b86f9ed5e25942854`; every later backend change requires a fresh successful run.
+1. **Runtime verification:** PHP is unavailable in this local workspace, so local migrations and tests were not run. CI run #95 verifies commit `f93086fa5ff2ae4a64a03adaec3e179f677315af`; every later backend change requires a fresh successful run.
 2. **Workflow coverage:** the current application contains functional accounting, customer/supplier, purchase order, GRN, raw-material stock, landed-cost, recipe approval, production planning, material reservation/issue, batch, and QC code. The HR employee register and confirmed import flow are implemented, but payroll periods, attendance, payroll calculation, approval, payment, and journals are not implemented. Sales invoicing/dispatch/returns, shareholder transaction posting, fixed-asset depreciation, and complete management reports are not ready to validate end to end.
 3. **Invoice acceptance:** obtain the client’s actual customer invoice sample and confirm required fields, currency/number formats, and approval/signature layout before implementing the print/PDF template.
 4. **Recipe approval:** obtain written Kanozay confirmation of the two formula discrepancies before importing or approving those recipes.
@@ -51,7 +51,7 @@
 - Corrected landed-cost rounding enum compatibility and expanded the GRN landed-cost tests for proportional allocation, reconciliation, duplicate component protection, and permissions. The branch CI passed on run #74.
 - Follow-on changes now use `brick/math` decimal operations for journal posting, trade settlement, currency exchange validation, general ledger running balances, aging, reconciliation, purchase totals, and finance amount display. Purchase and money transaction inputs enforce the database's four-decimal precision. Recipe workbook and approval weight checks also use decimal arithmetic. Regression tests were added for decimal journal balancing, settlement limits, currency conversion rounding, ledger totals, and input precision. These commits are **pending CI verification**; the available GitHub workflow-run connector only returns pull-request-triggered runs and no status is exposed for these branch pushes.
 - Commit `28cf1110e256affa1c7a192b86f9ed5e25942854` uses exact decimal allocation totals in sales and purchase overview overdue counts, formats amounts with the shared finance component, and tests fully paid versus partially settled overdue receivables. CI run #92 passed.
-- The current working changes add an HR employee register and a two-step payroll workbook import preview. Personal names, phone, national ID, and taxpayer ID are encrypted using `APP_KEY`. The source deduction column is excluded, salary currency is explicitly selected, duplicate employee numbers block import, and preview files are not retained. These changes require CI verification after commit.
+- Commit `f93086fa5ff2ae4a64a03adaec3e179f677315af` adds a permission-gated employee register and a two-step payroll workbook import preview. Personal names, phone, national ID, and taxpayer ID are encrypted using `APP_KEY`. The source deduction column is excluded, salary currency is explicitly selected, duplicate employee numbers block import, and preview files are not retained. CI run #95 passed. Payroll periods, attendance, payroll calculation, approval, payment, and journal posting remain incomplete.
 
 ## Next implementation order
 
