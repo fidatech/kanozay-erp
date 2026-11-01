@@ -20,6 +20,9 @@ Route::post('/language', function (\Illuminate\Http\Request $request) {
 Route::middleware('auth')->post('/production/recipes/kanozay-confirm', [\App\Http\Controllers\KanozayWorkbookPreviewController::class, 'confirm'])->name('production.recipes.kanozay-confirm');
 Route::middleware('auth')->post('/production/recipes/kanozay-preview', [\App\Http\Controllers\KanozayWorkbookPreviewController::class, '__invoke'])->name('production.recipes.kanozay-preview');
 Route::middleware('auth')->post('/production/recipes/import-preview', [\App\Http\Controllers\ProductionRecipeImportController::class, 'preview'])->name('production.recipes.import-preview');
+Route::middleware('auth')->get('/inventory/materials', [\App\Http\Controllers\InventoryMaterialController::class, 'index'])->name('inventory.materials.index');
+Route::middleware('auth')->post('/inventory/materials', [\App\Http\Controllers\InventoryMaterialController::class, 'store'])->name('inventory.materials.store');
+Route::middleware('auth')->post('/inventory/materials/{material}/opening', [\App\Http\Controllers\InventoryMaterialController::class, 'opening'])->name('inventory.materials.opening');
 Route::middleware('auth')->get('/production/orders', [\App\Http\Controllers\ProductionOrderController::class, 'index'])->name('production.orders.index');
 Route::middleware('auth')->post('/production/orders', [\App\Http\Controllers\ProductionOrderController::class, 'store'])->name('production.orders.store');
 Route::middleware('auth')->get('/production/orders/{order}', [\App\Http\Controllers\ProductionOrderController::class, 'show'])->name('production.orders.show');
