@@ -15,15 +15,15 @@
 .in{width:100%;height:40px;border:1px solid #d5dcea;border-radius:8px;padding:0 12px;font-size:13px;color:var(--tx);background:#fff}
 .in:focus{outline:2px solid var(--blue);outline-offset:-1px;border-color:var(--blue)}
 .btn{height:40px;border:0;border-radius:8px;background:var(--navy);color:#fff;font-weight:600;font-size:13px;padding:0 18px;cursor:pointer;width:100%}
-.row{display:flex;justify-content:space-between;align-items:center}.logo{display:flex;align-items:center;gap:8px;font-weight:800;letter-spacing:.5px}
-.logo b{width:36px;height:36px;border-radius:10px 2px 10px 2px;background:#2f9e44;display:grid;place-items:center;color:#fff;font-size:18px}
+.row{display:flex;justify-content:space-between;align-items:center}.logo{display:inline-flex;align-items:center;padding:12px 16px;background:#fff;border-radius:10px;box-shadow:0 12px 32px #07174430}
+.logo img{display:block;width:min(100%,440px);height:auto}
 a{color:var(--blue);text-decoration:none}.error{color:#b42318;font-size:12px;margin-top:5px}.status{color:#087a47;margin-bottom:16px}
 @media(max-width:850px){.lg-l{display:none}.lg-r{min-height:100vh}}
 </style>
 </head>
 <body>
 <section id="login">
-<div class="lg-l"><div class="logo"><b>K</b>KANOZAY FOODS</div><h1>Run the whole factory from one place.</h1><p>Purchases, inventory, production, finance and HR for Kanozay Foods, with approvals and alerts that reach you the moment they matter.</p></div>
+<div class="lg-l"><div class="logo"><img src="{{ asset('images/kanozay-logo.jpg') }}" alt="Kanozay Foods Manufacturing"></div><h1>Run the whole factory from one place.</h1><p>Purchases, inventory, production, finance and HR for Kanozay Foods, with approvals and alerts that reach you the moment they matter.</p></div>
 <div class="lg-r"><form class="lg-box" method="POST" action="{{ route('login') }}">
 @csrf
 <h2>Welcome back</h2><div class="subtitle">Sign in to the Kanozay ERP System</div>
