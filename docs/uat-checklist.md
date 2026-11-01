@@ -8,7 +8,7 @@
 - [ ] Create a new isolated database. Never point UAT at production.
 - [ ] Install Composer/npm dependencies, configure a private `APP_KEY`, build assets, run migrations, and seed reference roles/permissions as described in [handoff.md](handoff.md).
 - [ ] Create the first administrator with `php artisan kanozay:admin`.
-- [ ] Create named synthetic test users. The seed creates role names, but only Super Administrator receives permissions by default. Assign and verify each role's permissions in Administration → Roles before signing in as that user.
+- [ ] Create named synthetic test users. The seed installs scoped initial templates for Administrator, Finance Manager, Production Manager, Inventory Officer, Laboratory Officer, Sales Officer, HR Officer, and Viewer. Verify each user's assigned role and allowed/denied actions in Administration → Roles before the test session.
 - [ ] Give every test user a synthetic name and email such as `uat.finance@example.test`. Use unique passwords set by the administrator; do not add credentials to Git or this checklist.
 - [ ] Record the starting database backup and confirm that it can be restored into a separate disposable database.
 - [ ] Do not import source customer, supplier, employee, account, raw-stock, or investment rows during this session. Use synthetic fixtures only.
@@ -20,14 +20,16 @@
 |---|---|---|---|
 | UAT-AUTH-01 | Open a protected page without signing in | Redirect to sign-in | Ready to exercise |
 | UAT-AUTH-02 | Sign in as the initial administrator | Dashboard opens and the user can reach authorized administration pages | Ready to exercise |
-| UAT-AUTH-03 | Sign in as a role-limited synthetic user | Only explicitly granted actions work; forbidden actions return a denial | Requires per-role permission assignment |
+| UAT-AUTH-03 | Sign in as Finance Manager, Inventory Officer, and Viewer | Each can open its scoped pages; write actions require the matching create/update grants; unrelated pages/actions are denied | Ready to exercise; broader controller coverage remains partial |
 | UAT-SET-01 | Switch English, Dari, and Pashto | Page language changes; record direction/layout defects | Partial; RTL and full translations remain unverified |
 
 ## Purchasing and raw materials
 
+The default database seeder does not seed the reference chart of accounts. Customer/supplier creation with currencies provisions ledger accounts and therefore requires an approved chart mapping or a clearly marked synthetic chart in the isolated UAT database. Do not represent the reference chart as the client's confirmed account workbook.
+
 | ID | Scenario | Expected result | Status |
 |---|---|---|---|
-| UAT-PUR-01 | Create a synthetic purchase order with a synthetic supplier | Order and line totals are saved and visible | Ready to exercise |
+| UAT-PUR-01 | Create a synthetic purchase order with a synthetic supplier | Order and line totals are saved and visible; a view-only role cannot create it | Ready to exercise; supplier ledger provisioning requires an approved chart of accounts |
 | UAT-PUR-02 | Receive part of the open order | GRN records only received quantities; outstanding quantity remains | Ready to exercise |
 | UAT-PUR-03 | Try receiving above the open quantity or submit the same receipt twice | Validation rejects the excess/duplicate and stock is unchanged | Ready to exercise |
 | UAT-PUR-04 | Add freight/customs/handling landed-cost items | Allocation totals reconcile to entered costs; review per-item unit costs | Ready to exercise |

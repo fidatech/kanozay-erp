@@ -3,9 +3,14 @@
 **Decision: NO-GO for employee acceptance testing**  
 **Review date:** 1 November 2026
 **Branch:** `development/kanozay-completion`  
-**Latest verified code commit:** `8346945b50fc02c64b3a91f453067cf23254a826`
+**Latest verified code commit:** `b6239eee320148c3f9a4e57f792a2e3f0d2f2f56`
 
 ## Evidence reviewed
+
+- Current branch head `b6239eee320148c3f9a4e57f792a2e3f0d2f2f56` passed GitHub Actions run **#119**: **226 passed, 1 skipped, 1730 assertions**; the Vite build also passed. This run includes the purchasing permission regression tests.
+- GitHub Actions run **#115** passed module-role template tests, and run **#116** passed scoped module workspace route tests. Named roles now receive initial least-privilege templates; role changes are preserved when re-seeding. Finance, purchasing, and recipe controller permissions have scoped module checks while retaining the legacy administration permission as a compatibility path.
+- Permission tightening initially exposed outdated purchasing test fixtures in runs #117 and #118; those failures were corrected, and run #119 passed. No failing status is being carried as the latest result.
+- The CI workflow uses SQLite and runs Laravel tests plus the frontend build. It does not create a deployed UAT environment, exercise client workbook imports, visually inspect browser print output, or verify a clean production-style migration/seed procedure.
 
 - Repository source, migrations, controllers, services, Blade views, routes, seeders, tests, Composer and npm configuration, and GitHub Actions workflow.
 - The branch contains 47 Laravel test files and a push/pull-request Laravel test workflow configured for PHP 8.4, SQLite tests, and a Vite build.
@@ -66,10 +71,18 @@
 - The cash/bank/sarafi movement report uses linked financial-account ledger mappings, includes opening balances, reports posted inflows/outflows and closing balances by account/currency, and flags missing ledger mappings. Date, currency, draft/future exclusion, exact decimal, CSV, and permission tests passed in run #108. It is a movement register and does not classify inflows/outflows into operating, investing, or financing categories.
 - The dashboard replaces placeholder revenue/profit/inventory metrics and disabled controls with permission-scoped, transaction-backed operational counts and recent purchase orders, production plans, and posted journals. It filters date-bound data and omits unsupported values. Its role visibility, date filtering, and metric content passed in run #112.
 
+## Current blockers
+
+- No sales invoice, finished-goods dispatch, sales return, or sales credit-note workflow is implemented. Current finished-goods movements are production-batch receipts only; the invoice sample is unavailable, and sales revenue/COGS/inventory posting mappings have not been client-approved.
+- Shareholder contribution/withdrawal posting and fixed-asset workflows are not implemented. The owner-investment workbook exists, but mapping, currency treatment, and shareholder account rules need client review.
+- Payroll import preview and employee register exist, but payroll calculation, approval, payment, and journals do not. The source workbook has no salary currency; tax/transport formula treatment remains excluded until approved.
+- The chart-of-accounts seeder is a reference tree only and is not automatically included in the default seeder. The provided account workbook has not been imported because its 16 sheets still need account/date/currency/party/source mapping.
+- No staging environment, role-user pack, backup/restore drill, browser test, or visual print/PDF verification is available. The actual invoice sample and `01-Sample.xlsx` are unavailable.
+
 ## Next implementation order
 
 1. Continue removing floating-point arithmetic from financial posting paths as transaction workflows are completed.
-2. Validate migrations and the current purchase-to-GRN and manufacturing-to-QC flows on a clean SQLite test database and synthetic data.
-3. Finish the agreed initial-release gaps in sales/invoices, payroll, shareholder ledger, fixed assets, and transaction-backed reports.
+2. Validate migrations and the current purchase-to-GRN and manufacturing-to-QC flows on a clean SQLite UAT database and synthetic data. Review the unseeded chart of accounts before attempting customer/supplier ledger provisioning.
+3. Finish the agreed initial-release gaps in sales/invoices and dispatch, payroll, shareholder ledger, fixed assets, and transaction-backed reports.
 4. Obtain the missing invoice sample and client recipe approvals, then build validated import and print acceptance around those confirmed sources.
 5. Deploy only to an isolated UAT target, prepare named test users, and run the employee UAT checklist.
