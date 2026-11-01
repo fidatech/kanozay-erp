@@ -10,7 +10,7 @@ class PurchaseOrderTest extends TestCase {
  use RefreshDatabase;
  public function test_authorized_user_can_create_draft_purchase_order_with_items():void {
   $user=User::factory()->create();
-  Permission::findOrCreate('administration.view','web');
+  Permission::findOrCreate('administration.view','web'); Permission::findOrCreate('administration.update','web');
   $user->givePermissionTo(['administration.view', 'administration.update']);
   $supplier=TradeParty::create(['type'=>'supplier','name'=>'Test Supplier','code'=>'SUP-001','is_active'=>true,'created_by'=>$user->id]);
   $currency=Currency::create(['code'=>'AFN','name'=>'Afghani','symbol'=>'؋','decimal_places'=>2,'is_active'=>true,'is_base'=>true]);
@@ -28,7 +28,7 @@ class PurchaseOrderTest extends TestCase {
  }
  public function test_expenses_and_advances_are_recorded_on_order_without_finance_postings():void {
   $user=User::factory()->create();
-  Permission::findOrCreate('administration.view','web');
+  Permission::findOrCreate('administration.view','web'); Permission::findOrCreate('administration.update','web');
   $user->givePermissionTo(['administration.view', 'administration.update']);
   $supplier=TradeParty::create(['type'=>'supplier','name'=>'Supplier Two','code'=>'SUP-002','is_active'=>true,'created_by'=>$user->id]);
   $currency=Currency::create(['code'=>'USD','name'=>'US Dollar','symbol'=>'$','decimal_places'=>2,'is_active'=>true,'is_base'=>true]);
@@ -86,12 +86,14 @@ class PurchaseOrderTest extends TestCase {
   Permission::findOrCreate('purchases.create','web');
   Permission::findOrCreate('purchases.update','web');
   $user->givePermissionTo('purchases.view');
-  $this->actingAs($user)->post(route('purchases.orders.store'),[])->assertForbidden();
-  $this->actingAs($user)->post(route('purchases.orders.expenses.store',1),[])->assertForbidden();
-  $this->actingAs($user)->post(route('purchases.orders.advances.store',1),[])->assertForbidden();
-  $user->givePermissionTo('purchases.create');
   $supplier=TradeParty::create(['type'=>'supplier','name'=>'Scoped Supplier','is_active'=>true,'created_by'=>$user->id]);
   $currency=Currency::create(['code'=>'AFN','name'=>'Afghani','is_active'=>true,'is_base'=>true]);
+  $existing=PurchaseOrder::create(['number'=>'PO-EXISTING','supplier_id'=>$supplier->id,'currency_id'=>$currency->id,'source'=>'local','order_date'=>'2026-10-26','status'=>'draft','created_by'=>$user->id]);
+  $existing->items()->create(['description'=>'Material','quantity'=>1,'unit_price'=>10]);
+  $this->actingAs($user)->post(route('purchases.orders.store'),[])->assertForbidden();
+  $this->actingAs($user)->post(route('purchases.orders.expenses.store',$existing),[])->assertForbidden();
+  $this->actingAs($user)->post(route('purchases.orders.advances.store',$existing),[])->assertForbidden();
+  $user->givePermissionTo('purchases.create');
   $this->actingAs($user)->post(route('purchases.orders.store'),[
    'supplier_id'=>$supplier->id,'currency_id'=>$currency->id,'source'=>'local','order_date'=>'2026-10-27',
    'items'=>[['description'=>'Material','quantity'=>1,'unit_price'=>10]],
@@ -104,7 +106,7 @@ class PurchaseOrderTest extends TestCase {
   $this->actingAs($user)->post(route('purchases.orders.store'),[])->assertForbidden();
  }
  public function test_purchase_prices_reject_more_than_four_decimal_places():void {
-  Permission::findOrCreate('administration.view','web');$user=User::factory()->create();$user->givePermissionTo('administration.view');
+  Permission::findOrCreate('administration.view','web'); Permission::findOrCreate('administration.update','web');$user=User::factory()->create();$user->givePermissionTo('administration.view');
   $supplier=TradeParty::create(['type'=>'supplier','name'=>'Precision Supplier','is_active'=>true,'created_by'=>$user->id]);
   $currency=Currency::create(['code'=>'AFN','name'=>'Afghani','is_active'=>true,'is_base'=>true]);
   $payload=['supplier_id'=>$supplier->id,'currency_id'=>$currency->id,'source'=>'local','order_date'=>'2026-10-27','items'=>[['description'=>'Material','quantity'=>'1','unit_price'=>'1.00001']]];

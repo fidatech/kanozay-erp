@@ -16,7 +16,8 @@ class PurchaseOrderInventoryLinkTest extends TestCase
         $user=User::factory()->create();
         Permission::findOrCreate('administration.view','web');
         Permission::findOrCreate('purchases.update','web');
-        $user->givePermissionTo(['administration.view','purchases.update']);
+        Permission::findOrCreate('purchases.create','web');
+        $user->givePermissionTo(['administration.view','purchases.create','purchases.update']);
         $supplier=TradeParty::create(['type'=>'supplier','name'=>'Supplier','code'=>'SUP-LINK','is_active'=>true,'created_by'=>$user->id]);
         $currency=Currency::create(['code'=>'AFN','name'=>'Afghani','is_active'=>true,'is_base'=>true]);
         $material=InventoryMaterial::create(['sku'=>'RM-LINK','name'=>'Flour','unit'=>'kg']);
