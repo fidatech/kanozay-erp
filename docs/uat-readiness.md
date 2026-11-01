@@ -3,14 +3,14 @@
 **Decision: NO-GO for employee acceptance testing**  
 **Review date:** 1 November 2026
 **Branch:** `development/kanozay-completion`  
-**Latest verified commit:** `5d9de831cad4fea7954647d69710145647ab469d`
+**Latest verified commit:** `28cf1110e256affa1c7a192b86f9ed5e25942854`
 
 ## Evidence reviewed
 
 - Repository source, migrations, controllers, services, Blade views, routes, seeders, tests, Composer and npm configuration, and GitHub Actions workflow.
 - The branch contains 47 Laravel test files and a push/pull-request Laravel test workflow configured for PHP 8.4, SQLite tests, and a Vite build.
 - The current execution workspace has Node.js but no PHP, Composer, or `vendor/`. `npm ci --no-audit --no-fund` completed and `npm run build` passed locally on the current development branch. Laravel tests and migrations cannot run here because `php` is unavailable.
-- GitHub Actions run **#74** for commit `5d9de831cad4fea7954647d69710145647ab469d` completed successfully. The workflow reports **185 passed, 1 skipped, 1502 assertions** and the frontend asset build completed successfully. This verifies the tested branch state at that commit; later changes require a new successful run.
+- GitHub Actions run **#92** for commit `28cf1110e256affa1c7a192b86f9ed5e25942854` completed successfully. The workflow reports **197 passed, 1 skipped, 1545 assertions**, and the frontend asset build completed successfully.
 - No authorized staging/UAT deployment was identified or created. No production deployment was attempted.
 
 ## Client workbook review
@@ -18,12 +18,13 @@
 - The supplied liquid recipe sheet uses the water dose formula `SUM(F5:F17)-20`. Its listed non-water doses sum to 7.2996 kg, so the formula evaluates to **-12.7004 kg**. This is a source discrepancy; it has not been corrected or imported as an approved recipe.
 - The supplied powder recipe's seven named ingredients total **25.11 kg** against a 25 kg bag. The sheet also contains a separate “Pro Cost” line; its role is unclear and must be confirmed. The formula remains a draft and is not approved for production.
 - The raw materials/owner investment, account, and payroll workbooks contain client records. They were read locally for structure and anomaly review; none of their rows or personal data have been committed.
+- The payroll workbook contains employee number, name, father’s name, gender, position, phone, national ID, taxpayer ID, monthly salary, and a tax/transport deduction column with spreadsheet formulas. The deduction formula has not been adopted as a payroll policy, and employee records have not been imported. Confirm the deduction meaning, currency, and payroll treatment with Kanozay before using it for calculation or posting.
 - Available brand files include the original multicolour and monochrome logo images and a one-page letterhead PDF. The multicolour original is now used on the ERP sign-in and header. The customer invoice sample was not available, so client-specific invoice reproduction remains blocked.
 
 ## Blocking issues for UAT
 
-1. **Runtime verification:** install the project’s supported PHP/Composer dependencies in a controlled build environment, then run migrations and the complete Laravel suite. The frontend build has passed locally; the latest full Laravel CI pass remains run #74 before later changes.
-2. **Workflow coverage:** the current application contains functional accounting, customer/supplier, purchase order, GRN, raw-material stock, landed-cost, recipe approval, production planning, material reservation/issue, batch, and QC code. However, several business areas still route to generic module pages. Sales invoicing/dispatch/returns, payroll, shareholder transaction posting, fixed-asset depreciation, and complete management reports are not ready to validate end to end.
+1. **Runtime verification:** PHP is unavailable in this local workspace, so local migrations and tests were not run. CI run #92 verifies commit `28cf1110e256affa1c7a192b86f9ed5e25942854`; every later backend change requires a fresh successful run.
+2. **Workflow coverage:** the current application contains functional accounting, customer/supplier, purchase order, GRN, raw-material stock, landed-cost, recipe approval, production planning, material reservation/issue, batch, and QC code. A permission-gated employee register now stores workbook-aligned profile fields with encrypted personal identifiers, but does not import payroll records, calculate payroll, or post payroll journals. Sales invoicing/dispatch/returns, shareholder transaction posting, fixed-asset depreciation, and complete management reports are not ready to validate end to end.
 3. **Invoice acceptance:** obtain the client’s actual customer invoice sample and confirm required fields, currency/number formats, and approval/signature layout before implementing the print/PDF template.
 4. **Recipe approval:** obtain written Kanozay confirmation of the two formula discrepancies before importing or approving those recipes.
 5. **UAT data:** there are no synthetic scenario seeders or preconfigured test users in the repository. Create synthetic users and test transactions only after the deployment is isolated. The default database seeder was changed to create roles/permissions without a predictable default account.
@@ -49,6 +50,8 @@
 - Added a regression test for the no-default-user seeding rule. It is **not executed** because PHP and Composer are unavailable in this workspace.
 - Corrected landed-cost rounding enum compatibility and expanded the GRN landed-cost tests for proportional allocation, reconciliation, duplicate component protection, and permissions. The branch CI passed on run #74.
 - Follow-on changes now use `brick/math` decimal operations for journal posting, trade settlement, currency exchange validation, general ledger running balances, aging, reconciliation, purchase totals, and finance amount display. Purchase and money transaction inputs enforce the database's four-decimal precision. Recipe workbook and approval weight checks also use decimal arithmetic. Regression tests were added for decimal journal balancing, settlement limits, currency conversion rounding, ledger totals, and input precision. These commits are **pending CI verification**; the available GitHub workflow-run connector only returns pull-request-triggered runs and no status is exposed for these branch pushes.
+- Commit `28cf1110e256affa1c7a192b86f9ed5e25942854` uses exact decimal allocation totals in sales and purchase overview overdue counts, formats amounts with the shared finance component, and tests fully paid versus partially settled overdue receivables. CI run #92 passed.
+- The current working changes add an HR employee register based on the supplied payroll workbook’s field structure. Personal names, phone, national ID, and taxpayer ID are encrypted using `APP_KEY`. The workbook’s tax/transport formula is intentionally not calculated or imported. These changes require CI verification after commit.
 
 ## Next implementation order
 

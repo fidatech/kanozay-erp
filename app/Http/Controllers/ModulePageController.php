@@ -9,6 +9,10 @@ class ModulePageController extends Controller
 {
     public function show(Request $request, string $module, string $page)
     {
+        if ($module === 'hr' && $page === 'employees') {
+            return app(EmployeeProfileController::class)->index($request);
+        }
+
         abort_unless($request->user()->can('administration.view'), 403);
         $modules = config('erp_pages', []);
         abort_unless(isset($modules[$module]['pages'][$page]) || ($page === 'overview' && isset($modules[$module])), 404);
