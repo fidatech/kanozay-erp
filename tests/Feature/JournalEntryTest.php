@@ -33,6 +33,26 @@ class JournalEntryTest extends TestCase {
   $this->assertSame('investigating',$case->fresh()->status);
  }
  public function test_unbalanced_journal_is_rejected():void {[$u,$c,$a,$b]=$this->setupAccounts();$entry=JournalEntry::create(['number'=>'JE-00001','entry_date'=>'2026-10-25','description'=>'Test','currency_id'=>$c->id,'created_by'=>$u->id,'status'=>'draft']);$entry->lines()->create(['ledger_account_id'=>$a->id,'debit'=>100,'credit'=>0]);$entry->lines()->create(['ledger_account_id'=>$b->id,'debit'=>0,'credit'=>99]);$this->actingAs($u);$this->expectException(ValidationException::class);app(JournalPostingService::class)->post($entry,$u->id);}
+ public function test_posting_balances_fractional_amounts_without_float_conversion():void {
+  [$u,$c,$a,$b]=$this->setupAccounts();
+  $entry=JournalEntry::create(['number'=>'JE-DECIMAL-01','entry_date'=>'2026-10-25','description'=>'Fractional journal','currency_id'=>$c->id,'created_by'=>$u->id,'status'=>'draft']);
+  $entry->lines()->create(['ledger_account_id'=>$a->id,'debit'=>'0.1001','credit'=>'0']);
+  $entry->lines()->create(['ledger_account_id'=>$a->id,'debit'=>'0.2002','credit'=>'0']);
+  $entry->lines()->create(['ledger_account_id'=>$b->id,'debit'=>'0','credit'=>'0.3003']);
+  app(JournalPostingService::class)->post($entry,$u->id);
+  $this->assertSame('posted',$entry->fresh()->status);
+ }
+ public function test_journal_input_rejects_more_than_four_decimal_places():void {
+  [$u,$c,$a,$b]=$this->setupAccounts();
+  $this->actingAs($u)->post(route('finance.journals.store'),[
+   'entry_date'=>'2026-10-25','description'=>'Precision validation','currency_id'=>$c->id,
+   'lines'=>[
+    ['ledger_account_id'=>$a->id,'debit'=>'0.00001','credit'=>'0'],
+    ['ledger_account_id'=>$b->id,'debit'=>'0','credit'=>'0.00001'],
+   ],
+  ])->assertSessionHasErrors('lines.0.debit');
+  $this->assertDatabaseCount('journal_entries',0);
+ }
  public function test_journal_lines_show_party_names_without_account_codes():void {[$u,$c,$a,$b]=$this->setupAccounts();$party=\App\Models\TradeParty::create(['type'=>'customer','name'=>'Kabul Wholesale Customer','created_by'=>$u->id]);\Illuminate\Support\Facades\DB::table('entity_ledger_accounts')->insert(['entity_type'=>'customer','entity_id'=>$party->id,'currency_id'=>$c->id,'purpose'=>'receivable','ledger_account_id'=>$a->id,'created_at'=>now(),'updated_at'=>now()]);$entry=JournalEntry::create(['number'=>'JE-PARTY-01','entry_date'=>'2026-10-25','description'=>'Party journal','currency_id'=>$c->id,'created_by'=>$u->id,'status'=>'posted']);$entry->lines()->create(['ledger_account_id'=>$a->id,'debit'=>100,'credit'=>0]);$entry->lines()->create(['ledger_account_id'=>$b->id,'debit'=>0,'credit'=>100]);$this->actingAs($u)->get(route('finance.journals.index'))->assertOk()->assertSee('Kabul Wholesale Customer')->assertSee('>100</span>',false);}
  public function test_journal_creation_requires_permission():void {[$u,$c,$a,$b]=$this->setupAccounts();$other=User::factory()->create();$this->actingAs($other)->get(route('finance.journals.index'))->assertForbidden();$this->actingAs($u)->get(route('finance.journals.index'))->assertOk();}
 }

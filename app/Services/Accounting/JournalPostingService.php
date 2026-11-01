@@ -1,5 +1,6 @@
 <?php
 namespace App\Services\Accounting;
+use Brick\Math\BigDecimal;
 use App\Models\ActivityLog;
 use App\Models\JournalEntry;
 use App\Models\LedgerAccount;
@@ -35,11 +36,14 @@ class JournalPostingService {
    if (array_diff($lockedAccountIds,$accountIds) || array_diff($accountIds,$lockedAccountIds)) throw ValidationException::withMessages(['lines'=>'Journal accounts changed during posting. Please retry.']);
    if($entry->status!=='draft')throw ValidationException::withMessages(['status'=>'Only draft journals may be posted.']);
    $lines=$entry->lines()->get();if($lines->count()<2)throw ValidationException::withMessages(['lines'=>'A journal needs at least two lines.']);
-   $debits=0;$credits=0;
+   $debits=BigDecimal::zero();$credits=BigDecimal::zero();
    foreach($lines as $line){$account=LedgerAccount::findOrFail($line->ledger_account_id);if($account->is_group||!$account->is_active)throw ValidationException::withMessages(['lines'=>'Posting requires active, non-group accounts.']);
-    $d=(int)round((float)$line->debit*10000);$c=(int)round((float)$line->credit*10000);if(($d>0&&$c>0)||($d===0&&$c===0)||$d<0||$c<0)throw ValidationException::withMessages(['lines'=>'Each line must contain exactly one positive debit or credit.']);$debits+=$d;$credits+=$c;
+    $d=BigDecimal::of((string)$line->debit);$c=BigDecimal::of((string)$line->credit);
+    $dSign=$d->compareTo(BigDecimal::zero());$cSign=$c->compareTo(BigDecimal::zero());
+    if(($dSign>0&&$cSign>0)||($dSign===0&&$cSign===0)||$dSign<0||$cSign<0)throw ValidationException::withMessages(['lines'=>'Each line must contain exactly one positive debit or credit.']);
+    $debits=$debits->plus($d);$credits=$credits->plus($c);
    }
-   if($debits!==$credits)throw ValidationException::withMessages(['lines'=>'Total debits must equal total credits.']);
+   if($debits->compareTo($credits)!==0)throw ValidationException::withMessages(['lines'=>'Total debits must equal total credits.']);
    $entry->update(['status'=>'posted','posted_by'=>$userId,'posted_at'=>now()]);ActivityLog::record('journal.posted','journal_entry',$entry->id,'Journal '.$entry->number.' posted');return $entry;
   });
  }

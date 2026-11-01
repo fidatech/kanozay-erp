@@ -42,7 +42,7 @@ The uploaded payroll and account workbooks contain confidential personal and fin
 
 ## Current implementation boundary
 
-The repository contains implementation code and tests for authentication, permissions, accounting foundations, customers/suppliers, purchases, GRNs, materials, recipes, production orders, material reservations/issues, batches, QC decisions, and landed costs. Runtime verification is still pending. Sales invoicing/dispatch, HR/payroll, shareholder posting, fixed assets, and many reports remain incomplete or represented by generic workspace pages. Consult the readiness report rather than treating navigation entries as completed modules.
+The repository contains implementation code and tests for authentication, permissions, accounting foundations, customers/suppliers, purchases, GRNs, materials, recipes, production orders, material reservations/issues, batches, QC decisions, and landed costs. GitHub Actions has verified the SQLite test suite and Vite build through commit `5d9de831cad4fea7954647d69710145647ab469d`; the next exact-decimal accounting changes are pending CI. Sales invoicing/dispatch, HR/payroll, shareholder posting, fixed assets, and many reports remain incomplete or represented by generic workspace pages. Consult the readiness report rather than treating navigation entries as completed modules.
 
 ## Backup and recovery
 

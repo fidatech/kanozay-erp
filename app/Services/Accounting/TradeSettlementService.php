@@ -1,5 +1,7 @@
 <?php
 namespace App\Services\Accounting;
+use Brick\Math\BigDecimal;
+use Brick\Math\RoundingMode;
 use App\Models\TradeDocument;
 use App\Models\MoneyTransaction;
 use App\Models\TradeSettlementAllocation;
@@ -18,11 +20,19 @@ class TradeSettlementService {
    $party=DB::table('entity_ledger_accounts')->where(['entity_type'=>$document->type==='receivable'?'customer':'supplier','entity_id'=>$document->trade_party_id,'currency_id'=>$document->currency_id,'purpose'=>$document->type])->value('ledger_account_id');
    if(!$party || (int)$transaction->counterpart_ledger_account_id!==(int)$party)throw ValidationException::withMessages(['money_transaction_id'=>'Payment must post against the same customer or supplier ledger.']);
    if(TradeSettlementAllocation::where(['trade_document_id'=>$documentId,'money_transaction_id'=>$transactionId])->exists())throw ValidationException::withMessages(['amount'=>'This transaction is already allocated to this document.']);
-   $cents=(int)round((float)$amount*10000);
-   $documentUsed=(int)round((float)TradeSettlementAllocation::where('trade_document_id',$documentId)->sum('amount')*10000);
-   $transactionUsed=(int)round((float)TradeSettlementAllocation::where('money_transaction_id',$transactionId)->sum('amount')*10000);
-   if($cents<=0 || $cents>(int)round((float)$document->amount*10000)-$documentUsed || $cents>(int)round((float)$transaction->amount*10000)-$transactionUsed)throw ValidationException::withMessages(['amount'=>'Allocation must be positive and cannot exceed either outstanding balance.']);
-   return TradeSettlementAllocation::create(['trade_document_id'=>$documentId,'money_transaction_id'=>$transactionId,'amount'=>$amount,'created_by'=>$userId]);
+   $allocation=BigDecimal::of($amount)->toScale(4,RoundingMode::Unnecessary);
+   $documentUsed=$this->allocatedAmount('trade_document_id',$documentId);
+   $transactionUsed=$this->allocatedAmount('money_transaction_id',$transactionId);
+   $documentRemaining=BigDecimal::of((string)$document->amount)->minus($documentUsed);
+   $transactionRemaining=BigDecimal::of((string)$transaction->amount)->minus($transactionUsed);
+   if($allocation->compareTo(BigDecimal::zero())<=0 || $allocation->compareTo($documentRemaining)>0 || $allocation->compareTo($transactionRemaining)>0)throw ValidationException::withMessages(['amount'=>'Allocation must be positive and cannot exceed either outstanding balance.']);
+   return TradeSettlementAllocation::create(['trade_document_id'=>$documentId,'money_transaction_id'=>$transactionId,'amount'=>(string)$allocation,'created_by'=>$userId]);
   });
+ }
+
+ private function allocatedAmount(string $column,int $id):BigDecimal {
+  $total=BigDecimal::zero();
+  foreach(TradeSettlementAllocation::where($column,$id)->pluck('amount') as $amount)$total=$total->plus((string)$amount);
+  return $total;
  }
 }
