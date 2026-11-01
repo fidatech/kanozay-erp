@@ -1,0 +1,78 @@
+# Kanozay ERP UAT checklist
+
+**Branch:** `development/kanozay-completion`  
+**Readiness:** NO-GO for full employee acceptance testing. Run only on an isolated UAT database with synthetic records.
+
+## Before the session
+
+- [ ] Create a new isolated database. Never point UAT at production.
+- [ ] Install Composer/npm dependencies, configure a private `APP_KEY`, build assets, run migrations, and seed reference roles/permissions as described in [handoff.md](handoff.md).
+- [ ] Create the first administrator with `php artisan kanozay:admin`.
+- [ ] Create named synthetic test users. The seed creates role names, but only Super Administrator receives permissions by default. Assign and verify each role's permissions in Administration → Roles before signing in as that user.
+- [ ] Give every test user a synthetic name and email such as `uat.finance@example.test`. Use unique passwords set by the administrator; do not add credentials to Git or this checklist.
+- [ ] Record the starting database backup and confirm that it can be restored into a separate disposable database.
+- [ ] Do not import source customer, supplier, employee, account, raw-stock, or investment rows during this session. Use synthetic fixtures only.
+- [ ] Record the current commit, test run, browser/device, user role, and observed result for each case below.
+
+## Access and setup
+
+| ID | Scenario | Expected result | Status |
+|---|---|---|---|
+| UAT-AUTH-01 | Open a protected page without signing in | Redirect to sign-in | Ready to exercise |
+| UAT-AUTH-02 | Sign in as the initial administrator | Dashboard opens and the user can reach authorized administration pages | Ready to exercise |
+| UAT-AUTH-03 | Sign in as a role-limited synthetic user | Only explicitly granted actions work; forbidden actions return a denial | Requires per-role permission assignment |
+| UAT-SET-01 | Switch English, Dari, and Pashto | Page language changes; record direction/layout defects | Partial; RTL and full translations remain unverified |
+
+## Purchasing and raw materials
+
+| ID | Scenario | Expected result | Status |
+|---|---|---|---|
+| UAT-PUR-01 | Create a synthetic purchase order with a synthetic supplier | Order and line totals are saved and visible | Ready to exercise |
+| UAT-PUR-02 | Receive part of the open order | GRN records only received quantities; outstanding quantity remains | Ready to exercise |
+| UAT-PUR-03 | Try receiving above the open quantity or submit the same receipt twice | Validation rejects the excess/duplicate and stock is unchanged | Ready to exercise |
+| UAT-PUR-04 | Add freight/customs/handling landed-cost items | Allocation totals reconcile to entered costs; review per-item unit costs | Ready to exercise |
+| UAT-INV-01 | Record a synthetic stock adjustment with a reason | Immutable ledger movement and current balance agree | Ready to exercise |
+| UAT-INV-02 | Reduce stock below reservations or below zero | Request is rejected and the prior balance is unchanged | Ready to exercise |
+| UAT-INV-03 | Reconcile source workbook opening quantities and costs | Do not import until lot, manufacture/expiry, unit, USD valuation, and opening-cost handling are approved | Blocked by schema and client approval |
+
+## Manufacturing and laboratory
+
+| ID | Scenario | Expected result | Status |
+|---|---|---|---|
+| UAT-MFG-01 | Preview the supplied recipe workbook | Errors, warnings, duplicate formulas, and weight discrepancies appear before import | Ready to exercise with review copy |
+| UAT-MFG-02 | Inspect liquid and powder source discrepancies | Liquid water is `-12.7004 kg`; powder named ingredients total about `25.11 kg` against a `25 kg` target; do not approve either formula without written client confirmation | Blocked by client decision |
+| UAT-MFG-03 | Create a production plan from an approved recipe | The order snapshots the approved formula/version and shows requirements/shortages | Ready after a client-approved recipe exists |
+| UAT-MFG-04 | Reserve and issue materials, then record a batch | Stock ledger reflects reservations and consumption; duplicate posting is prevented | Ready to exercise |
+| UAT-QC-01 | Record passing and failing lab checks | A failed/unreleased batch remains unavailable for sale; release requires approval | Ready to exercise |
+| UAT-FG-01 | Review production receipt and current finished-goods quantity | Released package count matches the batch receipt | Partial; dispatch, transfer, return, and valuation workflows remain incomplete |
+
+## Finance and reports
+
+Use one currency per test and verify its journal lines. Never add amounts in different currencies.
+
+| ID | Scenario | Expected result | Status |
+|---|---|---|---|
+| UAT-FIN-01 | Post a balanced journal, then view the general ledger | Posted lines appear; draft lines do not; decimal running balance is exact | Ready to exercise |
+| UAT-FIN-02 | View the trial balance at a selected date | Only posted lines through that date appear; debit/credit totals reconcile separately by currency | Ready to exercise |
+| UAT-FIN-03 | View Profit and Loss for a date range | Income/expense totals and net result agree with underlying posted journal lines per currency | Ready to exercise |
+| UAT-FIN-04 | View Balance Sheet at a selected date | Fiscal-year start follows financial settings; difference is visible and must be resolved before acceptance | Ready to exercise with reconciliation |
+| UAT-FIN-05 | View cash/bank/sarafi movements | Opening + posted inflows - posted outflows = closing balance for each account/currency | Ready to exercise |
+| UAT-FIN-06 | Export the three statements and movement report to CSV | Filtered records and decimal values match the on-screen report | Ready to exercise |
+| UAT-FIN-07 | Reconcile the supplied 16-sheet accounts workbook | Map each sheet to accounts, dates, currencies, parties, and source documents; approve opening balances before import | Blocked by mapping/approval |
+
+## HR and other blocked workflows
+
+| ID | Scenario | Expected result | Status |
+|---|---|---|---|
+| UAT-HR-01 | Preview a synthetic payroll-format workbook | Errors/duplicates are shown; salary currency must be selected; no source rows are written until confirmation | Ready to exercise with synthetic file |
+| UAT-HR-02 | Calculate, approve, pay, and journal payroll | Compare to client-approved rules and payroll scenario | Blocked; payroll calculation/posting is not implemented |
+| UAT-SALES-01 | Create quotation/order/invoice, dispatch stock, receive payment, print invoice | Reconcile stock, receivable, payment, and journal; compare printed document to the client sample | Blocked; sales dispatch/invoice workflow and invoice sample are unavailable |
+| UAT-SH-01 | Record shareholder contributions/withdrawals and reconcile investment statement | Use approved owner-investment mapping and client-confirmed currency/account | Blocked; shareholder posting and mapping are not implemented |
+| UAT-ASSET-01 | Register an asset and run approved depreciation/disposal | Reconcile cost, depreciation, disposal, and journal | Blocked; fixed-asset workflows and depreciation policy are not implemented |
+| UAT-DASH-01 | View dashboard as each test role and change date range | Counts reflect accessible records only; no revenue/profit/inventory value appears without supporting workflows | Ready to exercise |
+
+## Record a result
+
+For each case, record: tester, date/time, role, database snapshot ID, app commit, steps, expected result, actual result, pass/fail/blocker, and a redacted screenshot or reference number. Never include passwords, real employee identifiers, or client workbook rows in screenshots or Git.
+
+A failed check against real business rules is a client decision or defect, not an instruction to alter source data. Preserve the UAT database before repair and use the documented backup/restore procedure.
