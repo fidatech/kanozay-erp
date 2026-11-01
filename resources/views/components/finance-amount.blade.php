@@ -8,7 +8,7 @@
     $parts = explode('.', $numeric, 2);
     $whole = preg_replace('/\D/', '', $parts[0]) ?: '0';
     $fraction = isset($parts[1]) ? rtrim(substr(preg_replace('/\D/', '', $parts[1]), 0, $precision), '0') : '';
-    $formatted = number_format((float) $whole, 0, '.', ',') . ($fraction !== '' ? '.' . $fraction : '');
+    $formatted = preg_replace('/\B(?=(\d{3})+(?!\d))/', ',', $whole) . ($fraction !== '' ? '.' . $fraction : '');
     $isZero = !preg_match('/[1-9]/', $whole . $fraction);
     $kind = in_array($direction, ['in', 'out'], true) ? $direction : 'neutral';
 @endphp

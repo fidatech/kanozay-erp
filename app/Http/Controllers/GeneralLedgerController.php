@@ -1,5 +1,6 @@
 <?php
 namespace App\Http\Controllers;
+use Brick\Math\BigDecimal;
 use App\Models\Currency;
 use App\Models\JournalLine;
 use App\Models\LedgerAccount;
@@ -18,18 +19,20 @@ class GeneralLedgerController extends Controller {
   if($currency)$query->where('j.currency_id',$currency->id);
   $from=$filters['from']??null;$to=$filters['to']??null;
   $openingQuery=clone $query;
-  $opening=$from?$openingQuery->where('j.entry_date','<',$from)->selectRaw('j.currency_id, SUM(journal_lines.debit) as debit_total, SUM(journal_lines.credit) as credit_total')->groupBy('j.currency_id')->get():collect();
+  $openingRows=$from?$openingQuery->where('j.entry_date','<',$from)->select('j.currency_id','journal_lines.debit','journal_lines.credit')->get():collect();
+  $aggregateByCurrency=function($lines){$totals=[];foreach($lines as $line){$id=$line->currency_id;if(!isset($totals[$id]))$totals[$id]=['currency_id'=>$id,'debit_total'=>BigDecimal::zero(),'credit_total'=>BigDecimal::zero()];$totals[$id]['debit_total']=$totals[$id]['debit_total']->plus((string)$line->debit);$totals[$id]['credit_total']=$totals[$id]['credit_total']->plus((string)$line->credit);}return collect(array_map(fn($total)=>(object)['currency_id'=>$total['currency_id'],'debit_total'=>(string)$total['debit_total'],'credit_total'=>(string)$total['credit_total']],array_values($totals)));};
+  $opening=$aggregateByCurrency($openingRows);
   if($from)$query->where('j.entry_date','>=',$from);
   if($to)$query->where('j.entry_date','<=',$to);
-  $totals=(clone $query)->selectRaw('j.currency_id, SUM(journal_lines.debit) as debit_total, SUM(journal_lines.credit) as credit_total')->groupBy('j.currency_id')->get();
+  $totalRows=(clone $query)->select('j.currency_id','journal_lines.debit','journal_lines.credit')->get();$totals=$aggregateByCurrency($totalRows);
   $rows=$query->select('journal_lines.*','j.number as journal_number','j.entry_date','j.description as journal_description','j.currency_id')->orderBy('j.entry_date')->orderBy('j.id')->orderBy('journal_lines.id')->paginate(30)->withQueryString();
-  $openingMap=$opening->keyBy('currency_id');$running=[];
-  foreach($opening as $item)$running[$item->currency_id]=(int)round((float)$item->debit_total*10000)-(int)round((float)$item->credit_total*10000);
+  $openingMap=$opening->keyBy('currency_id');$running=[];$openingNet=[];$openingDirections=[];
+  foreach($opening as $item){$net=BigDecimal::of((string)$item->debit_total)->minus((string)$item->credit_total);$running[$item->currency_id]=$net;$openingNet[$item->currency_id]=(string)$net;$openingDirections[$item->currency_id]=$net->compareTo(BigDecimal::zero())>0?'in':($net->compareTo(BigDecimal::zero())<0?'out':'neutral');}
   // Calculate the balance before the requested page without using floating-point accumulation.
   if($rows->currentPage()>1){$before=JournalLine::query()->join('journal_entries as j','j.id','=','journal_lines.journal_entry_id')->where('j.status','posted');if($account)$before->where('journal_lines.ledger_account_id',$account->id);if($currency)$before->where('j.currency_id',$currency->id);if($from)$before->where('j.entry_date','>=',$from);if($to)$before->where('j.entry_date','<=',$to);
-   $previous=$before->select('journal_lines.debit','journal_lines.credit','j.currency_id')->orderBy('j.entry_date')->orderBy('j.id')->orderBy('journal_lines.id')->limit(($rows->currentPage()-1)*$rows->perPage())->get();foreach($previous as $line)$running[$line->currency_id]=($running[$line->currency_id]??0)+(int)round((float)$line->debit*10000)-(int)round((float)$line->credit*10000);
+   $previous=$before->select('journal_lines.debit','journal_lines.credit','j.currency_id')->orderBy('j.entry_date')->orderBy('j.id')->orderBy('journal_lines.id')->limit(($rows->currentPage()-1)*$rows->perPage())->get();foreach($previous as $line)$running[$line->currency_id]=($running[$line->currency_id]??BigDecimal::zero())->plus((string)$line->debit)->minus((string)$line->credit);
   }
-  $balances=[];foreach($rows as $line){$running[$line->currency_id]=($running[$line->currency_id]??0)+(int)round((float)$line->debit*10000)-(int)round((float)$line->credit*10000);$balances[$line->id]=number_format($running[$line->currency_id]/10000,4,'.',',');}
-  return view('finance.ledger.index',compact('accounts','currencies','account','currency','filters','rows','openingMap','totals','balances'));
+  $balances=[];$balanceDirections=[];$debitNonzero=[];$creditNonzero=[];foreach($rows as $line){$running[$line->currency_id]=($running[$line->currency_id]??BigDecimal::zero())->plus((string)$line->debit)->minus((string)$line->credit);$balances[$line->id]=(string)$running[$line->currency_id];$balanceDirections[$line->id]=$running[$line->currency_id]->compareTo(BigDecimal::zero())>0?'in':($running[$line->currency_id]->compareTo(BigDecimal::zero())<0?'out':'neutral');$debitNonzero[$line->id]=BigDecimal::of((string)$line->debit)->compareTo(BigDecimal::zero())!==0;$creditNonzero[$line->id]=BigDecimal::of((string)$line->credit)->compareTo(BigDecimal::zero())!==0;}
+  return view('finance.ledger.index',compact('accounts','currencies','account','currency','filters','rows','openingMap','openingNet','openingDirections','totals','balances','balanceDirections','debitNonzero','creditNonzero'));
  }
 }

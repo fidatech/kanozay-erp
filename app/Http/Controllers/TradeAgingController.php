@@ -1,5 +1,6 @@
 <?php
 namespace App\Http\Controllers;
+use Brick\Math\BigDecimal;
 use App\Models\TradeDocument;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -11,12 +12,13 @@ class TradeAgingController extends Controller {
   $documents=TradeDocument::with(['party','currency'])->where('type',$type)->whereDate('document_date','<=',$asOf)->withSum(['allocations as allocated_as_of'=>fn($q)=>$q->whereDate('created_at','<=',$asOf)],'amount')->orderBy('due_date')->get();
   $rows=[];$totals=[];
   foreach($documents as $document){
-   $balance=max(0,round((float)$document->amount-(float)($document->allocated_as_of??0),4));if($balance<=0)continue;
+   $balance=BigDecimal::of((string)$document->amount)->minus((string)($document->allocated_as_of??'0'));
+   if($balance->compareTo(BigDecimal::zero())<=0)continue;
    $days=(int)\Carbon\Carbon::parse($document->due_date)->startOfDay()->diffInDays(\Carbon\Carbon::parse($asOf)->startOfDay(),false);
    $bucket=$days<=0?'current':($days<=30?'1_30':($days<=60?'31_60':($days<=90?'61_90':'90_plus')));
    $code=$document->currency?->code??'—';$rows[]=['document'=>$document,'balance'=>$balance,'days'=>max(0,$days),'bucket'=>$bucket];
-   if(!isset($totals[$code]))$totals[$code]=['current'=>0,'1_30'=>0,'31_60'=>0,'61_90'=>0,'90_plus'=>0,'total'=>0];
-   $totals[$code][$bucket]+=$balance;$totals[$code]['total']+=$balance;
+   if(!isset($totals[$code]))$totals[$code]=['current'=>BigDecimal::zero(),'1_30'=>BigDecimal::zero(),'31_60'=>BigDecimal::zero(),'61_90'=>BigDecimal::zero(),'90_plus'=>BigDecimal::zero(),'total'=>BigDecimal::zero()];
+   $totals[$code][$bucket]=$totals[$code][$bucket]->plus($balance);$totals[$code]['total']=$totals[$code]['total']->plus($balance);
   }
   return view('finance.documents.aging',['type'=>$type,'asOf'=>$asOf,'rows'=>$rows,'totals'=>$totals]);
  }

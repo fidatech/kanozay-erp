@@ -14,5 +14,11 @@ class GeneralLedgerTest extends TestCase {
   foreach([[$afn,'posted',10],[$afn,'draft',999],[$usd,'posted',25]] as $i=>$v){[$currency,$status,$amount]=$v;$entry=JournalEntry::create(['number'=>'JE-'.($i+1),'entry_date'=>'2026-10-20','description'=>'Test','status'=>$status,'currency_id'=>$currency->id,'created_by'=>$u->id]);$entry->lines()->create(['ledger_account_id'=>$a->id,'debit'=>$amount,'credit'=>0]);}
   $response=$this->actingAs($u)->get(route('finance.ledger.index',['account_id'=>$a->id,'currency_id'=>$afn->id]));$response->assertOk()->assertSee('>10</span>',false)->assertDontSee('>999</span>',false)->assertDontSee('>25</span>',false);
  }
+ public function test_fractional_running_balance_is_summed_exactly():void {
+  $u=User::factory()->create();Permission::findOrCreate('administration.view','web');$u->givePermissionTo('administration.view');
+  $currency=Currency::create(['code'=>'AFN','name'=>'Afghani','is_active'=>true,'is_base'=>true]);$account=LedgerAccount::create(['code'=>'1111','name'=>'Cash','type'=>'asset','is_active'=>true,'is_group'=>false]);
+  foreach(['0.1001','0.2002'] as $i=>$amount){$entry=JournalEntry::create(['number'=>'JE-DECIMAL-'.$i,'entry_date'=>'2026-10-20','description'=>'Fractional ledger','status'=>'posted','currency_id'=>$currency->id,'created_by'=>$u->id]);$entry->lines()->create(['ledger_account_id'=>$account->id,'debit'=>$amount,'credit'=>'0']);}
+  $this->actingAs($u)->get(route('finance.ledger.index',['account_id'=>$account->id,'currency_id'=>$currency->id]))->assertOk()->assertSee('0.3003');
+ }
  public function test_unprivileged_user_cannot_view_ledger():void {$this->actingAs(User::factory()->create())->get(route('finance.ledger.index'))->assertForbidden();}
 }
