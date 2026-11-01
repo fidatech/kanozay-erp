@@ -69,6 +69,16 @@
  </tr>
  @empty<tr><td colspan="11">No saved material requirements are available for this older plan. Do not use its recipe for purchasing or production without reviewing and recreating the plan.</td></tr>@endforelse
  </tbody></table></div>
+ @if($order->materials->sum(fn ($line) => $line->wastes->count()) > 0)
+ <h3>Recorded material waste</h3>
+ <div class="table-wrap"><table><thead><tr><th>Material</th><th>Rejected quantity</th><th>Unit</th><th>Reason</th><th>Recorded at</th></tr></thead><tbody>
+ @foreach($order->materials as $line)
+  @foreach($line->wastes as $waste)
+  <tr><td>{{ $line->material_name }}</td><td>{{ $waste->quantity }}</td><td>{{ $line->unit }}</td><td>{{ $waste->reason }}</td><td>{{ $waste->created_at->format('Y-m-d H:i') }}</td></tr>
+  @endforeach
+ @endforeach
+ </tbody></table></div>
+ @endif
  @can('administration.update')
  @can('inventory.update')
  @if($order->status === 'reserved')
