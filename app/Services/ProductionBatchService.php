@@ -19,12 +19,16 @@ class ProductionBatchService
             if ($order->batch()->exists()) {
                 $this->reject('This production order already has a batch.');
             }
-            $recipe = $order->recipe;
+            // Use the specification frozen when this production plan was created.
+            // Legacy orders without snapshots fall back to the linked recipe.
+            $unit = $order->planned_package_unit;
+            $weight = $order->planned_package_weight_kg;
+            $productCode = $order->planned_product_code;
             $good = FinishedGood::query()->findOrFail($good->id);
-            if (! $good->is_active || $good->package_unit !== $recipe->package_unit
-                || BigDecimal::of((string) $good->package_weight_kg)->compareTo(BigDecimal::of((string) $recipe->package_weight_kg)) !== 0
-                || (filled($recipe->product_code) && $good->sku !== $recipe->product_code)) {
-                $this->reject('Finished good SKU, unit and package weight must match the production recipe.');
+            if (! $weight || ! $unit || ! $good->is_active || $good->package_unit !== $unit
+                || BigDecimal::of((string) $good->package_weight_kg)->compareTo(BigDecimal::of((string) $weight)) !== 0
+                || (filled($productCode) && $good->sku !== $productCode)) {
+                $this->reject('Finished good SKU, unit and package weight must match the saved production plan.');
             }
             if ($reported < 1 || $reported > $order->package_count) {
                 $this->reject('Reported packages must be between one and the planned package count.');
