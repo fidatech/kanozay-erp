@@ -42,10 +42,10 @@ $balance=$subtotal-$advances;
 </td><td>{{ number_format((float)$item->quantity,4) }}</td><td>{{ number_format((float)$item->unit_price,4) }}</td><td>{{ number_format($line,2) }}</td><td>{{ $subtotal>0 ? number_format($allocated,2) : 'Pending' }}</td><td>{{ $subtotal>0 ? number_format($line+$allocated,2) : 'Pending' }}</td></tr>
 @endforeach
 </tbody><tfoot><tr><th colspan="4">Total ({{ $currency }})</th><th>{{ number_format($subtotal,2) }}</th><th>{{ $subtotal>0 ? number_format($expenses,2) : 'Pending' }}</th><th>{{ $subtotal>0 ? number_format($landed,2) : 'Pending' }}</th></tr></tfoot></table></div>
-<p class="muted">Estimated expenses are allocated proportionally by item value. Expense allocation is an estimate only. Goods receipts post stock quantities without inventory valuation or finance entries. Zero-value orders cannot be allocated.</p></div>
+<p class="muted">Estimated expenses are allocated proportionally by item value. Expense allocation is an estimate only. Goods receipts post stock quantities and preserve purchase-value snapshots without inventory valuation or finance entries. Zero-value orders cannot be allocated.</p></div>
 <div class="panel">
 <h2>Goods Received Notes</h2>
-<p class="muted">Only confirmed orders can receive goods. Quantities use the linked material's unit. Posting a GRN increases inventory immediately; it does not create a payable or journal entry.</p>
+<p class="muted">Only confirmed orders can receive goods. Quantities use the linked material's unit. Posting a GRN increases inventory immediately and freezes purchase prices in the order currency. These snapshots exclude other landed costs, FX conversion and accounting entries.</p>
 @if(in_array($order->status,['confirmed','partially_received'],true))
 @can('inventory.update')
 <form method="POST" action="{{ route('purchases.orders.receipts.store',$order) }}" style="margin:16px 0">@csrf
@@ -70,10 +70,16 @@ $balance=$subtotal-$advances;
 </form>
 @endcan
 @endif
-<div class="table-wrap"><table><thead><tr><th>GRN number</th><th>Date</th><th>Supplier reference</th><th>Lines</th><th>Status</th></tr></thead><tbody>
+<div class="table-wrap"><table><thead><tr><th>GRN number</th><th>Date</th><th>Supplier reference</th><th>Lines</th><th>Purchase value snapshot</th><th>Status</th></tr></thead><tbody>
 @forelse($order->receipts as $receipt)
-<tr><td><strong>{{ $receipt->number }}</strong></td><td>{{ $receipt->received_on->format('Y-m-d') }}</td><td>{{ $receipt->supplier_reference ?? '—' }}</td><td>{{ $receipt->lines->count() }}</td><td>{{ ucfirst($receipt->status) }}</td></tr>
-@empty<tr><td colspan="5" class="muted">No goods received yet.</td></tr>@endforelse
+@php
+$receiptValue = null;
+if ($receipt->cost_currency_code && $receipt->lines->isNotEmpty() && $receipt->lines->every(fn ($line) => $line->line_subtotal_snapshot !== null)) {
+    $receiptValue = $receipt->lines->reduce(fn ($total, $line) => $total->plus((string) $line->line_subtotal_snapshot), \Brick\Math\BigDecimal::zero());
+}
+@endphp
+<tr><td><strong>{{ $receipt->number }}</strong></td><td>{{ $receipt->received_on->format('Y-m-d') }}</td><td>{{ $receipt->supplier_reference ?? '—' }}</td><td>{{ $receipt->lines->count() }}</td><td>{{ $receiptValue === null ? 'Not captured' : rtrim(rtrim((string) $receiptValue->toScale(10), '0'), '.') . ' ' . $receipt->cost_currency_code }}</td><td>{{ ucfirst($receipt->status) }}</td></tr>
+@empty<tr><td colspan="6" class="muted">No goods received yet.</td></tr>@endforelse
 </tbody></table></div>
 </div>
 <div class="panel"><h2>Purchase Expenses</h2>

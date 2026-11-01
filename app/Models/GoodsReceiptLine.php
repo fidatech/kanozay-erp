@@ -7,9 +7,14 @@ use LogicException;
 
 class GoodsReceiptLine extends Model
 {
-    protected $fillable = ['purchase_order_item_id', 'inventory_material_id', 'quantity', 'unit'];
+    protected $fillable = ['purchase_order_item_id', 'inventory_material_id', 'quantity', 'unit',
+        'unit_price_snapshot', 'line_subtotal_snapshot'];
 
-    protected $casts = ['quantity' => 'decimal:6'];
+    protected $casts = [
+        'quantity' => 'decimal:6',
+        'unit_price_snapshot' => 'decimal:4',
+        'line_subtotal_snapshot' => 'decimal:10',
+    ];
 
     protected static function booted(): void
     {

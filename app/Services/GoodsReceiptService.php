@@ -81,6 +81,10 @@ class GoodsReceiptService
                 'notes' => $data['notes'] ?? null,
                 'status' => 'draft',
                 'created_by' => $actorId,
+                // Keep the purchase currency with the receipt. Historical GRNs
+                // must not be revalued if currency settings later change.
+                'cost_currency_id' => $locked->currency_id,
+                'cost_currency_code' => $locked->currency()->firstOrFail()->code,
             ]);
 
             foreach ($requested as $itemId => $quantity) {
@@ -91,6 +95,11 @@ class GoodsReceiptService
                     'inventory_material_id' => $material->id,
                     'quantity' => (string) $quantity->toScale(6),
                     'unit' => $material->unit,
+                    // Exact PO-currency purchase price, excluding freight,
+                    // other landed costs, tax and any FX conversion.
+                    'unit_price_snapshot' => (string) BigDecimal::of((string) $item->unit_price)->toScale(4),
+                    'line_subtotal_snapshot' => (string) BigDecimal::of((string) $item->unit_price)
+                        ->multipliedBy($quantity)->toScale(10),
                 ]);
                 $this->stock->post($material, [
                     'type' => 'receipt', 'direction' => 'in',

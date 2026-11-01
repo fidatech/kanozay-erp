@@ -10,6 +10,7 @@ class GoodsReceipt extends Model
     protected $fillable = [
         'number', 'purchase_order_id', 'receipt_token', 'received_on',
         'supplier_reference', 'status', 'notes', 'created_by',
+        'cost_currency_id', 'cost_currency_code',
     ];
 
     protected $casts = ['received_on' => 'date'];
