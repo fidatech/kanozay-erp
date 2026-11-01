@@ -40,21 +40,25 @@ class ProductionOrderController extends Controller {
                 'package_count' => $data['package_count'],
                 'notes' => $data['notes'] ?? null,
                 'created_by' => $request->user()->id,
+                'recipe_name_snapshot' => $recipe->name,
+                'product_code_snapshot' => $recipe->product_code,
+                'package_weight_kg_snapshot' => $recipe->package_weight_kg,
+                'package_unit_snapshot' => $recipe->package_unit,
             ]);
             foreach ($lines as $line) {
                 $quantity = (string) $line->quantity_per_package;
-                [$whole, $fraction] = array_pad(explode('.', $quantity, 2), 2, '');
-                $count = (int) $data['package_count'];
-                $fractionMicros = (int) str_pad(substr($fraction, 0, 6), 6, '0');
-                $fractionTotal = $fractionMicros * $count;
-                $requiredWhole = (int) $whole * $count + intdiv($fractionTotal, 1000000);
-                $required = $requiredWhole.'.'.str_pad((string) ($fractionTotal % 1000000), 6, '0', STR_PAD_LEFT);
+                $required = BigDecimal::of($quantity)->multipliedBy((string) $data['package_count']);
+                if ($required->isGreaterThan(BigDecimal::of('99999999999999.999999'))) {
+                    throw ValidationException::withMessages([
+                        'package_count' => 'Material requirement exceeds the supported stock quantity range.',
+                    ]);
+                }
                 $order->materials()->create([
                     'line_number' => $line->line_number,
                     'material_name' => $line->material_name,
                     'unit' => $line->unit,
                     'quantity_per_package' => $quantity,
-                    'required_quantity' => $required,
+                    'required_quantity' => (string) $required->toScale(6),
                     'is_packaging' => $line->is_packaging,
                 ]);
             }
