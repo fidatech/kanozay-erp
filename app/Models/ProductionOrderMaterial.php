@@ -9,6 +9,7 @@ class ProductionOrderMaterial extends Model
     protected $fillable = [
         'line_number', 'material_name', 'unit', 'quantity_per_package',
         'required_quantity', 'is_packaging', 'inventory_material_id',
+        'reserved_quantity', 'issued_quantity',
     ];
 
     protected $casts = [
