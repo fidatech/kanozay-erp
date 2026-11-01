@@ -27,6 +27,7 @@
 <a href="{{ route('finance.exchanges.index') }}"><i class="fa-solid fa-arrow-right-arrow-left"></i>Currency Exchange</a>
 <a href="{{ route('finance.ledger.index') }}"><i class="fa-solid fa-list-ol"></i>General Ledger</a>
 <a href="{{ route('finance.trial-balance.index') }}"><i class="fa-solid fa-scale-balanced"></i>Trial Balance</a>
+<a href="{{ route('finance.profit-and-loss.index') }}"><i class="fa-solid fa-chart-line"></i>Profit and Loss</a>
 <a href="{{ route('finance.reconciliation.index') }}"><i class="fa-solid fa-scale-balanced"></i>Settlement Reconciliation</a>
 </div>
 <p style="color:#7086a0;margin-top:18px">Counts represent actual registered records, not monetary balances. Multi-currency totals are intentionally not combined.</p>
