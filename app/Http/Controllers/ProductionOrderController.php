@@ -25,6 +25,8 @@ class ProductionOrderController extends Controller {
         $order = DB::transaction(function () use ($request, $data) {
             $recipe = ProductionRecipe::whereKey($data['production_recipe_id'])->lockForUpdate()->firstOrFail();
             abort_unless($recipe->status === 'approved', 422, 'Recipe must be approved.');
+            $lines = $recipe->lines()->get();
+            abort_if($lines->isEmpty(), 422, 'Approved recipe has no material lines.');
             $order = ProductionOrder::create([
                 'number' => 'PO-PENDING-'.bin2hex(random_bytes(8)),
                 'production_recipe_id' => $recipe->id,
@@ -32,6 +34,23 @@ class ProductionOrderController extends Controller {
                 'notes' => $data['notes'] ?? null,
                 'created_by' => $request->user()->id,
             ]);
+            foreach ($lines as $line) {
+                $quantity = (string) $line->quantity_per_package;
+                [$whole, $fraction] = array_pad(explode('.', $quantity, 2), 2, '');
+                $count = (int) $data['package_count'];
+                $fractionMicros = (int) str_pad(substr($fraction, 0, 6), 6, '0');
+                $fractionTotal = $fractionMicros * $count;
+                $requiredWhole = (int) $whole * $count + intdiv($fractionTotal, 1000000);
+                $required = $requiredWhole.'.'.str_pad((string) ($fractionTotal % 1000000), 6, '0', STR_PAD_LEFT);
+                $order->materials()->create([
+                    'line_number' => $line->line_number,
+                    'material_name' => $line->material_name,
+                    'unit' => $line->unit,
+                    'quantity_per_package' => $quantity,
+                    'required_quantity' => $required,
+                    'is_packaging' => $line->is_packaging,
+                ]);
+            }
             $order->update(['number' => 'PRD-'.str_pad((string) $order->id, 6, '0', STR_PAD_LEFT)]);
             return $order;
         });
@@ -39,11 +58,11 @@ class ProductionOrderController extends Controller {
     }
     public function show(Request $request, ProductionOrder $order) {
         abort_unless($request->user()->can('administration.view'), 403);
-        $order->load('recipe.lines');
-        $materials = $order->recipe->lines->map(fn ($line) => [
+        $order->load('recipe', 'materials');
+        $materials = $order->materials->map(fn ($line) => [
             'name' => $line->material_name,
             'unit' => $line->unit,
-            'quantity' => round((float) $line->quantity_per_package * $order->package_count, 6),
+            'quantity' => $line->required_quantity,
             'packaging' => (bool) $line->is_packaging,
         ]);
         return view('production.order-show', compact('order', 'materials'));
