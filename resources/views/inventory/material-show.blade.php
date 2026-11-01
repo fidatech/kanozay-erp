@@ -25,7 +25,7 @@
     <td>{{ ucwords(str_replace('_', ' ', $movement->type)) }}</td>
     <td><strong style="color:{{ $movement->direction === 'in' ? '#08734b' : '#b42318' }}">{{ strtoupper($movement->direction) }}</strong></td>
     <td>{{ $movement->quantity }} {{ $material->unit }}</td>
-    <td>{{ str_replace('_', ' ', $movement->reference_type) }} #{{ $movement->reference_id }}</td>
+    <td>{{ ucfirst(str_replace('_', ' ', $movement->reference_type)) }} #{{ $movement->reference_id }}</td>
     <td>{{ $movement->notes ?? '—' }}</td>
    </tr>
   @empty
