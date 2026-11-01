@@ -26,7 +26,7 @@ class ProductionOrderPlanningTest extends TestCase {
   $this->assertSame('planned',$order->status);
   $this->assertSame('PRD-000001',$order->number);
   $this->assertDatabaseHas('production_order_materials',['production_order_id'=>$order->id,'material_name'=>'Dextrose','required_quantity'=>50]);
-  $this->actingAs($user)->get(route('production.orders.show',$order))->assertOk()->assertSee('50.000000')->assertSee('Not yet connected');
+  $this->actingAs($user)->get(route('production.orders.show',$order))->assertOk()->assertSee('50.000000')->assertSee('Not mapped');
  }
  public function test_material_requirements_are_immutable_after_recipe_changes(): void {
   $user=User::factory()->create();

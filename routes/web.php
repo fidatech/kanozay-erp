@@ -25,6 +25,7 @@ Route::middleware('auth')->post('/inventory/materials', [\App\Http\Controllers\I
 Route::middleware('auth')->post('/inventory/materials/{material}/opening', [\App\Http\Controllers\InventoryMaterialController::class, 'opening'])->name('inventory.materials.opening');
 Route::middleware('auth')->get('/production/orders', [\App\Http\Controllers\ProductionOrderController::class, 'index'])->name('production.orders.index');
 Route::middleware('auth')->post('/production/orders', [\App\Http\Controllers\ProductionOrderController::class, 'store'])->name('production.orders.store');
+Route::middleware('auth')->patch('/production/orders/{order}/materials/{materialLine}/inventory', [\App\Http\Controllers\ProductionOrderController::class, 'linkMaterial'])->name('production.orders.materials.link');
 Route::middleware('auth')->get('/production/orders/{order}', [\App\Http\Controllers\ProductionOrderController::class, 'show'])->name('production.orders.show');
 Route::middleware('auth')->get('/production/recipes', [\App\Http\Controllers\ProductionRecipeController::class, 'index'])->name('production.recipes.index');
 Route::middleware('auth')->get('/production/recipes/{recipe}', [\App\Http\Controllers\ProductionRecipeController::class, 'show'])->name('production.recipes.show');

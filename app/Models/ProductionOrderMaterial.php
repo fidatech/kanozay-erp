@@ -8,7 +8,7 @@ class ProductionOrderMaterial extends Model
 {
     protected $fillable = [
         'line_number', 'material_name', 'unit', 'quantity_per_package',
-        'required_quantity', 'is_packaging',
+        'required_quantity', 'is_packaging', 'inventory_material_id',
     ];
 
     protected $casts = [
@@ -16,6 +16,11 @@ class ProductionOrderMaterial extends Model
         'required_quantity' => 'decimal:6',
         'is_packaging' => 'boolean',
     ];
+
+    public function inventoryMaterial()
+    {
+        return $this->belongsTo(InventoryMaterial::class, 'inventory_material_id');
+    }
 
     public function order()
     {
