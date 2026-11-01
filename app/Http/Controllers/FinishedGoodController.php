@@ -16,6 +16,15 @@ class FinishedGoodController extends Controller
         ]);
     }
 
+    public function show(Request $request, FinishedGood $good)
+    {
+        abort_unless($request->user()->can('inventory.view'), 403);
+        return view('production.finished-good-show', [
+            'good' => $good,
+            'movements' => $good->movements()->with('batch.order')->latest('id')->paginate(25),
+        ]);
+    }
+
     public function store(Request $request)
     {
         abort_unless($request->user()->can('inventory.create'), 403);
