@@ -35,7 +35,7 @@ class CashMovementReportTest extends TestCase
         return [$account, $ledger];
     }
 
-    private function post(User $user, Currency $currency, LedgerAccount $ledger, string $number, string $date, string $status, string $debit, string $credit): void
+    private function createJournalLine(User $user, Currency $currency, LedgerAccount $ledger, string $number, string $date, string $status, string $debit, string $credit): void
     {
         $entry = JournalEntry::create(['number' => $number, 'entry_date' => $date, 'description' => $number, 'status' => $status, 'currency_id' => $currency->id, 'created_by' => $user->id]);
         $entry->lines()->create(['ledger_account_id' => $ledger->id, 'debit' => $debit, 'credit' => $credit]);
@@ -48,12 +48,12 @@ class CashMovementReportTest extends TestCase
         $usd = Currency::create(['code' => 'USD', 'name' => 'US Dollar', 'is_active' => true, 'is_base' => false]);
         [, $cashLedger] = $this->makeFinancialAccount($user, $afn, 'cashbox', 'Factory cash');
         [, $bankLedger] = $this->makeFinancialAccount($user, $usd, 'bank', 'USD bank');
-        $this->post($user, $afn, $cashLedger, 'CM-1', '2026-09-30', 'posted', '100', '0');
-        $this->post($user, $afn, $cashLedger, 'CM-2', '2026-10-10', 'posted', '30', '0');
-        $this->post($user, $afn, $cashLedger, 'CM-3', '2026-10-15', 'posted', '0', '10');
-        $this->post($user, $afn, $cashLedger, 'CM-4', '2026-11-01', 'posted', '50', '0');
-        $this->post($user, $afn, $cashLedger, 'CM-5', '2026-10-20', 'draft', '0', '25');
-        $this->post($user, $usd, $bankLedger, 'CM-6', '2026-10-12', 'posted', '5', '0');
+        $this->createJournalLine($user, $afn, $cashLedger, 'CM-1', '2026-09-30', 'posted', '100', '0');
+        $this->createJournalLine($user, $afn, $cashLedger, 'CM-2', '2026-10-10', 'posted', '30', '0');
+        $this->createJournalLine($user, $afn, $cashLedger, 'CM-3', '2026-10-15', 'posted', '0', '10');
+        $this->createJournalLine($user, $afn, $cashLedger, 'CM-4', '2026-11-01', 'posted', '50', '0');
+        $this->createJournalLine($user, $afn, $cashLedger, 'CM-5', '2026-10-20', 'draft', '0', '25');
+        $this->createJournalLine($user, $usd, $bankLedger, 'CM-6', '2026-10-12', 'posted', '5', '0');
 
         $response = $this->actingAs($user)->get(route('finance.cash-movements.index', ['from' => '2026-10-01', 'to' => '2026-10-31']));
         $response->assertOk()->assertSee('Factory cash')->assertSee('USD bank')->assertSee('100')->assertSee('30')->assertSee('10')->assertSee('120')->assertSee('5')->assertDontSee('170')->assertDontSee('35');
@@ -66,7 +66,7 @@ class CashMovementReportTest extends TestCase
         $user = $this->allowedUser();
         $currency = Currency::create(['code' => 'AFN', 'name' => 'Afghani', 'is_active' => true, 'is_base' => true]);
         [$account, $ledger] = $this->makeFinancialAccount($user, $currency, 'sarafi', 'Sarafi counter');
-        $this->post($user, $currency, $ledger, 'CM-CSV', '2026-10-10', 'posted', '0.3003', '0');
+        $this->createJournalLine($user, $currency, $ledger, 'CM-CSV', '2026-10-10', 'posted', '0.3003', '0');
         $response = $this->actingAs($user)->get(route('finance.cash-movements.index', ['from' => '2026-10-01', 'to' => '2026-10-31', 'export' => 'csv']));
         $response->assertOk()->assertHeader('content-type', 'text/csv; charset=UTF-8');
         $this->assertStringContainsString($account->name, $response->streamedContent());
