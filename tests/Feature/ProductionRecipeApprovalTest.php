@@ -30,6 +30,33 @@ class ProductionRecipeApprovalTest extends TestCase {
   $user->givePermissionTo('administration.view');
   $this->actingAs($user)->get(route('production.recipes.show',$recipe))->assertOk()->assertSee('Dextrose');
  }
+ public function test_weight_tolerance_is_checked_at_six_decimal_precision(): void {
+  $user = User::factory()->create();
+  Permission::findOrCreate('administration.update', 'web');
+  $user->givePermissionTo('administration.update');
+
+  $within = ProductionRecipe::create([
+   'name' => 'Boundary formula', 'method' => 'powder_blending',
+   'package_weight_kg' => '25.0000', 'package_unit' => 'bag', 'status' => 'draft',
+  ]);
+  $within->lines()->create([
+   'line_number' => 1, 'material_name' => 'Ingredient', 'unit' => 'kg',
+   'quantity_per_package' => '25.010000',
+  ]);
+  $this->actingAs($user)->post(route('production.recipes.approve', $within))->assertRedirect();
+  $this->assertSame('approved', $within->fresh()->status);
+
+  $outside = ProductionRecipe::create([
+   'name' => 'Outside tolerance', 'method' => 'powder_blending',
+   'package_weight_kg' => '25.0000', 'package_unit' => 'bag', 'status' => 'draft',
+  ]);
+  $outside->lines()->create([
+   'line_number' => 1, 'material_name' => 'Ingredient', 'unit' => 'kg',
+   'quantity_per_package' => '25.010001',
+  ]);
+  $this->actingAs($user)->post(route('production.recipes.approve', $outside))->assertSessionHasErrors('approval');
+  $this->assertSame('draft', $outside->fresh()->status);
+ }
  public function test_mismatched_weight_blocks_approval(): void {
   $user=User::factory()->create();
   Permission::findOrCreate('administration.update','web');
