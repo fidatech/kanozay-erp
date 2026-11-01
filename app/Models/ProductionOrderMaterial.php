@@ -14,6 +14,8 @@ class ProductionOrderMaterial extends Model
     protected $casts = [
         'quantity_per_package' => 'decimal:6',
         'required_quantity' => 'decimal:6',
+        'reserved_quantity' => 'decimal:6',
+        'issued_quantity' => 'decimal:6',
         'is_packaging' => 'boolean',
     ];
 

@@ -12,6 +12,7 @@ class InventoryMaterial extends Model
         'is_packaging' => 'boolean',
         'is_active' => 'boolean',
         'on_hand_quantity' => 'decimal:6',
+        'reserved_quantity' => 'decimal:6',
     ];
 
     public function movements()

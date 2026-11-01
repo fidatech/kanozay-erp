@@ -49,6 +49,9 @@ class InventoryStockService
             if ($next->isLessThan(0)) {
                 throw ValidationException::withMessages(['quantity' => 'Stock issue exceeds the available quantity.']);
             }
+            if ($directions[$type] === 'out' && $next->isLessThan(BigDecimal::of((string) $locked->reserved_quantity))) {
+                throw ValidationException::withMessages(['quantity' => 'Stock is reserved for production orders.']);
+            }
             if ($next->isGreaterThan(BigDecimal::of('99999999999999.999999'))) {
                 throw ValidationException::withMessages(['quantity' => 'Stock balance exceeds the supported range.']);
             }
