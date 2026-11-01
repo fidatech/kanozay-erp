@@ -43,9 +43,9 @@ class TrialBalanceTest extends TestCase
         $otherCurrency->lines()->create(['ledger_account_id' => $cash->id, 'debit' => '20', 'credit' => '0']);
 
         $response = $this->actingAs($user)->get(route('finance.trial-balance.index', ['as_of' => '2026-10-21']));
-        $response->assertOk()->assertSee('125.125')->assertSee('AFN')->assertSee('USD')->assertDontSee('999')->assertDontSee('175.125');
+        $response->assertOk()->assertSee('125.125')->assertSee('AFN Trial Balance')->assertSee('USD Trial Balance')->assertDontSee('999')->assertDontSee('175.125');
         $this->actingAs($user)->get(route('finance.trial-balance.index', ['as_of' => '2026-10-21', 'currency_id' => $afn->id]))
-            ->assertOk()->assertSee('125.125')->assertDontSee('USD');
+            ->assertOk()->assertSee('125.125')->assertDontSee('USD Trial Balance');
     }
 
     public function test_csv_export_is_filtered_to_the_requested_as_of_date(): void
