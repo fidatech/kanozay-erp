@@ -24,6 +24,12 @@ Route::middleware('auth')->get('/inventory/materials', [\App\Http\Controllers\In
 Route::middleware('auth')->get('/inventory/materials/{material}', [\App\Http\Controllers\InventoryMaterialController::class, 'show'])->name('inventory.materials.show');
 Route::middleware('auth')->post('/inventory/materials', [\App\Http\Controllers\InventoryMaterialController::class, 'store'])->name('inventory.materials.store');
 Route::middleware('auth')->post('/inventory/materials/{material}/opening', [\App\Http\Controllers\InventoryMaterialController::class, 'opening'])->name('inventory.materials.opening');
+Route::middleware('auth')->get('/production/finished-goods', [\App\Http\Controllers\FinishedGoodController::class, 'index'])->name('production.finished-goods.index');
+Route::middleware('auth')->post('/production/finished-goods', [\App\Http\Controllers\FinishedGoodController::class, 'store'])->name('production.finished-goods.store');
+Route::middleware('auth')->post('/production/orders/{order}/batches', [\App\Http\Controllers\ProductionBatchController::class, 'store'])->name('production.orders.batches.store');
+Route::middleware('auth')->post('/production/orders/{order}/batches/{batch}/checks', [\App\Http\Controllers\ProductionBatchController::class, 'check'])->name('production.orders.batches.checks.store');
+Route::middleware('auth')->post('/production/orders/{order}/batches/{batch}/decide', [\App\Http\Controllers\ProductionBatchController::class, 'decide'])->name('production.orders.batches.decide');
+Route::middleware('auth')->post('/production/orders/{order}/batches/{batch}/release', [\App\Http\Controllers\ProductionBatchController::class, 'release'])->name('production.orders.batches.release');
 Route::middleware('auth')->get('/production/orders', [\App\Http\Controllers\ProductionOrderController::class, 'index'])->name('production.orders.index');
 Route::middleware('auth')->post('/production/orders', [\App\Http\Controllers\ProductionOrderController::class, 'store'])->name('production.orders.store');
 Route::middleware('auth')->patch('/production/orders/{order}/materials/{materialLine}/inventory', [\App\Http\Controllers\ProductionOrderController::class, 'linkMaterial'])->name('production.orders.materials.link');
