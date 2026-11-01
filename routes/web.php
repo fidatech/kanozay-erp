@@ -24,6 +24,7 @@ Route::middleware('auth')->get('/inventory/materials', [\App\Http\Controllers\In
 Route::middleware('auth')->get('/inventory/materials/{material}', [\App\Http\Controllers\InventoryMaterialController::class, 'show'])->name('inventory.materials.show');
 Route::middleware('auth')->post('/inventory/materials', [\App\Http\Controllers\InventoryMaterialController::class, 'store'])->name('inventory.materials.store');
 Route::middleware('auth')->post('/inventory/materials/{material}/opening', [\App\Http\Controllers\InventoryMaterialController::class, 'opening'])->name('inventory.materials.opening');
+Route::middleware('auth')->post('/inventory/materials/{material}/adjustments', [\App\Http\Controllers\InventoryMaterialController::class, 'adjust'])->name('inventory.materials.adjustments.store');
 Route::middleware('auth')->get('/production/finished-goods', [\App\Http\Controllers\FinishedGoodController::class, 'index'])->name('production.finished-goods.index');
 Route::middleware('auth')->get('/production/finished-goods/{good}', [\App\Http\Controllers\FinishedGoodController::class, 'show'])->name('production.finished-goods.show');
 Route::middleware('auth')->post('/production/finished-goods', [\App\Http\Controllers\FinishedGoodController::class, 'store'])->name('production.finished-goods.store');

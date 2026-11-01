@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\InventoryMaterial;
+use App\Services\InventoryAdjustmentService;
 use App\Services\InventoryStockService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -64,5 +65,39 @@ class InventoryMaterialController extends Controller
         ]);
 
         return redirect()->route('inventory.materials.index')->with('success', 'Opening stock recorded in the inventory ledger.');
+    }
+
+    public function adjust(Request $request, InventoryMaterial $material, InventoryAdjustmentService $adjustments)
+    {
+        abort_unless($request->user()->can('inventory.update'), 403);
+        $request->merge(['quantity' => $this->normalizeQuantity($request->input('quantity'))]);
+        $data = $request->validate([
+            'direction' => ['required', Rule::in(['adjustment_in', 'adjustment_out'])],
+            'quantity' => ['required', 'regex:/^(?:0|[1-9][0-9]{0,13})(?:\.[0-9]{1,6})?$/', 'numeric', 'gt:0'],
+            'occurred_on' => ['required', 'date', 'before_or_equal:today'],
+            'reason' => ['required', 'string', 'min:5', 'max:1000'],
+            'idempotency_key' => ['required', 'uuid'],
+        ]);
+
+        $adjustments->post($material, $data, $request->user());
+
+        return redirect()->route('inventory.materials.show', $material)->with('success', 'Stock adjustment posted to the immutable inventory ledger.');
+    }
+
+    private function normalizeQuantity(mixed $value): mixed
+    {
+        if (! is_string($value)) {
+            return $value;
+        }
+
+        $value = strtr($value, [
+            '٠' => '0', '١' => '1', '٢' => '2', '٣' => '3', '٤' => '4',
+            '٥' => '5', '٦' => '6', '٧' => '7', '٨' => '8', '٩' => '9',
+            '۰' => '0', '۱' => '1', '۲' => '2', '۳' => '3', '۴' => '4',
+            '۵' => '5', '۶' => '6', '۷' => '7', '۸' => '8', '۹' => '9',
+            '٫' => '.', '٬' => ',', '،' => ',',
+        ]);
+
+        return str_replace(',', '', $value);
     }
 }
