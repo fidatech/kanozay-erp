@@ -83,7 +83,7 @@ class PurchaseOrderController extends Controller {
  }
  public function show(Request $request,PurchaseOrder $order) {
   abort_unless($request->user()->can('administration.view'),403);
-  return view('purchases.show', ['order'=>$order->load(['supplier','currency','items.inventoryMaterial','expenses','advances','receipts.lines']), 'materials'=>\App\Models\InventoryMaterial::where('is_active',true)->orderBy('name')->get()]);
+  return view('purchases.show', ['order'=>$order->load(['supplier','currency','items.inventoryMaterial','items.receiptLines','expenses','advances','receipts.lines']), 'materials'=>\App\Models\InventoryMaterial::where('is_active',true)->orderBy('name')->get()]);
  }
  public function linkMaterial(Request $request, PurchaseOrder $order, \App\Models\PurchaseOrderItem $item) {
   abort_unless($request->user()->can('purchases.update'),403);

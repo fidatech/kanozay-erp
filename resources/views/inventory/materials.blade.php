@@ -41,7 +41,7 @@
  @empty<tr><td colspan="7" class="empty">No materials yet. Add a material to begin recording inventory.</td></tr>@endforelse
  </tbody></table></div>
  {{ $materials->links() }}
- <p class="muted" style="margin-top:18px">Production plans do not reserve or consume stock. Receipts, adjustments and consumption require their own controlled workflows.</p>
+ <p class="muted" style="margin-top:18px">Production plans do not reserve or consume stock. Confirmed purchase-order receipts increase stock through posted GRNs. Production consumption and stock adjustments remain separate workflows.</p>
 </div>
 @can('inventory.create')
 <dialog class="k-modal" id="create-material-modal">

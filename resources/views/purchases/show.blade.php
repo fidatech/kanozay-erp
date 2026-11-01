@@ -43,6 +43,39 @@ $balance=$subtotal-$advances;
 @endforeach
 </tbody><tfoot><tr><th colspan="4">Total ({{ $currency }})</th><th>{{ number_format($subtotal,2) }}</th><th>{{ $subtotal>0 ? number_format($expenses,2) : 'Pending' }}</th><th>{{ $subtotal>0 ? number_format($landed,2) : 'Pending' }}</th></tr></tfoot></table></div>
 <p class="muted">Estimated expenses are allocated proportionally by item value. Final allocation will be rounded and posted during receiving. Zero-value orders cannot be allocated.</p></div>
+<div class="panel">
+<h2>Goods Received Notes</h2>
+<p class="muted">Only confirmed orders can receive goods. Quantities use the linked material's unit. Posting a GRN increases inventory immediately; it does not create a payable or journal entry.</p>
+@if(in_array($order->status,['confirmed','partially_received'],true))
+@can('inventory.update')
+<form method="POST" action="{{ route('purchases.orders.receipts.store',$order) }}" style="margin:16px 0">@csrf
+<input type="hidden" name="receipt_token" value="{{ old('receipt_token', (string) \Illuminate\Support\Str::uuid()) }}">
+<div class="po-form">
+<label>Receipt date<input type="date" name="received_on" value="{{ old('received_on',now()->toDateString()) }}" required max="{{ now()->toDateString() }}"></label>
+<label>Supplier delivery reference<input type="text" name="supplier_reference" maxlength="100" value="{{ old('supplier_reference') }}"></label>
+<label>Notes<input type="text" name="notes" maxlength="2000" value="{{ old('notes') }}"></label>
+</div>
+<div class="table-wrap"><table><thead><tr><th>PO item</th><th>Material</th><th>Ordered</th><th>Already received</th><th>Receive now</th></tr></thead><tbody>
+@foreach($order->items as $item)
+@php($received = $item->receiptLines->sum('quantity'))
+@php($remaining = max(0, (float)$item->quantity - (float)$received))
+<tr><td>{{ $item->description }}</td><td>{{ $item->inventoryMaterial?->name ?? 'Not linked' }} {{ $item->inventoryMaterial?->unit }}</td>
+<td>{{ number_format((float)$item->quantity,4) }}</td><td>{{ number_format((float)$received,6) }}</td>
+<td>@if($item->inventoryMaterial && $remaining > 0)
+<input type="number" name="quantities[{{ $item->id }}]" step="0.000001" min="0.000001" max="{{ number_format($remaining,6,'.','') }}" value="{{ old('quantities.'.$item->id) }}" placeholder="Up to {{ number_format($remaining,6) }}" style="width:160px;padding:9px;border:1px solid #cddbea;border-radius:8px">
+@else <span class="muted">{{ $remaining <= 0 ? 'Fully received' : 'No material linked' }}</span> @endif</td></tr>
+@endforeach
+</tbody></table></div>
+<button type="submit" class="btn" style="margin-top:12px" onclick="return confirm('Post these quantities to the inventory ledger? This cannot be reversed by editing the receipt.')">Post goods receipt</button>
+</form>
+@endcan
+@endif
+<div class="table-wrap"><table><thead><tr><th>GRN number</th><th>Date</th><th>Supplier reference</th><th>Lines</th><th>Status</th></tr></thead><tbody>
+@forelse($order->receipts as $receipt)
+<tr><td><strong>{{ $receipt->number }}</strong></td><td>{{ $receipt->received_on->format('Y-m-d') }}</td><td>{{ $receipt->supplier_reference ?? '—' }}</td><td>{{ $receipt->lines->count() }}</td><td>{{ ucfirst($receipt->status) }}</td></tr>
+@empty<tr><td colspan="5" class="muted">No goods received yet.</td></tr>@endforelse
+</tbody></table></div>
+</div>
 <div class="panel"><h2>Purchase Expenses</h2>
 @if($order->status==='draft')
 <form method="POST" action="{{ route('purchases.orders.expenses.store',$order) }}" class="po-form">@csrf
