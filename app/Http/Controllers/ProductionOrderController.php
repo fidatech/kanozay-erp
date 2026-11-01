@@ -2,6 +2,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ProductionOrder;
+use App\Services\ProductionMaterialService;
 use App\Models\ProductionRecipe;
 use App\Models\InventoryMaterial;
 use App\Models\ProductionOrderMaterial;
@@ -63,11 +64,24 @@ class ProductionOrderController extends Controller {
     public function show(Request $request, ProductionOrder $order) {
         abort_unless($request->user()->can('administration.view'), 403);
         $order->load('recipe', 'materials.inventoryMaterial');
-        $materials = $order->materials->map(function ($line) {
+        $ownReservations = [];
+        foreach ($order->materials as $line) {
+            if ($line->inventory_material_id) {
+                $id = $line->inventory_material_id;
+                $ownReservations[$id] = ($ownReservations[$id] ?? BigDecimal::zero())
+                    ->plus(BigDecimal::of((string) $line->reserved_quantity));
+            }
+        }
+        $materials = $order->materials->map(function ($line) use ($ownReservations) {
             $catalog = $line->inventoryMaterial;
             $onHand = $catalog ? (string) $catalog->on_hand_quantity : null;
-            $shortage = $onHand === null ? null
-                : BigDecimal::of((string) $line->required_quantity)->minus(BigDecimal::of($onHand));
+            $available = $catalog
+                ? BigDecimal::of($onHand)
+                    ->minus(BigDecimal::of((string) $catalog->reserved_quantity))
+                    ->plus($ownReservations[$catalog->id] ?? BigDecimal::zero())
+                : null;
+            $shortage = $available === null ? null
+                : BigDecimal::of((string) $line->required_quantity)->minus($available);
             return [
                 'id' => $line->id,
                 'name' => $line->material_name,
@@ -77,6 +91,9 @@ class ProductionOrderController extends Controller {
                 'catalog_id' => $catalog?->id,
                 'sku' => $catalog?->sku,
                 'on_hand' => $onHand,
+                'available' => $available === null ? null : (string) $available->toScale(6),
+                'reserved' => (string) $line->reserved_quantity,
+                'issued' => (string) $line->issued_quantity,
                 'shortage' => $shortage !== null && $shortage->isGreaterThan(0)
                     ? (string) $shortage->toScale(6) : '0.000000',
             ];
@@ -102,7 +119,38 @@ class ProductionOrderController extends Controller {
                 'inventory_material_id' => 'Stock unit and material type must match the saved production requirement.',
             ]);
         }
-        $materialLine->update(['inventory_material_id' => $catalog->id]);
+        DB::transaction(function () use ($order, $materialLine, $catalog) {
+            $lockedOrder = ProductionOrder::query()->lockForUpdate()->findOrFail($order->id);
+            if ($lockedOrder->status !== 'planned') {
+                throw ValidationException::withMessages([
+                    'inventory_material_id' => 'Material links cannot change after a plan is reserved or closed.',
+                ]);
+            }
+            $materialLine->update(['inventory_material_id' => $catalog->id]);
+        });
         return back()->with('success', 'Material linked to stock catalog. No stock was reserved or consumed.');
     }
+    public function reserve(Request $request, ProductionOrder $order, ProductionMaterialService $service) {
+        abort_unless($request->user()->can('inventory.update') && $request->user()->can('administration.update'), 403);
+        $service->reserve($order);
+        return back()->with('success', 'All materials reserved. No stock has been consumed.');
+    }
+
+    public function issue(Request $request, ProductionOrder $order, ProductionMaterialService $service) {
+        abort_unless($request->user()->can('inventory.update') && $request->user()->can('administration.update'), 403);
+        $data = $request->validate([
+            'occurred_on' => ['required', 'date', 'before_or_equal:today'],
+            'actual_quantities' => ['required', 'array', 'min:1'],
+            'actual_quantities.*' => ['required', 'regex:/^(?:0|[1-9][0-9]{0,13})(?:\\.[0-9]{1,6})?$/'],
+        ]);
+        $service->issue($order, $data['actual_quantities'], $request->user()->id, $data['occurred_on']);
+        return back()->with('success', 'Actual materials issued to production and stock ledger updated.');
+    }
+
+    public function cancel(Request $request, ProductionOrder $order, ProductionMaterialService $service) {
+        abort_unless($request->user()->can('inventory.update') && $request->user()->can('administration.update'), 403);
+        $service->cancel($order);
+        return back()->with('success', 'Production plan cancelled and unused reservations released.');
+    }
+
 }
