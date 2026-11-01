@@ -3,7 +3,7 @@
 **Decision: NO-GO for employee acceptance testing**  
 **Review date:** 1 November 2026
 **Branch:** `development/kanozay-completion`  
-**Latest verified code commit:** `a9a808a8a1c9aace324c339d1dd03d6afaaca5a2` (trial balance implementation is pending CI)
+**Latest verified code commit:** `bb2f533c1c95a9ec2b9860f52a3cd788b9e65dd2`
 
 ## Evidence reviewed
 
@@ -11,6 +11,7 @@
 - The branch contains 47 Laravel test files and a push/pull-request Laravel test workflow configured for PHP 8.4, SQLite tests, and a Vite build.
 - The current execution workspace has Node.js but no PHP, Composer, or `vendor/`. `npm ci --no-audit --no-fund` completed and `npm run build` passed locally on the current development branch. Laravel tests and migrations cannot run here because `php` is unavailable.
 - GitHub Actions run **#97** for commit `a9a808a8a1c9aace324c339d1dd03d6afaaca5a2` completed successfully. The workflow reports **208 passed, 1 skipped, 1624 assertions**, and the frontend asset build completed successfully.
+- GitHub Actions run **#100** for commit `bb2f533c1c95a9ec2b9860f52a3cd788b9e65dd2` completed successfully. The workflow reports **211 passed, 1 skipped, 1638 assertions**, and the frontend asset build completed successfully. Run #99 exposed a test assertion that checked for a currency code still present in the filter dropdown; the assertion was narrowed to the report section and run #100 passed.
 - No authorized staging/UAT deployment was identified or created. No production deployment was attempted.
 
 ## Client workbook review
@@ -25,7 +26,7 @@
 
 ## Blocking issues for UAT
 
-1. **Runtime verification:** PHP is unavailable in this local workspace, so local migrations and tests were not run. CI run #97 verifies commit `a9a808a8a1c9aace324c339d1dd03d6afaaca5a2`; every later backend change requires a fresh successful run.
+1. **Runtime verification:** PHP is unavailable in this local workspace, so local migrations and tests were not run. CI run #100 verifies code commit `bb2f533c1c95a9ec2b9860f52a3cd788b9e65dd2`; every later backend change requires a fresh successful run.
 2. **Workflow coverage:** the current application contains functional accounting, customer/supplier, purchase order, GRN, raw-material stock receipts/issues and adjustments, landed-cost, recipe approval, production planning, material reservation/issue, batch, and QC code. Physical stock counts and transfers are not implemented. The HR employee register and confirmed import flow are implemented, but payroll periods, attendance, payroll calculation, approval, payment, and journals are not implemented. Sales invoicing/dispatch/returns, shareholder transaction posting, fixed-asset depreciation, and complete management reports are not ready to validate end to end.
 3. **Invoice acceptance:** obtain the client’s actual customer invoice sample and confirm required fields, currency/number formats, and approval/signature layout before implementing the print/PDF template.
 4. **Recipe approval:** obtain written Kanozay confirmation of the two formula discrepancies before importing or approving those recipes.
@@ -55,12 +56,12 @@
 - Commit `28cf1110e256affa1c7a192b86f9ed5e25942854` uses exact decimal allocation totals in sales and purchase overview overdue counts, formats amounts with the shared finance component, and tests fully paid versus partially settled overdue receivables. CI run #92 passed.
 - Commit `f93086fa5ff2ae4a64a03adaec3e179f677315af` adds a permission-gated employee register and a two-step payroll workbook import preview. Personal names, phone, national ID, and taxpayer ID are encrypted using `APP_KEY`. The source deduction column is excluded, salary currency is explicitly selected, duplicate employee numbers block import, and preview files are not retained. CI run #95 passed. Payroll periods, attendance, payroll calculation, approval, payment, and journal posting remain incomplete.
 - Commit `a9a808a8a1c9aace324c339d1dd03d6afaaca5a2` adds immutable stock adjustments with reason, permission enforcement, exact quantities, reservation/negative-stock protection, transaction rollback, and idempotency coverage. CI run #97 passed.
-- A new posted-only trial balance report is being added with an as-of date, currency-separated exact decimal balances, access control, and CSV export. Its feature tests and backend CI result are pending; do not treat it as verified until a successful run is available.
+- The posted-only trial balance report provides an as-of date, currency-separated exact decimal balances, access control, and CSV export. Its date, draft exclusion, currency filter, CSV, and permission tests passed in run #100. The report does not replace a reviewed balance sheet or period-close control.
 
 ## Next implementation order
 
 1. Wait for CI to verify the exact-decimal accounting changes, then continue removing floating-point arithmetic from financial posting paths.
 2. Validate migrations and the current purchase-to-GRN and manufacturing-to-QC flows on a clean SQLite test database and synthetic data.
-3. Finish the agreed initial-release gaps in sales/invoices, payroll, shareholder ledger, fixed assets, and transaction-backed reports; obtain a CI result for the trial balance change.
+3. Finish the agreed initial-release gaps in sales/invoices, payroll, shareholder ledger, fixed assets, and transaction-backed reports.
 4. Obtain the missing invoice sample and client recipe approvals, then build validated import and print acceptance around those confirmed sources.
 5. Deploy only to an isolated UAT target, prepare named test users, and run the employee UAT checklist.
