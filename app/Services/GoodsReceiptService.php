@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\GoodsReceipt;
+use App\Models\Currency;
+use App\Models\ExchangeRate;
 use App\Models\GoodsReceiptLine;
 use App\Models\InventoryMaterial;
 use App\Models\PurchaseOrder;
@@ -72,6 +74,29 @@ class GoodsReceiptService
                 $receivedByItem[$itemId] = $receivedByItem[$itemId]->plus($quantity);
             }
 
+            // Only a single configured base currency and an explicit direct
+            // historical rate can produce a reliable conversion snapshot.
+            // Missing/ambiguous rates must never be guessed or applied later.
+            $baseCurrencies = Currency::query()->where('is_base', true)->limit(2)->get();
+            $base = $baseCurrencies->count() === 1 ? $baseCurrencies->first() : null;
+            $rate = null;
+            $fxRate = null;
+            if ($base && (int) $base->id === (int) $locked->currency_id) {
+                $fxRate = '1.000000000000';
+            } elseif ($base) {
+                $candidate = ExchangeRate::query()
+                    ->where('from_currency_id', $locked->currency_id)
+                    ->where('to_currency_id', $base->id)
+                    ->whereDate('effective_date', '<=', $data['received_on'])
+                    ->orderByDesc('effective_date')
+                    ->orderByDesc('id')
+                    ->first();
+                if ($candidate && BigDecimal::of((string) $candidate->rate)->isGreaterThan(0)) {
+                    $rate = $candidate;
+                    $fxRate = (string) BigDecimal::of((string) $rate->rate)->toScale(12);
+                }
+            }
+
             $receipt = GoodsReceipt::create([
                 'number' => 'TMP-'.Str::uuid(),
                 'purchase_order_id' => $locked->id,
@@ -85,6 +110,11 @@ class GoodsReceiptService
                 // must not be revalued if currency settings later change.
                 'cost_currency_id' => $locked->currency_id,
                 'cost_currency_code' => $locked->currency()->firstOrFail()->code,
+                'valuation_currency_id' => $base?->id,
+                'valuation_currency_code' => $base?->code,
+                'fx_rate_snapshot' => $fxRate,
+                'fx_rate_source_id' => $rate?->id,
+                'fx_rate_effective_date' => $rate?->effective_date?->toDateString(),
             ]);
 
             foreach ($requested as $itemId => $quantity) {

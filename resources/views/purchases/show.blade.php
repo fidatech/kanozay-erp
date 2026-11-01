@@ -45,7 +45,7 @@ $balance=$subtotal-$advances;
 <p class="muted">Estimated expenses are allocated proportionally by item value. Expense allocation is an estimate only. Goods receipts post stock quantities and preserve purchase-value snapshots without inventory valuation or finance entries. Zero-value orders cannot be allocated.</p></div>
 <div class="panel">
 <h2>Goods Received Notes</h2>
-<p class="muted">Only confirmed orders can receive goods. Quantities use the linked material's unit. Posting a GRN increases inventory immediately and freezes purchase prices in the order currency. These snapshots exclude other landed costs, FX conversion and accounting entries.</p>
+<p class="muted">Only confirmed orders can receive goods. Quantities use the linked material's unit. Posting a GRN increases inventory immediately and freezes purchase prices in the order currency. These snapshots exclude other landed costs and accounting entries. A base-currency purchase equivalent is shown only when an explicit direct historical exchange rate was available on the receipt date; it is not an inventory valuation.</p>
 @if(in_array($order->status,['confirmed','partially_received'],true))
 @can('inventory.update')
 <form method="POST" action="{{ route('purchases.orders.receipts.store',$order) }}" style="margin:16px 0">@csrf
@@ -70,11 +70,16 @@ $balance=$subtotal-$advances;
 </form>
 @endcan
 @endif
-<div class="table-wrap"><table><thead><tr><th>GRN number</th><th>Date</th><th>Supplier reference</th><th>Lines</th><th>Purchase value snapshot</th><th>Status</th></tr></thead><tbody>
+<div class="table-wrap"><table><thead><tr><th>GRN number</th><th>Date</th><th>Supplier reference</th><th>Lines</th><th>Purchase value snapshot</th><th>Base purchase equivalent</th><th>Status</th></tr></thead><tbody>
 @forelse($order->receipts as $receipt)
 
-<tr><td><strong>{{ $receipt->number }}</strong></td><td>{{ $receipt->received_on->format('Y-m-d') }}</td><td>{{ $receipt->supplier_reference ?? '—' }}</td><td>{{ $receipt->lines->count() }}</td><td>{{ $receipt->purchase_value_snapshot ?? 'Not captured' }}</td><td>{{ ucfirst($receipt->status) }}</td></tr>
-@empty<tr><td colspan="6" class="muted">No goods received yet.</td></tr>@endforelse
+<tr><td><strong>{{ $receipt->number }}</strong></td><td>{{ $receipt->received_on->format('Y-m-d') }}</td><td>{{ $receipt->supplier_reference ?? '—' }}</td><td>{{ $receipt->lines->count() }}</td><td>{{ $receipt->purchase_value_snapshot ?? 'Not captured' }}</td><td>
+{{ $receipt->base_purchase_value_snapshot ?? ($receipt->cost_currency_code ? 'FX rate unavailable' : 'Not captured') }}
+@if($receipt->fx_rate_snapshot !== null)
+<small style="display:block;color:#648099">Rate: {{ $receipt->fx_rate_snapshot }}@if($receipt->fx_rate_effective_date) · {{ $receipt->fx_rate_effective_date->format('Y-m-d') }}@else · base currency @endif</small>
+@endif
+</td><td>{{ ucfirst($receipt->status) }}</td></tr>
+@empty<tr><td colspan="7" class="muted">No goods received yet.</td></tr>@endforelse
 </tbody></table></div>
 </div>
 <div class="panel"><h2>Purchase Expenses</h2>
