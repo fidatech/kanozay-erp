@@ -29,7 +29,7 @@ class LandedCostAllocator
         if ($cost->isLessThan(0)) {
             throw new InvalidArgumentException('Landed cost cannot be negative.');
         }
-        $cost = $cost->toScale($scale, RoundingMode::HALF_UP);
+        $cost = $cost->toScale($scale, RoundingMode::HalfUp);
 
         $weights = [];
         $total = BigDecimal::zero();
@@ -56,7 +56,7 @@ class LandedCostAllocator
                 $part = $remaining;
             } else {
                 $part = $cost->multipliedBy($weight)
-                    ->dividedBy($total, $scale, RoundingMode::DOWN);
+                    ->dividedBy($total, $scale, RoundingMode::Down);
                 $remaining = $remaining->minus($part);
             }
             $result[$id] = (string) $part->toScale($scale);

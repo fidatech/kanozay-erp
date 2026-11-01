@@ -34,6 +34,8 @@ class GoodsReceiptLandedCostTest extends TestCase
     public function test_snapshot_models_reject_modification(): void
     {
         $cost = new GoodsReceiptLandedCost(['component' => 'freight']);
+        $cost->forceFill(['id' => 1]);
+        $cost->exists = true;
         $this->expectException(\LogicException::class);
         $cost->delete();
     }

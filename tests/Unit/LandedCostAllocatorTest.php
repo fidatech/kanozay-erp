@@ -20,6 +20,12 @@ class LandedCostAllocatorTest extends TestCase
         $this->assertSame([1 => '0.00', 2 => '7.25', 3 => '0.00'], $result);
     }
 
+    public function test_amount_rounds_half_up_to_the_requested_currency_scale(): void
+    {
+        $result = (new LandedCostAllocator())->allocate('0.015', [1 => '1']);
+        $this->assertSame([1 => '0.02'], $result);
+    }
+
     public function test_rejects_zero_total_weights(): void
     {
         $this->expectException(InvalidArgumentException::class);
