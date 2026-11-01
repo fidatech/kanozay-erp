@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 class GeneralLedgerController extends Controller {
  public function index(Request $request) {
-  abort_unless($request->user()->can('administration.view'),403);
+  abort_unless($request->user()->canAny(['administration.view', 'finance.view', 'reports.view']),403);
   $filters=$request->validate(['account_id'=>['nullable','integer',Rule::exists('ledger_accounts','id')],'currency_id'=>['nullable','integer',Rule::exists('currencies','id')],'from'=>['nullable','date'],'to'=>['nullable','date','after_or_equal:from']]);
   $accounts=LedgerAccount::orderBy('code')->get();$currencies=Currency::orderBy('code')->get();
   $account=isset($filters['account_id'])?$accounts->firstWhere('id',(int)$filters['account_id']):null;

@@ -9,7 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 class JournalEntryController extends Controller {
- private function guard(Request $request,bool $write=false):void {abort_unless($request->user()->can($write?'administration.update':'administration.view'),403);}
+ private function guard(Request $request,bool $write=false):void {abort_unless($request->user()->canAny($write ? ['administration.update', 'finance.update'] : ['administration.view', 'finance.view', 'reports.view']),403);}
  public function index(Request $request){
   $this->guard($request);
   $journals=JournalEntry::with(['lines','lines.account','currency'])->withCount('lines')->latest('id')->paginate(20);

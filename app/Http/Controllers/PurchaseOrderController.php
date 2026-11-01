@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 class PurchaseOrderController extends Controller {
  public function index(Request $request) {
-  abort_unless($request->user()->can('administration.view'),403);
+  abort_unless($request->user()->canAny(['administration.view', 'purchases.view']),403);
   $orders=PurchaseOrder::with(['supplier','currency','items'])->latest('id')->paginate(20);
   foreach($orders as $order){$total=BigDecimal::zero();foreach($order->items as $item)$total=$total->plus(BigDecimal::of((string)$item->quantity)->multipliedBy((string)$item->unit_price)->toScale(4,RoundingMode::HalfUp));$order->setAttribute('order_total',(string)$total);}
   return view('purchases.orders',[
@@ -21,7 +21,7 @@ class PurchaseOrderController extends Controller {
   ]);
  }
  public function store(Request $request) {
-  abort_unless($request->user()->can('administration.view'),403);
+  abort_unless($request->user()->canAny(['administration.view', 'purchases.view']),403);
   $data=$request->validate([
 
    'supplier_id'=>['required',Rule::exists('trade_parties','id')->where('type','supplier')->where('is_active',true)],
@@ -51,7 +51,7 @@ class PurchaseOrderController extends Controller {
   return 'PO-'.str_pad((string)($last+1),6,'0',STR_PAD_LEFT);
  }
  public function quickSupplier(Request $request) {
-  abort_unless($request->user()->can('administration.update'),403);
+  abort_unless($request->user()->canAny(['administration.update', 'purchases.create']),403);
   $data=$request->validate(['name'=>['required','string','max:180'],'phone'=>['nullable','string','max:80'],'currency_id'=>['required',Rule::exists('currencies','id')->where('is_active',true)]]);
   $party=DB::transaction(function()use($data,$request){
    $party=TradeParty::create(['type'=>'supplier','name'=>$data['name'],'phone'=>$data['phone']??null,'is_active'=>true,'created_by'=>$request->user()->id]);
@@ -63,7 +63,7 @@ class PurchaseOrderController extends Controller {
   return response()->json(['id'=>$party->id,'text'=>$party->name],201);
  }
  public function quickCustomer(Request $request) {
-  abort_unless($request->user()->can('administration.update'),403);
+  abort_unless($request->user()->canAny(['administration.update', 'purchases.create']),403);
   $data=$request->validate(['name'=>['required','string','max:180'],'phone'=>['nullable','string','max:80'],'currency_id'=>['required',Rule::exists('currencies','id')->where('is_active',true)]]);
   $party=DB::transaction(function()use($data,$request){
    $party=TradeParty::create(['type'=>'customer','name'=>$data['name'],'phone'=>$data['phone']??null,'is_active'=>true,'created_by'=>$request->user()->id]);
@@ -75,7 +75,7 @@ class PurchaseOrderController extends Controller {
   return response()->json(['id'=>$party->id,'text'=>$party->name],201);
  }
  public function quickCurrency(Request $request) {
-  abort_unless($request->user()->can('administration.update'),403);
+  abort_unless($request->user()->canAny(['administration.update', 'purchases.create']),403);
   $data=$request->validate(['code'=>['required','regex:/^[A-Za-z]{3}$/'],'name'=>['required','string','max:100'],'symbol'=>['nullable','string','max:12']]);
   $code=strtoupper($data['code']);
   if(Currency::where('code',$code)->exists())throw \Illuminate\Validation\ValidationException::withMessages(['code'=>'Currency code already exists.']);
@@ -87,7 +87,7 @@ class PurchaseOrderController extends Controller {
   return response()->json(['id'=>$currency->id,'text'=>$currency->code.' — '.$currency->name],201);
  }
  public function show(Request $request,PurchaseOrder $order) {
-  abort_unless($request->user()->can('administration.view'),403);
+  abort_unless($request->user()->canAny(['administration.view', 'purchases.view']),403);
   return view('purchases.show', ['order'=>$order->load(['supplier','currency','items.inventoryMaterial','items.receiptLines','expenses','advances','receipts.lines']), 'materials'=>\App\Models\InventoryMaterial::where('is_active',true)->orderBy('name')->get()]);
  }
  public function linkMaterial(Request $request, PurchaseOrder $order, \App\Models\PurchaseOrderItem $item) {
@@ -113,7 +113,7 @@ class PurchaseOrderController extends Controller {
   return back()->with('success','Purchase order confirmed. No stock or finance postings were made.');
  }
  public function addExpense(Request $request,PurchaseOrder $order) {
-  abort_unless($request->user()->can('administration.view'),403);
+  abort_unless($request->user()->canAny(['administration.view', 'purchases.view']),403);
   abort_unless($order->status==='draft',422,'Only draft orders can be edited.');
   $data=$request->validate([
    'category'=>['required',Rule::in(['transport','loading','customs','insurance','freight','handling','other'])],
@@ -125,7 +125,7 @@ class PurchaseOrderController extends Controller {
   return back()->with('success','Purchase expense added.');
  }
  public function addAdvance(Request $request,PurchaseOrder $order) {
-  abort_unless($request->user()->can('administration.view'),403);
+  abort_unless($request->user()->canAny(['administration.view', 'purchases.view']),403);
   abort_unless($order->status==='draft',422,'Only draft orders can be edited.');
   $data=$request->validate([
    'payment_date'=>['required','date'],

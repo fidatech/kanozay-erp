@@ -17,7 +17,7 @@ class TradeReconciliationController extends Controller
 {
     public function index(Request $request)
     {
-        abort_unless($request->user()->can('administration.view'), 403);
+        abort_unless($request->user()->canAny(['administration.view', 'finance.view', 'reports.view']), 403);
         $filters = $request->validate(['type' => ['nullable', Rule::in(['receivable', 'payable'])], 'party_id' => ['nullable', 'integer', 'min:1'], 'currency_id' => ['nullable', 'integer', 'min:1']]);
         $type = $filters['type'] ?? 'receivable';
         $partyType = $type === 'receivable' ? 'customer' : 'supplier';
@@ -149,7 +149,7 @@ class TradeReconciliationController extends Controller
     }
     public function saveCase(Request $request)
     {
-        abort_unless($request->user()->can('administration.update'), 403);
+        abort_unless($request->user()->canAny(['administration.update', 'finance.update']), 403);
         $data = $request->validate([
             'type'=>['required',Rule::in(['receivable','payable'])],
             'trade_party_id'=>['required','integer','exists:trade_parties,id'],
@@ -180,7 +180,7 @@ class TradeReconciliationController extends Controller
     }
     public function reopenCase(Request $request, ReconciliationCase $case)
     {
-        abort_unless($request->user()->can('administration.update'), 403);
+        abort_unless($request->user()->canAny(['administration.update', 'finance.update']), 403);
         $data = $request->validate(['reopen_reason'=>['required','string','min:10','max:5000']]);
         return DB::transaction(function () use ($request, $case, $data) {
             $case = ReconciliationCase::whereKey($case->id)->lockForUpdate()->firstOrFail();
@@ -218,7 +218,7 @@ class TradeReconciliationController extends Controller
 
     public function approveCase(Request $request, ReconciliationCase $case)
     {
-        abort_unless($request->user()->can('administration.update'),403);
+        abort_unless($request->user()->canAny(['administration.update', 'finance.update']),403);
         return DB::transaction(function () use ($request, $case) {
         $case = ReconciliationCase::whereKey($case->id)->lockForUpdate()->firstOrFail();
         abort_if((int)$case->updated_by === (int)$request->user()->id,403,'Independent approval required.');

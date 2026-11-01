@@ -28,7 +28,7 @@ class DashboardController extends Controller
         $recent = [];
         $releasedPackages = null;
 
-        if ($user->can('administration.view')) {
+        if ($user->canAny(['administration.view', 'purchases.view'])) {
             $purchaseCount = PurchaseOrder::whereBetween('order_date', [$from, $to])->count();
             $orders = PurchaseOrder::with('supplier:id,name')->whereBetween('order_date', [$from, $to])->latest('order_date')->limit(10)->get();
             $cards[] = ['label' => 'Purchase orders', 'value' => $purchaseCount, 'hint' => 'Created in selected period', 'icon' => 'fa-cart-shopping', 'url' => route('purchases.orders.index')];
@@ -61,7 +61,7 @@ class DashboardController extends Controller
             $cards[] = ['label' => 'Active employee profiles', 'value' => EmployeeProfile::where('is_active', true)->count(), 'hint' => 'Registered profiles', 'icon' => 'fa-users', 'url' => route('workspace.page', ['hr', 'employees'])];
         }
 
-        if ($user->can('administration.view')) {
+        if ($user->canAny(['administration.view', 'finance.view'])) {
             $journalCount = JournalEntry::where('status', 'posted')->whereBetween('entry_date', [$from, $to])->count();
             $journals = JournalEntry::with('currency')->where('status', 'posted')->whereBetween('entry_date', [$from, $to])->latest('entry_date')->limit(10)->get();
             $cards[] = ['label' => 'Posted journals', 'value' => $journalCount, 'hint' => 'Posted in selected period', 'icon' => 'fa-book', 'url' => route('finance.journals.index')];

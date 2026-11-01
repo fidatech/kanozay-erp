@@ -13,7 +13,7 @@ class CashMovementReportController extends Controller
 {
     public function index(Request $request)
     {
-        abort_unless($request->user()->can('administration.view'), 403);
+        abort_unless($request->user()->canAny(['administration.view', 'finance.view', 'reports.view']), 403);
         $filters = $request->validate([
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date', 'after_or_equal:from'],

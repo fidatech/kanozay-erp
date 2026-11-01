@@ -12,13 +12,13 @@ class ProductionRecipeController extends Controller
 {
     public function index(Request $request)
     {
-        abort_unless($request->user()->can('administration.view'), 403);
+        abort_unless($request->user()->canAny(['administration.view', 'manufacturing.view']), 403);
         return view('production.recipes', ['recipes' => ProductionRecipe::with('approver')->withCount('lines')->latest('id')->paginate(20)]);
     }
 
     public function store(Request $request)
     {
-        abort_unless($request->user()->can('administration.update'), 403);
+        abort_unless($request->user()->canAny(['administration.update', 'manufacturing.update']), 403);
         $data = $request->validate([
             'name' => ['required', 'string', 'max:180'],
             'product_code' => ['nullable', 'string', 'max:80'],
@@ -49,14 +49,14 @@ class ProductionRecipeController extends Controller
     }
     public function show(Request $request, ProductionRecipe $recipe)
     {
-        abort_unless($request->user()->can('administration.view'), 403);
+        abort_unless($request->user()->canAny(['administration.view', 'manufacturing.view']), 403);
         $recipe->load(['lines', 'approver']);
         return view('production.recipe-show', compact('recipe'));
     }
 
     public function approve(Request $request, ProductionRecipe $recipe)
     {
-        abort_unless($request->user()->can('administration.update'), 403);
+        abort_unless($request->user()->canAny(['administration.update', 'manufacturing.update']), 403);
         $error = DB::transaction(function () use ($recipe, $request) {
             $recipe = ProductionRecipe::whereKey($recipe->id)->lockForUpdate()->firstOrFail();
             if ($recipe->status !== 'draft') return 'Only draft recipes may be approved.';

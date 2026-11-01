@@ -11,7 +11,7 @@ class ProductionRecipeImportController extends Controller
 {
     public function preview(Request $request)
     {
-        abort_unless($request->user()->can('administration.update'), 403);
+        abort_unless($request->user()->canAny(['administration.update', 'manufacturing.update']), 403);
         $request->validate(['file' => ['required', 'file', 'mimes:csv,txt,xlsx,xls', 'max:2048']]);
         $extension = strtolower($request->file('file')->getClientOriginalExtension());
         if (in_array($extension, ['xlsx', 'xls'], true)) {

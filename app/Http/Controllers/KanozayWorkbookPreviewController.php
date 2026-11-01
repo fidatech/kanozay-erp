@@ -13,7 +13,7 @@ class KanozayWorkbookPreviewController extends Controller
 {
     public function __invoke(Request $request)
     {
-        abort_unless($request->user()->can('administration.update'), 403);
+        abort_unless($request->user()->canAny(['administration.update', 'manufacturing.update']), 403);
         $request->validate(['file' => ['required', 'file', 'mimes:xlsx,xls', 'max:4096']]);
         try {
             $reader = IOFactory::createReaderForFile($request->file('file')->getRealPath());
@@ -70,7 +70,7 @@ class KanozayWorkbookPreviewController extends Controller
     }
     public function confirm(Request $request)
     {
-        abort_unless($request->user()->can('administration.update'), 403);
+        abort_unless($request->user()->canAny(['administration.update', 'manufacturing.update']), 403);
         $recipes = $request->session()->get('kanozay_recipe_preview');
         if (!is_array($recipes) || count($recipes) !== 2) {
             return redirect()->route('production.recipes.index')->withErrors(['file' => 'Preview the original workbook again before confirming.']);

@@ -6,7 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 class TradeAgingController extends Controller {
  public function index(Request $request){
-  abort_unless($request->user()->can('administration.view'),403);
+  abort_unless($request->user()->canAny(['administration.view', 'finance.view', 'reports.view']),403);
   $filters=$request->validate(['type'=>['nullable',Rule::in(['receivable','payable'])],'as_of'=>['nullable','date']]);
   $type=$filters['type']??'receivable';$asOf=$filters['as_of']??now()->toDateString();
   $documents=TradeDocument::with(['party','currency'])->where('type',$type)->whereDate('document_date','<=',$asOf)->withSum(['allocations as allocated_as_of'=>fn($q)=>$q->whereDate('created_at','<=',$asOf)],'amount')->orderBy('due_date')->get();

@@ -13,7 +13,7 @@ class TrialBalanceController extends Controller
 {
     public function index(Request $request)
     {
-        abort_unless($request->user()->can('administration.view'), 403);
+        abort_unless($request->user()->canAny(['administration.view', 'finance.view', 'reports.view']), 403);
 
         $filters = $request->validate([
             'as_of' => ['nullable', 'date'],
