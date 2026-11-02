@@ -19,7 +19,8 @@ class CurrencyController extends Controller
     }
     public function store(Request $request): RedirectResponse {
         abort_unless($request->user()->can('administration.update'),403);
-        $data=$request->validate(['code'=>['required','regex:/^[A-Za-z]{3}$/',Rule::unique('currencies','code')], 'name'=>['required','string','max:100'], 'symbol'=>['nullable','string','max:12'], 'decimal_places'=>['required','integer','between:0,6']]);
+        $request->merge(['code'=>strtoupper((string)$request->input('code'))]);
+        $data=$request->validate(['code'=>['required','regex:/^[A-Z]{3}$/',Rule::unique('currencies','code')], 'name'=>['required','string','max:100'], 'symbol'=>['nullable','string','max:12'], 'decimal_places'=>['required','integer','between:0,6']]);
         $data['code']=strtoupper($data['code']);
         abort_if(Currency::where('code',$data['code'])->exists(),422,'Currency code already exists.');
         DB::transaction(function() use($data) { $currency=Currency::create($data+['is_base'=>!Currency::where('is_base',true)->exists()]); ActivityLog::record('currency.created','currency',$currency->id,'Currency '.$currency->code.' created'); });
@@ -35,7 +36,7 @@ class CurrencyController extends Controller
     public function base(Request $request, Currency $currency): RedirectResponse {
         abort_unless($request->user()->can('administration.update'),403);
         if(!$currency->is_active) return back()->withErrors(['currency'=>'Activate the currency before selecting it as base.']);
-        if(\App\Models\ExchangeRate::exists()) return back()->withErrors(['currency'=>'Base currency is locked after exchange rates have been recorded.']);
+        if(\App\Models\ExchangeRate::exists() || \App\Models\JournalEntry::exists() || \App\Models\FinancialAccount::exists() || \App\Models\PurchaseOrder::exists() || \App\Models\CurrencyExchange::exists()) return back()->withErrors(['currency'=>'Base currency cannot change after exchange rates or financial and purchasing records exist.']);
         DB::transaction(function() use($currency) { Currency::where('is_base',true)->update(['is_base'=>false]); $currency->update(['is_base'=>true]); ActivityLog::record('currency.base_changed','currency',$currency->id,'Base currency changed to '.$currency->code); });
         return back()->with('status','Base currency updated.');
     }

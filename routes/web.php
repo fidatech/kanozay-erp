@@ -167,6 +167,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::patch('currencies/{currency}/base', [\App\Http\Controllers\Admin\CurrencyController::class,'base'])->name('currencies.base');
     Route::get('exchange-rates', [\App\Http\Controllers\Admin\ExchangeRateController::class,'index'])->name('exchange-rates.index');
     Route::post('exchange-rates', [\App\Http\Controllers\Admin\ExchangeRateController::class,'store'])->name('exchange-rates.store');
+    Route::get('exchange-rates/convert', [\App\Http\Controllers\Admin\ExchangeRateController::class,'convert'])->name('exchange-rates.convert');
     Route::get('company', [\App\Http\Controllers\Admin\CompanySettingController::class, 'edit'])->name('company.edit');
     Route::put('company', [\App\Http\Controllers\Admin\CompanySettingController::class, 'update'])->name('company.update');
     Route::post('company/branches', [\App\Http\Controllers\Admin\CompanySettingController::class, 'storeBranch'])->name('company.branches.store');
