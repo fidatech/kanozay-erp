@@ -31,13 +31,13 @@
  @php($daily=array_values(array_filter(config('erp_navigation.'.$module,[]),fn($slug)=>isset($moduleData['pages'][$slug]) && $slug!=='overview')))
  @php($support=array_diff_key($moduleData['pages'],array_flip($daily),['overview'=>true]))
  @if($module==='sales' && $salesSnapshot)
- <div class="overview-section"><h2>Sales accounting snapshot</h2><small>Live finance records, not sales invoices</small></div>
+ <div class="overview-section"><h2>Sales accounting snapshot</h2><small>Posted sales invoices and other receivables</small></div>
  <div class="overview-stats">
   <div class="overview-stat"><small>Active customers</small><strong>{{ number_format($salesSnapshot['customers']) }}</strong><span class="stat-caption">Registered customer accounts</span></div>
   <div class="overview-stat"><small>Receivable documents</small><strong>{{ number_format($salesSnapshot['receivables']) }}</strong><span class="stat-caption">Recorded trade receivables</span></div>
   <div class="overview-stat"><small>Overdue receivables</small><strong>{{ number_format($salesSnapshot['overdue']) }}</strong><span class="stat-caption">Past due with an outstanding balance</span></div>
  </div>
- <div class="overview-panel"><div class="overview-panel-header"><h2>Recent receivable documents</h2><a href="{{ route('finance.documents.index',['type'=>'receivable']) }}">View receivables</a></div>
+ <div class="overview-panel"><div class="overview-panel-header"><h2>Recent receivable documents</h2><span><a href="{{ route('finance.documents.index',['type'=>'receivable']) }}">View receivables</a> · <a href="{{ route('sales.invoices.index') }}">Sales invoices</a> @can('sales.create') · <a href="{{ route('sales.invoices.create') }}">New invoice</a>@endcan</span></div>
  @forelse($salesSnapshot['recent'] as $doc)<div class="overview-activity"><span><strong>{{ $doc->number }}</strong> · {{ $doc->party?->name ?? 'Customer unavailable' }} · <x-finance-amount :amount="$doc->amount" /> {{ $doc->currency?->code }}</span><time>{{ $doc->document_date }}</time></div>@empty<div class="overview-empty">No receivable documents recorded yet.</div>@endforelse
  </div>
  @endif
