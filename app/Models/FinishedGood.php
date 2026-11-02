@@ -14,4 +14,9 @@ class FinishedGood extends Model
     {
         return $this->hasMany(FinishedGoodMovement::class);
     }
+
+    public function dispatchLines()
+    {
+        return $this->hasMany(FinishedGoodDispatchLine::class);
+    }
 }

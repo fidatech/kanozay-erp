@@ -37,4 +37,9 @@ class ProductionBatch extends Model
     {
         return $this->hasMany(ProductionBatchCost::class, 'production_batch_id');
     }
+
+    public function dispatchLines()
+    {
+        return $this->hasMany(FinishedGoodDispatchLine::class, 'production_batch_id');
+    }
 }
