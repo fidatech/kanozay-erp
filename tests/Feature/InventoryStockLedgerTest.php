@@ -6,7 +6,6 @@ use App\Models\InventoryMaterial;
 use App\Models\InventoryStockMovement;
 use App\Models\Currency;
 use App\Models\User;
-use App\Services\InventoryCostService;
 use App\Services\InventoryStockService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
@@ -77,10 +76,10 @@ class InventoryStockLedgerTest extends TestCase
         $material = InventoryMaterial::create(['sku' => 'RM-COST-01', 'name' => 'Flour', 'unit' => 'kg']);
         $movement = app(InventoryStockService::class)->post($material, [
             'type' => 'opening', 'direction' => 'in', 'quantity' => '5.000000',
+            'unit_cost' => '2.500000', 'currency_id' => $currency->id,
             'reference_type' => 'opening', 'reference_id' => $material->id,
             'occurred_on' => '2026-11-02', 'created_by' => $user->id,
         ]);
-        app(InventoryCostService::class)->createFromInboundMovement($movement, '2.500000', $currency->id, $user->id);
 
         app(InventoryStockService::class)->post($material, [
             'type' => 'issue', 'direction' => 'out', 'quantity' => '2.000000',

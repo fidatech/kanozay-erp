@@ -68,6 +68,15 @@ class InventoryStockService
             ]);
             $locked->forceFill(['on_hand_quantity' => (string) $next->toScale(6)])->save();
 
+            if ($type === 'opening') {
+                app(InventoryCostService::class)->createFromInboundMovement(
+                    $entry,
+                    isset($data['unit_cost']) ? (string) $data['unit_cost'] : null,
+                    isset($data['currency_id']) ? (int) $data['currency_id'] : null,
+                    isset($data['created_by']) ? (int) $data['created_by'] : null,
+                );
+            }
+
             if ($directions[$type] === 'out') {
                 app(InventoryCostService::class)->consume($entry);
             }

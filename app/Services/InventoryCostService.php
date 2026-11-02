@@ -18,6 +18,7 @@ class InventoryCostService
     public function valuationRows(?string $currencyCode = null): array
     {
         $rows = [];
+        $trackedQuantities = [];
         $layers = InventoryCostLayer::with('material')->where('remaining_quantity', '>', 0)->orderBy('inventory_material_id')->orderBy('received_on')->get();
         foreach ($layers as $layer) {
             $code = $layer->currency_code;
@@ -32,7 +33,21 @@ class InventoryCostService
                 'is_valued' => $valued,
             ];
             $rows[$key]['quantity'] = $rows[$key]['quantity']->plus((string) $layer->remaining_quantity);
+            $trackedQuantities[$layer->inventory_material_id] = ($trackedQuantities[$layer->inventory_material_id] ?? BigDecimal::zero())
+                ->plus((string) $layer->remaining_quantity);
             if ($valued) $rows[$key]['value'] = $rows[$key]['value']->plus($this->remainingLayerCost($layer));
+        }
+
+        if ($currencyCode === null) {
+            foreach (InventoryMaterial::query()->where('on_hand_quantity', '>', 0)->get() as $material) {
+                $physical = BigDecimal::of((string) $material->on_hand_quantity);
+                $tracked = $trackedQuantities[$material->id] ?? BigDecimal::zero();
+                $untracked = $physical->minus($tracked);
+                if (! $untracked->isGreaterThan(0)) continue;
+                $key = $material->id.'|UNVALUED|unvalued';
+                $rows[$key] ??= ['material' => $material, 'currency_code' => null, 'quantity' => BigDecimal::zero(), 'value' => BigDecimal::zero(), 'is_valued' => false];
+                $rows[$key]['quantity'] = $rows[$key]['quantity']->plus($untracked);
+            }
         }
 
         return array_values(array_map(fn (array $row) => [
@@ -64,7 +79,7 @@ class InventoryCostService
         );
     }
 
-    public function createFromInboundMovement(InventoryStockMovement $movement, ?string $unitCost, ?int $currencyId, int $actorId): InventoryCostLayer
+    public function createFromInboundMovement(InventoryStockMovement $movement, ?string $unitCost, ?int $currencyId, ?int $actorId): InventoryCostLayer
     {
         $totalCost = null;
         $code = null;
@@ -138,7 +153,7 @@ class InventoryCostService
         }
     }
 
-    private function createLayer(int $materialId, string $sourceType, int $sourceId, string $quantity, ?string $cost, ?int $currencyId, ?string $currencyCode, string $date, int $actorId): InventoryCostLayer
+    private function createLayer(int $materialId, string $sourceType, int $sourceId, string $quantity, ?string $cost, ?int $currencyId, ?string $currencyCode, string $date, ?int $actorId): InventoryCostLayer
     {
         return InventoryCostLayer::firstOrCreate(
             ['source_type' => $sourceType, 'source_id' => $sourceId],

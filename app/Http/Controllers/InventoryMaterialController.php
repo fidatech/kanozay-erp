@@ -8,7 +8,6 @@ use App\Services\InventoryAdjustmentService;
 use App\Services\InventoryCostService;
 use App\Services\InventoryStockService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class InventoryMaterialController extends Controller
@@ -62,7 +61,7 @@ class InventoryMaterialController extends Controller
         return redirect()->route('inventory.materials.index')->with('success', 'Material created. No stock has been posted.');
     }
 
-    public function opening(Request $request, InventoryMaterial $material, InventoryStockService $stock, InventoryCostService $costing)
+    public function opening(Request $request, InventoryMaterial $material, InventoryStockService $stock)
     {
         abort_unless($request->user()->can('inventory.update'), 403);
         $data = $request->validate([
@@ -73,19 +72,16 @@ class InventoryMaterialController extends Controller
             'currency_id' => ['nullable', 'required_with:unit_cost', Rule::exists('currencies', 'id')->where('is_active', true)],
         ]);
 
-        DB::transaction(function () use ($stock, $material, $data, $costing, $request) {
-            $movement = $stock->post($material, [
+        $stock->post($material, [
                 'type' => 'opening', 'direction' => 'in',
                 'quantity' => $data['quantity'],
+                'unit_cost' => $data['unit_cost'] ?? null,
+                'currency_id' => $data['currency_id'] ?? null,
                 'reference_type' => 'opening', 'reference_id' => $material->id,
                 'occurred_on' => $data['occurred_on'],
                 'notes' => $data['notes'] ?? null,
                 'created_by' => $request->user()->id,
             ]);
-            if (isset($data['unit_cost'], $data['currency_id'])) {
-                $costing->createFromInboundMovement($movement, $data['unit_cost'], (int) $data['currency_id'], (int) $request->user()->id);
-            }
-        });
 
         return redirect()->route('inventory.materials.index')->with('success', 'Opening stock recorded in the inventory ledger'.(isset($data['unit_cost']) ? ' with its currency-specific cost.' : ' without a valuation snapshot.'));
     }
