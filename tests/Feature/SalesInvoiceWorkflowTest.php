@@ -135,7 +135,7 @@ class SalesInvoiceWorkflowTest extends TestCase
         $this->assertEquals(1, $good->fresh()->on_hand_packages);
         $this->assertSame(1, app(FinishedGoodDispatchService::class)->availablePackages($batch->fresh()));
         $this->assertDatabaseHas('trade_document_credits', ['trade_document_id' => $invoice->trade_document_id, 'amount' => '12.5000']);
-        $this->assertSame('12.5000', (string) $credit->journal->lines()->where('debit', '>', 0)->value('debit'));
+        $this->assertSame(0, \Brick\Math\BigDecimal::of((string) $credit->journal->lines()->where('debit', '>', 0)->value('debit'))->compareTo(\Brick\Math\BigDecimal::of('12.5000')));
 
         $invalid['lines'][0]['quantity_packages'] = 1;
         try {
