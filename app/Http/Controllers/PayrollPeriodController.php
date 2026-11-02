@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Currency;
 use App\Models\CompanySetting;
+use App\Models\EmployeeAttendance;
 use App\Models\FinancialAccount;
 use App\Models\LedgerAccount;
 use App\Models\PayrollLine;
@@ -27,8 +28,15 @@ class PayrollPeriodController extends Controller
     public function show(Request $request, PayrollPeriod $period)
     {
         abort_unless($request->user()->can('hr.view'), 403);
+        $period->load(['currency', 'approvalJournal', 'lines.employee', 'lines.payment']);
+        $start = $period->period_start->toDateString();
+        $end = $period->period_start->copy()->endOfMonth()->toDateString();
+        $attendance = EmployeeAttendance::whereIn('employee_profile_id', $period->lines->pluck('employee_profile_id'))
+            ->whereBetween('attendance_date', [$start, $end])->get()
+            ->groupBy('employee_profile_id')->map(fn ($rows) => $rows->countBy('status')->all())->all();
         return view('hr.payroll.show', [
-            'period' => $period->load(['currency', 'approvalJournal', 'lines.employee', 'lines.payment']),
+            'period' => $period,
+            'attendance' => $attendance,
             'expenses' => LedgerAccount::where('type', 'expense')->where('is_active', true)->where('is_group', false)->orderBy('code')->get(),
             'payables' => LedgerAccount::where('type', 'liability')->where('is_active', true)->where('is_group', false)->orderBy('code')->get(),
             'accounts' => FinancialAccount::where('currency_id', $period->currency_id)->where('is_active', true)->orderBy('name')->get(),
