@@ -24,6 +24,7 @@ class ModulePageStructureTest extends TestCase
                 $expectedContent = match (true) {
                     $page === 'overview' => 'Daily operations',
                     $module === 'hr' && $page === 'employees' => 'Employee number',
+                    $module === 'hr' && $page === 'payroll' => 'Payroll periods',
                     $module === 'purchases' && $page === 'orders' => 'New Purchase Order',
                     $module === 'manufacturing' && $page === 'recipes' => 'Production Recipes',
                     $module === 'manufacturing' && $page === 'orders' => 'Production Orders',

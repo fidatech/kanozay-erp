@@ -87,6 +87,7 @@ Route::middleware('auth')->post('/hr/payroll', [\App\Http\Controllers\PayrollPer
 Route::middleware('auth')->patch('/hr/payroll/{period}/lines/{line}', [\App\Http\Controllers\PayrollPeriodController::class, 'updateLine'])->name('hr.payroll.lines.update');
 Route::middleware('auth')->post('/hr/payroll/{period}/approve', [\App\Http\Controllers\PayrollPeriodController::class, 'approve'])->name('hr.payroll.approve');
 Route::middleware('auth')->post('/hr/payroll/{period}/lines/{line}/pay', [\App\Http\Controllers\PayrollPeriodController::class, 'pay'])->name('hr.payroll.lines.pay');
+Route::middleware('auth')->get('/hr/payroll/{period}/lines/{line}/payslip', [\App\Http\Controllers\PayrollPeriodController::class, 'payslip'])->name('hr.payroll.lines.payslip');
 
 Route::middleware('auth')->group(function () {
     Route::get('/finance/documents', [\App\Http\Controllers\TradeDocumentController::class,'index'])->name('finance.documents.index');

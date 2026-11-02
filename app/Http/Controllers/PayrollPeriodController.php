@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Currency;
+use App\Models\CompanySetting;
 use App\Models\FinancialAccount;
 use App\Models\LedgerAccount;
 use App\Models\PayrollLine;
@@ -81,6 +82,19 @@ class PayrollPeriodController extends Controller
         if ($data['payment_date'] < $period->period_start->toDateString()) throw ValidationException::withMessages(['payment_date' => 'Payment date cannot precede the payroll period.']);
         $service->pay($period, $line, FinancialAccount::findOrFail($data['source_account_id']), $data['payment_date'], $data['submission_token'], $request->user()->id);
         return back()->with('success', 'Employee salary payment posted to cash and general ledger.');
+    }
+
+    public function payslip(Request $request, PayrollPeriod $period, PayrollLine $line)
+    {
+        abort_unless($request->user()->can('hr.view'), 403);
+        abort_unless($period->status !== 'draft', 404);
+        $line = $period->lines()->with(['employee', 'payment.journal'])->findOrFail($line->id);
+
+        return view('hr.payroll.payslip', [
+            'period' => $period->load('currency', 'approvalJournal'),
+            'line' => $line,
+            'company' => CompanySetting::first(),
+        ]);
     }
 
     private function authorizePosting(Request $request): void

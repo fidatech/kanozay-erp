@@ -54,7 +54,7 @@ class PayrollPeriodWorkflowTest extends TestCase
         ])->assertRedirect();
         $this->actingAs($user)->post(route('hr.payroll.approve', $period), [
             'expense_ledger_id' => LedgerAccount::where('code', '5410')->value('id'),
-            'payable_ledger_id' => LedgerAccount::where('code', '2131')->value('id'),
+            'payable_ledger_id' => LedgerAccount::where('code', '2131.01')->value('id'),
             'confirm_review' => '1',
         ])->assertRedirect();
         $period->refresh();
@@ -78,6 +78,8 @@ class PayrollPeriodWorkflowTest extends TestCase
         $this->assertSame(1, MoneyTransaction::count());
         $this->assertSame(2, JournalEntry::count());
         $this->assertSame('posted', MoneyTransaction::sole()->journal->status);
+        $this->actingAs($user)->get(route('hr.payroll.lines.payslip', [$period, $line]))
+            ->assertOk()->assertSee('Kanozay Foods Manufacturing logo')->assertSee('110.0000')->assertSee('Paid');
     }
 
     public function test_payment_currency_mismatch_rolls_back_and_approval_needs_finance_permission(): void
@@ -93,7 +95,7 @@ class PayrollPeriodWorkflowTest extends TestCase
         $user->givePermissionTo('finance.update');
         $this->actingAs($user)->post(route('hr.payroll.approve', $period), [
             'expense_ledger_id' => LedgerAccount::where('code', '5410')->value('id'),
-            'payable_ledger_id' => LedgerAccount::where('code', '2131')->value('id'),
+            'payable_ledger_id' => LedgerAccount::where('code', '2131.01')->value('id'),
             'confirm_review' => '1',
         ])->assertRedirect();
         $this->actingAs($user)->post(route('hr.payroll.lines.pay', [$period, $line]), [
