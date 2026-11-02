@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Currency;
 use App\Models\DocumentSequence;
+use App\Models\FinishedGood;
 use App\Models\SalesQuotation;
 use App\Models\TradeParty;
 use Brick\Math\BigDecimal;
@@ -28,9 +29,15 @@ class SalesQuotationService
             $total = BigDecimal::zero();
             $lines = [];
             foreach ($data['lines'] as $line) {
+                $finishedGoodId = isset($line['finished_good_id']) && $line['finished_good_id'] !== '' ? (int) $line['finished_good_id'] : null;
+                if ($finishedGoodId) {
+                    $good = FinishedGood::whereKey($finishedGoodId)->where('is_active', true)->first();
+                    if (! $good) throw ValidationException::withMessages(['lines' => 'Select an active finished product for each linked quotation line.']);
+                    if (strcasecmp((string) $line['unit'], (string) $good->package_unit) !== 0) throw ValidationException::withMessages(['lines' => 'A product quotation line must use the finished product package unit.']);
+                }
                 $lineTotal = BigDecimal::of((string) $line['unit_price'])->multipliedBy((string) $line['quantity'])->toScale(4, RoundingMode::HalfUp);
                 $total = $total->plus($lineTotal);
-                $lines[] = [$line, $lineTotal];
+                $lines[] = [$line, $lineTotal, $finishedGoodId];
             }
             if (! $total->isGreaterThan(0) || $total->isGreaterThan(BigDecimal::of('99999999999999999999.9999'))) {
                 throw ValidationException::withMessages(['lines' => 'Quotation total must be positive and within the supported range.']);
@@ -44,9 +51,9 @@ class SalesQuotationService
                 'subtotal' => (string) $total->toScale(4, RoundingMode::HalfUp), 'total' => (string) $total->toScale(4, RoundingMode::HalfUp),
                 'reference' => $data['reference'] ?? null, 'notes' => $data['notes'] ?? null, 'created_by' => $actorId,
             ]);
-            foreach ($lines as [$line, $lineTotal]) {
+            foreach ($lines as [$line, $lineTotal, $finishedGoodId]) {
                 $quotation->lines()->create([
-                    'description' => $line['description'], 'quantity' => (int) $line['quantity'], 'unit' => $line['unit'],
+                    'finished_good_id' => $finishedGoodId, 'description' => $line['description'], 'quantity' => (int) $line['quantity'], 'unit' => $line['unit'],
                     'unit_price' => (string) BigDecimal::of((string) $line['unit_price'])->toScale(4, RoundingMode::HalfUp),
                     'line_total' => (string) $lineTotal,
                 ]);

@@ -83,6 +83,20 @@ class SalesInvoiceService
             foreach ($calculated as $item) {
                 $line = $item['line'];
                 $batch = \App\Models\ProductionBatch::findOrFail($line['production_batch_id']);
+                $orderLineId = isset($line['sales_order_line_id']) && $line['sales_order_line_id'] !== '' ? (int) $line['sales_order_line_id'] : null;
+                if ($orderLineId) {
+                    $orderLine = \App\Models\SalesOrderLine::query()->lockForUpdate()->with('order')->findOrFail($orderLineId);
+                    if ($orderLine->order->status !== 'confirmed'
+                        || (int) $orderLine->order->customer_id !== (int) $customer->id
+                        || (int) $orderLine->order->currency_id !== (int) $currency->id
+                        || (int) $orderLine->finished_good_id !== (int) $batch->finished_good_id) {
+                        $this->reject('The selected order line must match this customer, currency and finished product.');
+                    }
+                    $alreadyInvoiced = DB::table('sales_invoice_lines')->where('sales_order_line_id', $orderLineId)->sum('quantity_packages');
+                    if ((int) $alreadyInvoiced + (int) $line['quantity_packages'] > (int) $orderLine->quantity) {
+                        $this->reject('Invoice quantity exceeds the remaining quantity on the selected sales order line.');
+                    }
+                }
                 $dispatch = $this->dispatches->post(
                     (int) $batch->finished_good_id,
                     (int) $batch->id,
@@ -96,6 +110,7 @@ class SalesInvoiceService
                     $actorId,
                 );
                 $invoice->lines()->create([
+                    'sales_order_line_id' => $orderLineId,
                     'finished_good_id' => $batch->finished_good_id,
                     'production_batch_id' => $batch->id,
                     'dispatch_id' => $dispatch->id,

@@ -30,7 +30,7 @@ class SalesOrderService
             ]);
             foreach ($quotation->lines as $line) {
                 $order->lines()->create([
-                    'sales_quotation_line_id' => $line->id, 'description' => $line->description,
+                    'sales_quotation_line_id' => $line->id, 'finished_good_id' => $line->finished_good_id, 'description' => $line->description,
                     'quantity' => $line->quantity, 'unit' => $line->unit,
                     'unit_price' => $line->unit_price, 'line_total' => $line->line_total,
                 ]);

@@ -11,6 +11,8 @@ use App\Models\TradeParty;
 use App\Models\User;
 use App\Services\Accounting\EntityAccountProvisioner;
 use App\Services\SalesInvoiceService;
+use App\Services\SalesOrderService;
+use App\Services\SalesQuotationService;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -59,6 +61,14 @@ class SalesInvoiceWorkflowTest extends TestCase
             'quantity_packages' => 8, 'occurred_on' => now()->toDateString(), 'created_by' => $user->id,
         ]);
 
+        $quotation = app(SalesQuotationService::class)->create([
+            'submission_token' => (string) Str::uuid(), 'customer_id' => $customer->id, 'currency_id' => $currency->id,
+            'quotation_date' => now()->toDateString(), 'valid_until' => now()->addDays(14)->toDateString(),
+            'lines' => [['finished_good_id' => $good->id, 'description' => $good->name, 'quantity' => 8, 'unit' => 'bag', 'unit_price' => '12.5000']],
+        ], $user->id);
+        $salesOrder = app(SalesOrderService::class)->acceptQuotation($quotation->id, $user->id);
+        $salesOrderLine = $salesOrder->lines->firstOrFail();
+
         $data = [
             'submission_token' => (string) Str::uuid(),
             'customer_id' => $customer->id,
@@ -69,6 +79,7 @@ class SalesInvoiceWorkflowTest extends TestCase
             'reference' => 'TEST-ORDER-1',
             'lines' => [[
                 'dispatch_token' => (string) Str::uuid(),
+                'sales_order_line_id' => $salesOrderLine->id,
                 'production_batch_id' => $batch->id,
                 'quantity_packages' => 4,
                 'unit_price' => '12.5000',
@@ -104,17 +115,25 @@ class SalesInvoiceWorkflowTest extends TestCase
         $invalid = $data;
         $invalid['submission_token'] = (string) Str::uuid();
         $invalid['lines'][0]['dispatch_token'] = (string) Str::uuid();
-        $invalid['lines'][0]['quantity_packages'] = 5;
+        $partial = $data;
+        $partial['submission_token'] = (string) Str::uuid();
+        $partial['lines'][0]['dispatch_token'] = (string) Str::uuid();
+        $partial['lines'][0]['quantity_packages'] = 4;
+        $secondInvoice = $service->post($partial, $user->id);
+        $this->assertSame('50.0000', $secondInvoice->total);
+
+        $invalid['lines'][0]['quantity_packages'] = 1;
         try {
             $service->post($invalid, $user->id);
-            $this->fail('An invoice exceeding remaining batch stock should fail.');
+            $this->fail('An invoice exceeding the remaining sales order quantity should fail.');
         } catch (ValidationException $exception) {
-            $this->assertArrayHasKey('dispatch', $exception->errors());
+            $this->assertArrayHasKey('invoice', $exception->errors());
         }
-        $this->assertDatabaseCount('sales_invoices', 1);
-        $this->assertDatabaseCount('journal_entries', 1);
-        $this->assertDatabaseCount('finished_good_dispatches', 1);
-        $this->assertEquals(4, $good->fresh()->on_hand_packages);
+        $this->assertDatabaseCount('sales_invoices', 2);
+        $this->assertDatabaseCount('journal_entries', 2);
+        $this->assertDatabaseCount('finished_good_dispatches', 2);
+        $this->assertEquals(0, $good->fresh()->on_hand_packages);
+        $this->assertEquals(8, \App\Models\SalesInvoiceLine::where('sales_order_line_id', $salesOrderLine->id)->sum('quantity_packages'));
     }
 
     public function test_invoice_creation_requires_sales_create_permission(): void

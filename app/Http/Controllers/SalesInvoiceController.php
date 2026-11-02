@@ -7,6 +7,7 @@ use App\Models\Currency;
 use App\Models\LedgerAccount;
 use App\Models\ProductionBatch;
 use App\Models\SalesInvoice;
+use App\Models\SalesOrderLine;
 use App\Models\TradeDocument;
 use App\Models\TradeParty;
 use App\Services\FinishedGoodDispatchService;
@@ -29,12 +30,16 @@ class SalesInvoiceController extends Controller
         abort_unless($request->user()->can('sales.create'), 403);
         $batches = ProductionBatch::with(['finishedGood', 'order'])->where('status', 'released')->orderByDesc('released_at')->get();
         $batches->each(fn ($batch) => $batch->setAttribute('available_packages', $dispatches->availablePackages($batch)));
+        $orderLines = SalesOrderLine::with(['order', 'finishedGood', 'invoiceLines'])
+            ->whereNotNull('finished_good_id')->whereHas('order', fn ($query) => $query->where('status', 'confirmed'))->get()
+            ->filter(fn ($line) => $line->quantity - $line->invoiceLines->sum('quantity_packages') > 0);
 
         return view('sales.invoices.create', [
             'customers' => TradeParty::with('currencies')->where('type', 'customer')->where('is_active', true)->orderBy('name')->get(),
             'currencies' => Currency::where('is_active', true)->orderBy('code')->get(),
             'incomeAccounts' => LedgerAccount::where('type', 'income')->where('is_group', false)->where('is_active', true)->orderBy('code')->get(),
             'batches' => $batches->filter(fn ($batch) => $batch->available_packages > 0),
+            'orderLines' => $orderLines,
         ]);
     }
 
@@ -51,6 +56,7 @@ class SalesInvoiceController extends Controller
             'reference' => ['nullable', 'string', 'max:100'],
             'lines' => ['required', 'array', 'min:1', 'max:100'],
             'lines.*.dispatch_token' => ['required', 'uuid', 'distinct'],
+            'lines.*.sales_order_line_id' => ['nullable', 'integer', 'exists:sales_order_lines,id'],
             'lines.*.production_batch_id' => ['required', 'integer', 'distinct', 'exists:production_batches,id'],
             'lines.*.quantity_packages' => ['required', 'integer', 'min:1', 'max:2147483647'],
             'lines.*.unit_price' => ['required', 'regex:/^(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,4})?$/', 'numeric', 'gt:0'],

@@ -8,7 +8,7 @@ use LogicException;
 class SalesInvoiceLine extends Model
 {
     protected $fillable = [
-        'sales_invoice_id', 'finished_good_id', 'production_batch_id', 'dispatch_id',
+        'sales_invoice_id', 'sales_order_line_id', 'finished_good_id', 'production_batch_id', 'dispatch_id',
         'quantity_packages', 'unit_price', 'line_total',
     ];
 
@@ -38,5 +38,10 @@ class SalesInvoiceLine extends Model
     public function dispatch()
     {
         return $this->belongsTo(FinishedGoodDispatch::class, 'dispatch_id');
+    }
+
+    public function orderLine()
+    {
+        return $this->belongsTo(SalesOrderLine::class, 'sales_order_line_id');
     }
 }

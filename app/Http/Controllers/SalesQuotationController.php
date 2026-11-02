@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\CompanySetting;
 use App\Models\Currency;
+use App\Models\FinishedGood;
 use App\Models\SalesQuotation;
 use App\Models\TradeParty;
 use App\Services\SalesQuotationService;
@@ -23,6 +24,7 @@ class SalesQuotationController extends Controller
         return view('sales.quotations.create', [
             'customers' => TradeParty::with('currencies')->where('type', 'customer')->where('is_active', true)->orderBy('name')->get(),
             'currencies' => Currency::where('is_active', true)->orderBy('code')->get(),
+            'products' => FinishedGood::where('is_active', true)->orderBy('name')->get(),
         ]);
     }
 
@@ -38,6 +40,7 @@ class SalesQuotationController extends Controller
             'reference' => ['nullable', 'string', 'max:100'], 'notes' => ['nullable', 'string', 'max:2000'],
             'lines' => ['required', 'array', 'min:1', 'max:100'],
             'lines.*.description' => ['required', 'string', 'max:255'],
+            'lines.*.finished_good_id' => ['nullable', 'integer', 'exists:finished_goods,id'],
             'lines.*.quantity' => ['required', 'integer', 'min:1', 'max:2147483647'],
             'lines.*.unit' => ['required', 'string', 'max:40'],
             'lines.*.unit_price' => ['required', 'regex:/^(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,4})?$/', 'numeric', 'gt:0'],
