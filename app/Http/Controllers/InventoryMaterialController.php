@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\InventoryMaterial;
 use App\Models\Currency;
-use App\Services\InventoryCostService;
+use App\Models\InventoryMaterial;
 use App\Services\InventoryAdjustmentService;
+use App\Services\InventoryCostService;
 use App\Services\InventoryStockService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -32,6 +32,18 @@ class InventoryMaterialController extends Controller
         return view('inventory.material-show', [
             'material' => $material,
             'movements' => $material->movements()->orderByDesc('id')->paginate(25),
+        ]);
+    }
+
+    public function valuation(Request $request, InventoryCostService $costing)
+    {
+        abort_unless($request->user()->can('inventory.view'), 403);
+        $currency = strtoupper(trim((string) $request->query('currency', '')));
+        if ($currency !== '') abort_if(! preg_match('/^[A-Z]{3}$/', $currency), 422);
+
+        return view('inventory.valuation', [
+            'rows' => $costing->valuationRows($currency ?: null),
+            'currencyFilter' => $currency,
         ]);
     }
 

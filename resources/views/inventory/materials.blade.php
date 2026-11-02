@@ -3,6 +3,7 @@
 <div class="heading">
  <div><h1><i class="fa-solid fa-boxes-stacked"></i> Raw materials</h1>
  <p>Material catalog, on-hand stock, production reservations and available balances. Quantities use the recorded unit without automatic conversions.</p></div>
+ <a class="btn btn-light" href="{{ route('inventory.valuation') }}">Inventory valuation</a>
  @can('inventory.create')
  <button type="button" class="btn" onclick="document.getElementById('create-material-modal').showModal()"><i class="fa-solid fa-plus"></i> Add material</button>
  @endcan

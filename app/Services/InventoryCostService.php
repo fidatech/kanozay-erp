@@ -15,6 +15,37 @@ use Illuminate\Validation\ValidationException;
 
 class InventoryCostService
 {
+    public function valuationRows(?string $currencyCode = null): array
+    {
+        $rows = [];
+        $layers = InventoryCostLayer::with('material')->where('remaining_quantity', '>', 0)->orderBy('inventory_material_id')->orderBy('received_on')->get();
+        foreach ($layers as $layer) {
+            $code = $layer->currency_code;
+            if ($currencyCode && $code !== $currencyCode) continue;
+            $valued = $layer->original_cost !== null && $layer->currency_id !== null;
+            $key = $layer->inventory_material_id.'|'.($code ?? 'UNVALUED').'|'.($valued ? 'valued' : 'unvalued');
+            $rows[$key] ??= [
+                'material' => $layer->material,
+                'currency_code' => $valued ? $code : null,
+                'quantity' => BigDecimal::zero(),
+                'value' => BigDecimal::zero(),
+                'is_valued' => $valued,
+            ];
+            $rows[$key]['quantity'] = $rows[$key]['quantity']->plus((string) $layer->remaining_quantity);
+            if ($valued) $rows[$key]['value'] = $rows[$key]['value']->plus($this->remainingLayerCost($layer));
+        }
+
+        return array_values(array_map(fn (array $row) => [
+            'material' => $row['material'],
+            'currency_code' => $row['currency_code'],
+            'quantity' => (string) $row['quantity']->toScale(6),
+            'value' => $row['is_valued'] ? (string) $row['value']->toScale(10, RoundingMode::HalfUp) : null,
+            'quantity_display' => $this->formatDecimal((string) $row['quantity']->toScale(6)),
+            'value_display' => $row['is_valued'] ? $this->formatDecimal((string) $row['value']->toScale(4, RoundingMode::HalfUp)) : null,
+            'is_valued' => $row['is_valued'],
+        ], $rows));
+    }
+
     public function receiveGoodsReceiptLine(int $lineId, int $actorId): InventoryCostLayer
     {
         $line = GoodsReceiptLine::with('receipt')->findOrFail($lineId);
@@ -127,15 +158,28 @@ class InventoryCostService
     private function amountForConsumption(InventoryCostLayer $layer, BigDecimal $quantity): ?string
     {
         if ($layer->original_cost === null || $layer->currency_id === null) return null;
+        $availableCost = $this->remainingLayerCost($layer);
+        $remaining = BigDecimal::of((string) $layer->remaining_quantity);
+        if ($quantity->compareTo($remaining) === 0) return (string) $availableCost->toScale(10, RoundingMode::HalfUp);
+        return (string) $availableCost->multipliedBy($quantity)->dividedBy((string) $remaining, 10, RoundingMode::HalfUp)->toScale(10, RoundingMode::HalfUp);
+    }
+
+    private function remainingLayerCost(InventoryCostLayer $layer): BigDecimal
+    {
         $landed = $layer->source_type === 'goods_receipt_line'
             ? DB::table('goods_receipt_landed_cost_allocations')->where('goods_receipt_line_id', $layer->source_id)->sum('amount')
             : '0';
         $totalCost = BigDecimal::of((string) $layer->original_cost)->plus((string) $landed);
         $used = BigDecimal::zero();
         foreach ($layer->consumptions()->where('is_valued', true)->pluck('amount') as $prior) $used = $used->plus((string) $prior);
-        $availableCost = $totalCost->minus($used);
-        $remaining = BigDecimal::of((string) $layer->remaining_quantity);
-        if ($quantity->compareTo($remaining) === 0) return (string) $availableCost->toScale(10, RoundingMode::HalfUp);
-        return (string) $availableCost->multipliedBy($quantity)->dividedBy((string) $remaining, 10, RoundingMode::HalfUp)->toScale(10, RoundingMode::HalfUp);
+        return $totalCost->minus($used);
+    }
+
+    private function formatDecimal(string $value): string
+    {
+        [$integer, $fraction] = array_pad(explode('.', $value, 2), 2, '');
+        $integer = preg_replace('/\B(?=(\d{3})+(?!\d))/', ',', $integer);
+        $fraction = rtrim($fraction, '0');
+        return $integer.($fraction === '' ? '' : '.'.$fraction);
     }
 }

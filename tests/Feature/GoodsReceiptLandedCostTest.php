@@ -104,6 +104,9 @@ class GoodsReceiptLandedCostTest extends TestCase
             'quantity' => '0.500000', 'amount' => '52.5000000000', 'currency_code' => 'AFN', 'is_valued' => true,
         ]);
         $this->assertSame('0.500000', $material->fresh()->on_hand_quantity);
+        $valuation = app(\App\Services\InventoryCostService::class)->valuationRows('AFN');
+        $this->assertSame('52.5000000000', $valuation[0]['value']);
+        $this->assertSame('0.5', $valuation[0]['quantity_display']);
     }
 
     public function test_landed_cost_is_rejected_after_receipt_material_was_issued(): void
