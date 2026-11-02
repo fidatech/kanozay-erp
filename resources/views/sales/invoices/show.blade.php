@@ -2,7 +2,7 @@
 @section('content')
 <div class="heading no-print">
  <div><h1>{{ $invoice->number }}</h1><p>Posted sales invoice and linked customer receivable</p></div>
- <div style="display:flex;gap:8px"><a class="btn btn-light" href="{{ route('sales.invoices.index') }}">Back to invoices</a><button class="btn" type="button" onclick="window.print()"><i class="fa-solid fa-print"></i> Print / Save PDF</button></div>
+ <div style="display:flex;gap:8px"><a class="btn btn-light" href="{{ route('sales.invoices.index') }}">Back to invoices</a>@can('sales.create')<a class="btn btn-light" href="{{ route('sales.credit-notes.create',$invoice) }}">Return / credit note</a>@endcan<button class="btn" type="button" onclick="window.print()"><i class="fa-solid fa-print"></i> Print / Save PDF</button></div>
 </div>
 <div class="card invoice-sheet" dir="{{ session('locale','en') === 'en' ? 'ltr' : 'rtl' }}" style="max-width:900px;margin:0 auto;padding:42px;background:#fff;color:#1b2738">
  <header style="display:flex;align-items:center;justify-content:space-between;gap:24px;border-bottom:3px solid #5921a8;padding-bottom:18px">
@@ -40,10 +40,12 @@
    <tr><th style="text-align:left">Invoice total</th><td style="text-align:right"><strong>{{ $invoice->currency_code }} {{ rtrim(rtrim((string) $invoice->total, '0'), '.') }}</strong></td></tr>
    <tr><th style="text-align:left">Previous balance</th><td style="text-align:right">{{ $invoice->currency_code }} {{ rtrim(rtrim($previousBalance, '0'), '.') }}</td></tr>
    <tr><th style="text-align:left">Payments received</th><td style="text-align:right">{{ $invoice->currency_code }} {{ rtrim(rtrim($paid, '0'), '.') }}</td></tr>
+   <tr><th style="text-align:left">Credit notes</th><td style="text-align:right">{{ $invoice->currency_code }} {{ rtrim(rtrim($credited, '0'), '.') }}</td></tr>
    <tr><th style="text-align:left">Outstanding on invoice</th><td style="text-align:right"><strong>{{ $invoice->currency_code }} {{ rtrim(rtrim($outstanding, '0'), '.') }}</strong></td></tr>
    <tr><th style="text-align:left">Total customer balance</th><td style="text-align:right"><strong>{{ $invoice->currency_code }} {{ rtrim(rtrim((string) \Brick\Math\BigDecimal::of($previousBalance)->plus($outstanding)->toScale(4), '0'), '.') }}</strong></td></tr>
   </tbody></table>
  </section>
+ @if($invoice->creditNotes->isNotEmpty())<section style="margin-top:26px"><strong>Credit notes</strong><div class="table-wrap"><table><thead><tr><th>Number</th><th>Date</th><th>Reason</th><th>Amount</th></tr></thead><tbody>@foreach($invoice->creditNotes as $credit)<tr><td><a href="{{ route('sales.credit-notes.show',$credit) }}">{{ $credit->number }}</a></td><td>{{ $credit->credit_date->format('Y-m-d') }}</td><td>{{ $credit->reason }}</td><td>{{ $invoice->currency_code }} {{ rtrim(rtrim((string)$credit->total,'0'),'.') }}</td></tr>@endforeach</tbody></table></div></section>@endif
  <div style="display:grid;grid-template-columns:1fr 1fr;gap:80px;margin-top:70px;text-align:center">
   <div style="border-top:1px solid #667085;padding-top:8px">Prepared by</div><div style="border-top:1px solid #667085;padding-top:8px">Customer signature</div>
  </div>

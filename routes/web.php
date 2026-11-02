@@ -31,6 +31,9 @@ Route::middleware('auth')->get('/sales/invoices', [\App\Http\Controllers\SalesIn
 Route::middleware('auth')->get('/sales/invoices/create', [\App\Http\Controllers\SalesInvoiceController::class, 'create'])->name('sales.invoices.create');
 Route::middleware('auth')->post('/sales/invoices', [\App\Http\Controllers\SalesInvoiceController::class, 'store'])->name('sales.invoices.store');
 Route::middleware('auth')->get('/sales/invoices/{invoice}', [\App\Http\Controllers\SalesInvoiceController::class, 'show'])->name('sales.invoices.show');
+Route::middleware('auth')->get('/sales/invoices/{invoice}/credit-notes/create', [\App\Http\Controllers\SalesCreditNoteController::class, 'create'])->name('sales.credit-notes.create');
+Route::middleware('auth')->post('/sales/invoices/{invoice}/credit-notes', [\App\Http\Controllers\SalesCreditNoteController::class, 'store'])->name('sales.credit-notes.store');
+Route::middleware('auth')->get('/sales/credit-notes/{creditNote}', [\App\Http\Controllers\SalesCreditNoteController::class, 'show'])->name('sales.credit-notes.show');
 Route::middleware('auth')->get('/sales/quotations', [\App\Http\Controllers\SalesQuotationController::class, 'index'])->name('sales.quotations.index');
 Route::middleware('auth')->get('/sales/quotations/create', [\App\Http\Controllers\SalesQuotationController::class, 'create'])->name('sales.quotations.create');
 Route::middleware('auth')->post('/sales/quotations', [\App\Http\Controllers\SalesQuotationController::class, 'store'])->name('sales.quotations.store');

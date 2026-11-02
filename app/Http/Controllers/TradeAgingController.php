@@ -9,10 +9,10 @@ class TradeAgingController extends Controller {
   abort_unless($request->user()->canAny(['administration.view', 'finance.view', 'reports.view']),403);
   $filters=$request->validate(['type'=>['nullable',Rule::in(['receivable','payable'])],'as_of'=>['nullable','date']]);
   $type=$filters['type']??'receivable';$asOf=$filters['as_of']??now()->toDateString();
-  $documents=TradeDocument::with(['party','currency'])->where('type',$type)->whereDate('document_date','<=',$asOf)->withSum(['allocations as allocated_as_of'=>fn($q)=>$q->whereDate('created_at','<=',$asOf)],'amount')->orderBy('due_date')->get();
+  $documents=TradeDocument::with(['party','currency'])->where('type',$type)->whereDate('document_date','<=',$asOf)->withSum(['allocations as allocated_as_of'=>fn($q)=>$q->whereDate('created_at','<=',$asOf)],'amount')->withSum(['credits as credited_as_of'=>fn($q)=>$q->whereDate('credit_date','<=',$asOf)],'amount')->orderBy('due_date')->get();
   $rows=[];$totals=[];
   foreach($documents as $document){
-   $balance=BigDecimal::of((string)$document->amount)->minus((string)($document->allocated_as_of??'0'));
+   $balance=BigDecimal::of((string)$document->amount)->minus((string)($document->allocated_as_of??'0'))->minus((string)($document->credited_as_of??'0'));
    if($balance->compareTo(BigDecimal::zero())<=0)continue;
    $days=(int)\Carbon\Carbon::parse($document->due_date)->startOfDay()->diffInDays(\Carbon\Carbon::parse($asOf)->startOfDay(),false);
    $bucket=$days<=0?'current':($days<=30?'1_30':($days<=60?'31_60':($days<=90?'61_90':'90_plus')));

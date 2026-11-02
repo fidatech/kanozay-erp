@@ -69,14 +69,16 @@ class SalesInvoiceController extends Controller
     public function show(Request $request, SalesInvoice $invoice)
     {
         abort_unless($request->user()->canAny(['sales.view', 'administration.view', 'finance.view', 'reports.view']), 403);
-        $invoice->load(['customer', 'currency', 'lines.finishedGood', 'lines.batch', 'journal', 'tradeDocument.allocations']);
+        $invoice->load(['customer', 'currency', 'lines.finishedGood', 'lines.batch', 'journal', 'tradeDocument.allocations', 'tradeDocument.credits', 'creditNotes.lines']);
 
         $paid = BigDecimal::zero();
         foreach ($invoice->tradeDocument?->allocations ?? [] as $allocation) $paid = $paid->plus((string) $allocation->amount);
-        $outstanding = BigDecimal::of((string) $invoice->total)->minus($paid);
+        $credited = BigDecimal::zero();
+        foreach ($invoice->tradeDocument?->credits ?? [] as $credit) $credited = $credited->plus((string) $credit->amount);
+        $outstanding = BigDecimal::of((string) $invoice->total)->minus($paid)->minus($credited);
         if ($outstanding->isLessThan(0)) $outstanding = BigDecimal::zero();
 
-        $prior = TradeDocument::with('allocations')->where('type', 'receivable')
+        $prior = TradeDocument::with(['allocations','credits'])->where('type', 'receivable')
             ->where('trade_party_id', $invoice->customer_id)->where('currency_id', $invoice->currency_id)
             ->where(function ($query) use ($invoice) {
                 $query->whereDate('document_date', '<', $invoice->invoice_date->toDateString())
@@ -89,7 +91,9 @@ class SalesInvoiceController extends Controller
         foreach ($prior as $document) {
             $allocated = BigDecimal::zero();
             foreach ($document->allocations as $allocation) $allocated = $allocated->plus((string) $allocation->amount);
-            $balance = BigDecimal::of((string) $document->amount)->minus($allocated);
+            $creditTotal = BigDecimal::zero();
+            foreach ($document->credits as $credit) $creditTotal = $creditTotal->plus((string) $credit->amount);
+            $balance = BigDecimal::of((string) $document->amount)->minus($allocated)->minus($creditTotal);
             if ($balance->isGreaterThan(0)) $previousBalance = $previousBalance->plus($balance);
         }
 
@@ -97,6 +101,7 @@ class SalesInvoiceController extends Controller
             'invoice' => $invoice,
             'company' => CompanySetting::first(),
             'paid' => (string) $paid->toScale(4),
+            'credited' => (string) $credited->toScale(4),
             'outstanding' => (string) $outstanding->toScale(4),
             'previousBalance' => (string) $previousBalance->toScale(4),
         ]);

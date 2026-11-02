@@ -11,6 +11,8 @@ use App\Models\TradeParty;
 use App\Models\User;
 use App\Services\Accounting\EntityAccountProvisioner;
 use App\Services\SalesInvoiceService;
+use App\Services\SalesCreditNoteService;
+use App\Services\FinishedGoodDispatchService;
 use App\Services\SalesOrderService;
 use App\Services\SalesQuotationService;
 use Database\Seeders\ChartOfAccountsSeeder;
@@ -122,6 +124,19 @@ class SalesInvoiceWorkflowTest extends TestCase
         $secondInvoice = $service->post($partial, $user->id);
         $this->assertSame('50.0000', $secondInvoice->total);
 
+        $credit = app(SalesCreditNoteService::class)->post($invoice->id, [
+            'submission_token' => (string) Str::uuid(), 'credit_date' => now()->toDateString(),
+            'reason' => 'Synthetic returned package', 'lines' => [[
+                'sales_invoice_line_id' => $invoice->lines->first()->id,
+                'quantity_packages' => 1, 'restock' => true,
+            ]],
+        ], $user->id);
+        $this->assertSame('12.5000', $credit->total);
+        $this->assertEquals(1, $good->fresh()->on_hand_packages);
+        $this->assertSame(1, app(FinishedGoodDispatchService::class)->availablePackages($batch->fresh()));
+        $this->assertDatabaseHas('trade_document_credits', ['trade_document_id' => $invoice->trade_document_id, 'amount' => '12.5000']);
+        $this->assertSame('12.5000', (string) $credit->journal->lines()->where('debit', '>', 0)->value('debit'));
+
         $invalid['lines'][0]['quantity_packages'] = 1;
         try {
             $service->post($invalid, $user->id);
@@ -130,9 +145,9 @@ class SalesInvoiceWorkflowTest extends TestCase
             $this->assertArrayHasKey('invoice', $exception->errors());
         }
         $this->assertDatabaseCount('sales_invoices', 2);
-        $this->assertDatabaseCount('journal_entries', 2);
+        $this->assertDatabaseCount('journal_entries', 3);
         $this->assertDatabaseCount('finished_good_dispatches', 2);
-        $this->assertEquals(0, $good->fresh()->on_hand_packages);
+        $this->assertEquals(1, $good->fresh()->on_hand_packages);
         $this->assertEquals(8, \App\Models\SalesInvoiceLine::where('sales_order_line_id', $salesOrderLine->id)->sum('quantity_packages'));
     }
 

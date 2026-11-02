@@ -46,4 +46,9 @@ class SalesInvoice extends Model
     {
         return $this->belongsTo(TradeDocument::class, 'trade_document_id');
     }
+
+    public function creditNotes()
+    {
+        return $this->hasMany(SalesCreditNote::class, 'sales_invoice_id')->orderBy('id');
+    }
 }

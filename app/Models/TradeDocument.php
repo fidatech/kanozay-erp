@@ -6,5 +6,6 @@ class TradeDocument extends Model {
  public function party(){return $this->belongsTo(TradeParty::class,'trade_party_id');}
  public function currency(){return $this->belongsTo(Currency::class);}
  public function allocations(){return $this->hasMany(TradeSettlementAllocation::class,'trade_document_id');}
+ public function credits(){return $this->hasMany(TradeDocumentCredit::class,'trade_document_id');}
  public function journal(){return $this->belongsTo(JournalEntry::class,'journal_entry_id');}
 }

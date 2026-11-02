@@ -23,7 +23,7 @@ class TradeReconciliationController extends Controller
         $partyType = $type === 'receivable' ? 'customer' : 'supplier';
         $moneyType = $type === 'receivable' ? 'receipt' : 'payment';
         $parties = TradeParty::where('type', $partyType)->orderBy('name')->get();
-        $documents = TradeDocument::where('type', $type)->with('allocations')->get();
+        $documents = TradeDocument::where('type', $type)->with(['allocations','credits'])->get();
         $transactions = MoneyTransaction::where('type', $moneyType)->with('allocations')->get();
         $ledgers = \Illuminate\Support\Facades\DB::table('entity_ledger_accounts')
             ->where('entity_type', $partyType)->where('purpose', $type)->get();
@@ -35,8 +35,10 @@ class TradeReconciliationController extends Controller
             $rows[$key] ??= ['party' => $partyNames->get($document->trade_party_id)?->name ?? 'Unknown',
                 'currency' => $document->currency_id, 'outstanding' => BigDecimal::zero(), 'unapplied' => BigDecimal::zero(), 'issues' => 0];
             $allocated = $this->allocationTotal($document);
+            $credited = BigDecimal::zero();
+            foreach ($document->credits as $credit) $credited = $credited->plus((string) $credit->amount);
             $amount = $this->money($document->amount);
-            $remaining = $amount->minus($allocated);
+            $remaining = $amount->minus($allocated)->minus($credited);
             $rows[$key]['outstanding'] = $rows[$key]['outstanding']->plus($remaining->compareTo(BigDecimal::zero()) > 0 ? $remaining : BigDecimal::zero());
             if ($allocated->compareTo($amount) > 0) $rows[$key]['issues']++;
         }
@@ -99,7 +101,7 @@ class TradeReconciliationController extends Controller
                 $documentBreakdown = $documents->filter(fn ($doc) => (int) $doc->trade_party_id === (int) $party->id && (int) $doc->currency_id === (int) $filters['currency_id'])->values();
                 $mappedLedger = $rows[$key]['ledger_account_id'];
                 $paymentBreakdown = $transactions->filter(fn ($tx) => $mappedLedger && (int) $tx->counterpart_ledger_account_id === (int) $mappedLedger && (int) $tx->currency_id === (int) $filters['currency_id'])->values();
-                $documentBreakdown->each(function ($doc) { $allocated=$this->allocationTotal($doc);$doc->setAttribute('reconciliation_allocated',(string)$allocated);$doc->setAttribute('reconciliation_remaining',(string)$this->positiveRemainder($doc->amount,$allocated)); });
+                $documentBreakdown->each(function ($doc) { $allocated=$this->allocationTotal($doc);$credited=BigDecimal::zero();foreach($doc->credits as $credit)$credited=$credited->plus((string)$credit->amount);$remaining=$this->money($doc->amount)->minus($allocated)->minus($credited);$doc->setAttribute('reconciliation_allocated',(string)$allocated);$doc->setAttribute('reconciliation_remaining',(string)($remaining->compareTo(BigDecimal::zero())>0?$remaining:BigDecimal::zero())); });
                 $paymentBreakdown->each(function ($tx) { $allocated=$this->allocationTotal($tx);$tx->setAttribute('reconciliation_allocated',(string)$allocated);$tx->setAttribute('reconciliation_remaining',(string)$this->positiveRemainder($tx->amount,$allocated)); });
                 $selectedRow = $rows[$key];
                 $reconciliationSummary = [

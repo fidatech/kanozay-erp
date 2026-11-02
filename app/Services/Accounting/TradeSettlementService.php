@@ -24,6 +24,7 @@ class TradeSettlementService {
    $documentUsed=$this->allocatedAmount('trade_document_id',$documentId);
    $transactionUsed=$this->allocatedAmount('money_transaction_id',$transactionId);
    $documentRemaining=BigDecimal::of((string)$document->amount)->minus($documentUsed);
+   foreach ($document->credits as $credit) $documentRemaining=$documentRemaining->minus((string)$credit->amount);
    $transactionRemaining=BigDecimal::of((string)$transaction->amount)->minus($transactionUsed);
    if($allocation->compareTo(BigDecimal::zero())<=0 || $allocation->compareTo($documentRemaining)>0 || $allocation->compareTo($transactionRemaining)>0)throw ValidationException::withMessages(['amount'=>'Allocation must be positive and cannot exceed either outstanding balance.']);
    return TradeSettlementAllocation::create(['trade_document_id'=>$documentId,'money_transaction_id'=>$transactionId,'amount'=>(string)$allocation,'created_by'=>$userId]);
