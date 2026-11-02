@@ -32,7 +32,7 @@ class PayrollPeriodController extends Controller
         $start = $period->period_start->toDateString();
         $end = $period->period_start->copy()->endOfMonth()->toDateString();
         $attendance = EmployeeAttendance::whereIn('employee_profile_id', $period->lines->pluck('employee_profile_id'))
-            ->whereBetween('attendance_date', [$start, $end])->get()
+            ->whereDate('attendance_date', '>=', $start)->whereDate('attendance_date', '<=', $end)->get()
             ->groupBy('employee_profile_id')->map(fn ($rows) => $rows->countBy('status')->all())->all();
         return view('hr.payroll.show', [
             'period' => $period,

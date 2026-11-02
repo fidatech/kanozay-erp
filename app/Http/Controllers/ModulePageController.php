@@ -21,6 +21,10 @@ class ModulePageController extends Controller
             return app(EmployeeAttendanceController::class)->index($request);
         }
 
+        if ($module === 'hr' && $page === 'leave') {
+            return app(EmployeeLeaveController::class)->index($request);
+        }
+
         if ($module === 'assets' && $page === 'register') {
             return app(FixedAssetController::class)->index($request);
         }

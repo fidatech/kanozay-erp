@@ -22,7 +22,8 @@ class EmployeeAttendanceController extends Controller
         return view('hr.attendance.index', [
             'month' => $month,
             'entries' => EmployeeAttendance::with('employee')
-                ->whereBetween('attendance_date', [$month.'-01', date('Y-m-t', strtotime($month.'-01'))])
+                ->whereDate('attendance_date', '>=', $month.'-01')
+                ->whereDate('attendance_date', '<=', date('Y-m-t', strtotime($month.'-01')))
                 ->orderByDesc('attendance_date')->orderBy('id')->paginate(30)->withQueryString(),
             'employees' => EmployeeProfile::where('is_active', true)->orderBy('employee_number')->get(),
             'statuses' => self::STATUSES,
@@ -40,7 +41,7 @@ class EmployeeAttendanceController extends Controller
         ]);
         DB::transaction(function () use ($data, $request) {
             $employee = EmployeeProfile::whereKey($data['employee_profile_id'])->where('is_active', true)->firstOrFail();
-            if (EmployeeAttendance::where('employee_profile_id', $employee->id)->where('attendance_date', $data['attendance_date'])->exists()) {
+            if (EmployeeAttendance::where('employee_profile_id', $employee->id)->whereDate('attendance_date', $data['attendance_date'])->exists()) {
                 throw ValidationException::withMessages(['attendance_date' => 'Attendance for this employee and day already exists. Use the correction form.']);
             }
             $entry = EmployeeAttendance::create($data + ['recorded_by' => $request->user()->id]);
