@@ -88,6 +88,11 @@ Route::middleware('auth')->patch('/hr/payroll/{period}/lines/{line}', [\App\Http
 Route::middleware('auth')->post('/hr/payroll/{period}/approve', [\App\Http\Controllers\PayrollPeriodController::class, 'approve'])->name('hr.payroll.approve');
 Route::middleware('auth')->post('/hr/payroll/{period}/lines/{line}/pay', [\App\Http\Controllers\PayrollPeriodController::class, 'pay'])->name('hr.payroll.lines.pay');
 Route::middleware('auth')->get('/hr/payroll/{period}/lines/{line}/payslip', [\App\Http\Controllers\PayrollPeriodController::class, 'payslip'])->name('hr.payroll.lines.payslip');
+Route::middleware('auth')->get('/assets/{asset}', [\App\Http\Controllers\FixedAssetController::class, 'show'])->name('assets.show');
+Route::middleware('auth')->post('/assets/categories', [\App\Http\Controllers\FixedAssetController::class, 'category'])->name('assets.categories.store');
+Route::middleware('auth')->post('/assets', [\App\Http\Controllers\FixedAssetController::class, 'store'])->name('assets.store');
+Route::middleware('auth')->post('/assets/{asset}/assignments', [\App\Http\Controllers\FixedAssetController::class, 'assign'])->name('assets.assignments.store');
+Route::middleware('auth')->post('/assets/{asset}/assignments/{assignment}/return', [\App\Http\Controllers\FixedAssetController::class, 'returnAssignment'])->name('assets.assignments.return');
 
 Route::middleware('auth')->group(function () {
     Route::get('/finance/documents', [\App\Http\Controllers\TradeDocumentController::class,'index'])->name('finance.documents.index');

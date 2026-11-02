@@ -17,6 +17,10 @@ class ModulePageController extends Controller
             return app(PayrollPeriodController::class)->index($request);
         }
 
+        if ($module === 'assets' && $page === 'register') {
+            return app(FixedAssetController::class)->index($request);
+        }
+
         if ($module === 'shareholders' && in_array($page, ['register', 'capital', 'statements'], true)) {
             return app(ShareholderController::class)->index($request);
         }
