@@ -31,6 +31,7 @@ class RoleController extends Controller
             'permissions.*' => [Rule::exists('permissions', 'name')->where('guard_name', 'web')],
         ]);
         if ($data['name'] === 'Super Administrator') abort(403);
+        $this->ensureGrantablePermissions($request, $data['permissions'] ?? []);
         $role = Role::create(['name' => $data['name'], 'guard_name' => 'web']);
         $role->syncPermissions($data['permissions'] ?? []);
         ActivityLog::record('role.'.(request()->isMethod('post') ? 'created' : 'updated'), 'role', $role->id, 'Saved access role', ['name' => $role->name, 'permissions' => $data['permissions'] ?? []]);
@@ -47,6 +48,7 @@ class RoleController extends Controller
             'permissions.*' => [Rule::exists('permissions', 'name')->where('guard_name', 'web')],
         ]);
         if ($data['name'] === 'Super Administrator') abort(403);
+        $this->ensureGrantablePermissions($request, $data['permissions'] ?? []);
         $role->update(['name' => $data['name']]);
         $role->syncPermissions($data['permissions'] ?? []);
         ActivityLog::record('role.'.(request()->isMethod('post') ? 'created' : 'updated'), 'role', $role->id, 'Saved access role', ['name' => $role->name, 'permissions' => $data['permissions'] ?? []]);
@@ -63,4 +65,14 @@ class RoleController extends Controller
         $role->delete();
         return back()->with('status', 'Role deleted successfully.');
     }
+    private function ensureGrantablePermissions(Request $request, array $permissions): void
+    {
+        if ($request->user()->hasRole('Super Administrator')) return;
+
+        // Role administrators cannot grant access they do not hold themselves.
+        foreach ($permissions as $permission) {
+            abort_unless($request->user()->can($permission), 403);
+        }
+    }
+
 }
