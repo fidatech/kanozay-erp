@@ -132,6 +132,7 @@ Route::middleware('auth')->group(function () {
 
 Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::get('chart-of-accounts', [\App\Http\Controllers\Admin\LedgerAccountController::class,'index'])->name('accounts.index');
+    Route::post('chart-of-accounts/workbook-review', \App\Http\Controllers\Admin\LegacyAccountsWorkbookReviewController::class)->name('accounts.workbook-review');
     Route::post('chart-of-accounts', [\App\Http\Controllers\Admin\LedgerAccountController::class,'store'])->name('accounts.store');
     Route::put('chart-of-accounts/{account}', [\App\Http\Controllers\Admin\LedgerAccountController::class,'update'])->name('accounts.update');
     Route::get('financial-settings', [\App\Http\Controllers\Admin\FinancialSettingController::class,'edit'])->name('financial-settings.edit');

@@ -8,6 +8,7 @@
 @media(max-width:650px){.coa-filter-form{width:100%;justify-content:flex-end}.coa-filter-label{display:none}}
 </style>
 <div class="heading"><div><h1><i class="fa-solid fa-sitemap" style="color:#2b8d70"></i> Chart of Accounts</h1><p>Configure the financial account hierarchy for Kanozay Foods.</p></div></div>
+@can('administration.update')<section class="panel" style="margin-bottom:16px"><h2>Review Kanozay accounts workbook</h2><p class="coa-muted">Inspect the historical ledgers and their source currencies before mapping opening balances.</p><form method="POST" action="{{ route('admin.accounts.workbook-review') }}" enctype="multipart/form-data" style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">@csrf<label>Accounts workbook (.xls or .xlsx)<input type="file" name="file" accept=".xls,.xlsx" required></label><button type="submit" class="btn">Review workbook</button></form></section>@endcan
 @if($errors->any())<section class="panel" style="color:#b42318">{{ $errors->first() }}</section>@endif
 <div class="coa-grid"><section class="panel"><h2>Create Account</h2><p class="coa-muted">Create group accounts first, then add posting accounts beneath them. No opening balances are generated automatically.</p>
 @can('administration.update')<form class="coa-form" data-new-entry-form="1" method="POST" action="{{ route('admin.accounts.store') }}">@csrf
