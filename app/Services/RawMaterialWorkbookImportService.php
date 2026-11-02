@@ -24,9 +24,14 @@ class RawMaterialWorkbookImportService
         $rows = [];
         $errors = [];
         $seen = [];
+        $section = 'Uncategorized';
         for ($row = 3; $row <= min(1000, $sheet->getHighestDataRow()); $row++) {
             $number = $sheet->getCell('A'.$row)->getCalculatedValue();
-            if (! is_numeric($number)) continue;
+            if (! is_numeric($number)) {
+                $heading = trim((string) $sheet->getCell('B'.$row)->getFormattedValue());
+                if ($heading !== '' && stripos($heading, 'details') === false) $section = $heading;
+                continue;
+            }
             $name = trim(preg_replace('/\s+/', ' ', (string) $sheet->getCell('B'.$row)->getFormattedValue()));
             $unit = trim(preg_replace('/\s+/', ' ', (string) $sheet->getCell('F'.$row)->getFormattedValue()));
             $quantity = $this->number($sheet->getCell('G'.$row)->getCalculatedValue());
@@ -37,22 +42,32 @@ class RawMaterialWorkbookImportService
             if ($quantity === null || ! preg_match('/^(?:0|[1-9][0-9]{0,13})(?:\.[0-9]{1,6})?$/', $quantity) || BigDecimal::of($quantity)->compareTo(BigDecimal::zero()) <= 0) $rowErrors[] = 'Quantity must be a positive number with up to six decimal places.';
             if ($unitCost !== null && (! preg_match('/^(?:0|[1-9][0-9]{0,13})(?:\.[0-9]{1,6})?$/', $unitCost) || BigDecimal::of($unitCost)->compareTo(BigDecimal::zero()) < 0)) $rowErrors[] = 'USD unit price must be zero or a positive number with up to six decimal places.';
 
-            $key = mb_strtolower($name.'|'.$unit);
-            if ($name !== '' && $unit !== '' && isset($seen[$key])) $rowErrors[] = 'Material name and unit are duplicated within this workbook.';
-            $seen[$key] = true;
-            if ($name !== '' && $unit !== '' && InventoryMaterial::query()->whereRaw('lower(name) = ?', [mb_strtolower($name)])->whereRaw('lower(unit) = ?', [mb_strtolower($unit)])->exists()) $rowErrors[] = 'A material with this name and unit already exists.';
+            $excluded = preg_match('/\b(on\s+way|ordered)\b/i', $section) === 1;
+            if (! $excluded) {
+                $key = mb_strtolower($name.'|'.$unit);
+                if ($name !== '' && $unit !== '' && isset($seen[$key])) $rowErrors[] = 'Material name and unit are duplicated within this workbook.';
+                $seen[$key] = true;
+                if ($name !== '' && $unit !== '' && InventoryMaterial::query()->whereRaw('lower(name) = ?', [mb_strtolower($name)])->whereRaw('lower(unit) = ?', [mb_strtolower($unit)])->exists()) $rowErrors[] = 'A material with this name and unit already exists.';
+            }
 
-            $rows[] = ['source_row' => $row, 'name' => $name, 'unit' => $unit, 'quantity' => $quantity, 'unit_cost_usd' => $unitCost, 'errors' => $rowErrors];
-            foreach ($rowErrors as $message) $errors[] = ['row' => $row, 'message' => $message];
+            $rows[] = [
+                'source_row' => $row, 'section' => $section, 'name' => $name, 'unit' => $unit,
+                'quantity' => $quantity, 'unit_cost_usd' => $unitCost,
+                'is_packaging' => stripos($section, 'cans bottles and caps') !== false,
+                'excluded' => $excluded, 'errors' => $rowErrors,
+            ];
+            if (! $excluded) foreach ($rowErrors as $message) $errors[] = ['row' => $row, 'message' => $message];
         }
         $book->disconnectWorksheets();
         if ($rows === []) throw ValidationException::withMessages(['file' => 'No numbered stock rows were found in the expected worksheet.']);
 
-        return ['rows' => $rows, 'total' => count($rows), 'valid' => count(array_filter($rows, fn ($item) => $item['errors'] === [])), 'errors' => $errors];
+        $stockRows = array_filter($rows, fn ($item) => ! $item['excluded']);
+        return ['rows' => $rows, 'total' => count($rows), 'importable' => count($stockRows), 'excluded' => count($rows) - count($stockRows), 'valid' => count(array_filter($stockRows, fn ($item) => $item['errors'] === [])), 'errors' => $errors];
     }
 
     public function import(array $rows, string $date, int $currencyId, User $actor, InventoryStockService $stock): int
     {
+        $rows = array_values(array_filter($rows, fn ($row) => empty($row['excluded'])));
         if ($rows === [] || count($rows) > 1000 || collect($rows)->contains(fn ($row) => ! empty($row['errors']))) {
             throw ValidationException::withMessages(['file' => 'The reviewed workbook contains invalid rows. Preview it again after resolving every error.']);
         }
@@ -67,7 +82,7 @@ class RawMaterialWorkbookImportService
                     throw ValidationException::withMessages(['file' => 'A matching material was added after preview. Nothing was imported; preview the workbook again.']);
                 }
                 $sku = 'RM-'.strtoupper(substr(hash('sha256', mb_strtolower($name).'|'.mb_strtolower($unit)), 0, 12));
-                $material = InventoryMaterial::create(['sku' => $sku, 'name' => $name, 'unit' => $unit, 'is_packaging' => false, 'is_active' => true]);
+                $material = InventoryMaterial::create(['sku' => $sku, 'name' => $name, 'unit' => $unit, 'is_packaging' => (bool) $item['is_packaging'], 'is_active' => true]);
                 $stock->post($material, [
                     'type' => 'opening', 'direction' => 'in', 'quantity' => $item['quantity'],
                     'unit_cost' => $item['unit_cost_usd'],
