@@ -49,6 +49,11 @@ class FixedAssetRegisterTest extends TestCase
         ])->assertRedirect();
         $this->assertSame($employee->id, $asset->fresh()->custodian_id);
         $assignment = FixedAssetAssignment::sole();
+        $this->actingAs($user)->post(route('assets.assignments.return', [$asset, $assignment]), [
+            'returned_on' => now()->subDays(2)->toDateString(),
+        ])->assertSessionHasErrors('assignment');
+        $this->assertNull($assignment->fresh()->returned_on);
+        $this->assertSame($employee->id, $asset->fresh()->custodian_id);
         $this->actingAs($user)->post(route('assets.assignments.store', $asset), [
             'employee_profile_id' => $employee->id, 'assigned_on' => now()->toDateString(),
         ])->assertSessionHasErrors('assignment');
