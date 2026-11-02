@@ -69,7 +69,7 @@ class ProductionOrderController extends Controller {
     }
     public function show(Request $request, ProductionOrder $order) {
         abort_unless($request->user()->canAny(['administration.view', 'manufacturing.view', 'laboratory.view', 'inventory.view']), 403);
-        $order->load('recipe', 'materials.inventoryMaterial', 'materials.wastes', 'batch.checks', 'batch.finishedGood');
+        $order->load('recipe', 'materials.inventoryMaterial', 'materials.wastes', 'batch.checks', 'batch.finishedGood', 'batch.costs');
         $ownReservations = [];
         $totalDemand = [];
         $firstLineForMaterial = [];

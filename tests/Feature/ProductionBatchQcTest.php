@@ -3,10 +3,13 @@
 namespace Tests\Feature;
 
 use App\Models\FinishedGood;
+use App\Models\Currency;
+use App\Models\InventoryMaterial;
 use App\Models\ProductionBatch;
 use App\Models\ProductionOrder;
 use App\Models\ProductionRecipe;
 use App\Models\User;
+use App\Services\InventoryStockService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
@@ -70,6 +73,70 @@ class ProductionBatchQcTest extends TestCase
         ])->assertSessionHasErrors('production_batch');
         $this->assertDatabaseCount('finished_good_movements', 1);
         $this->assertEquals(15, $good->fresh()->on_hand_packages);
+    }
+
+    public function test_release_freezes_material_issue_cost_by_source_currency(): void
+    {
+        [$order, $good] = $this->setupOrder();
+        $currency = Currency::create(['code' => 'USD', 'name' => 'US Dollar', 'is_active' => true, 'is_base' => false]);
+        $material = InventoryMaterial::create(['sku' => 'COST-01', 'name' => 'Synthetic flour', 'unit' => 'kg']);
+        $line = $order->materials()->create([
+            'line_number' => 1, 'material_name' => 'Synthetic flour', 'unit' => 'kg',
+            'quantity_per_package' => '1.000000', 'required_quantity' => '5.000000',
+            'issued_quantity' => '5.000000', 'inventory_material_id' => $material->id,
+        ]);
+        $stock = app(InventoryStockService::class);
+        $stock->post($material, [
+            'type' => 'opening', 'direction' => 'in', 'quantity' => '5.000000',
+            'unit_cost' => '2.000000', 'currency_id' => $currency->id,
+            'reference_type' => 'opening', 'reference_id' => $material->id,
+            'occurred_on' => now()->toDateString(), 'created_by' => $this->operator->id,
+        ]);
+        $unvaluedMaterial = InventoryMaterial::create(['sku' => 'COST-02', 'name' => 'Unvalued additive', 'unit' => 'kg']);
+        $unvaluedLine = $order->materials()->create([
+            'line_number' => 2, 'material_name' => 'Unvalued additive', 'unit' => 'kg',
+            'quantity_per_package' => '0.200000', 'required_quantity' => '1.000000',
+            'issued_quantity' => '1.000000', 'inventory_material_id' => $unvaluedMaterial->id,
+        ]);
+        $stock->post($unvaluedMaterial, [
+            'type' => 'opening', 'direction' => 'in', 'quantity' => '2.000000',
+            'reference_type' => 'opening', 'reference_id' => $unvaluedMaterial->id,
+            'occurred_on' => now()->toDateString(), 'created_by' => $this->operator->id,
+        ]);
+        $stock->post($unvaluedMaterial, [
+            'type' => 'issue', 'direction' => 'out', 'quantity' => '1.000000',
+            'reference_type' => 'production_order_material', 'reference_id' => $unvaluedLine->id,
+            'occurred_on' => now()->toDateString(), 'created_by' => $this->operator->id,
+        ]);
+        $stock->post($material, [
+            'type' => 'issue', 'direction' => 'out', 'quantity' => '5.000000',
+            'reference_type' => 'production_order_material', 'reference_id' => $line->id,
+            'occurred_on' => now()->toDateString(), 'created_by' => $this->operator->id,
+        ]);
+
+        $batch = $this->submitBatch($order, $good, 17);
+        $this->actingAs($this->laboratory)->post(route('production.orders.batches.checks.store', [$order, $batch]), [
+            'test_name' => 'Moisture', 'result' => 'pass',
+        ])->assertRedirect();
+        $this->actingAs($this->laboratory)->post(route('production.orders.batches.decide', [$order, $batch]), [
+            'decision' => 'approve', 'rejected_packages' => 0, 'qc_notes' => 'Passed.',
+        ])->assertRedirect();
+        $this->actingAs($this->warehouse)->post(route('production.orders.batches.release', [$order, $batch]), [
+            'occurred_on' => now()->toDateString(),
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('production_batch_costs', [
+            'production_batch_id' => $batch->id, 'currency_id' => $currency->id,
+            'currency_code' => 'USD', 'material_cost' => '10.0000000000',
+            'consumed_quantity' => '5.000000', 'unvalued_quantity' => '0.000000',
+        ]);
+        $this->assertDatabaseHas('production_batch_costs', [
+            'production_batch_id' => $batch->id, 'currency_id' => null,
+            'currency_code' => null, 'material_cost' => null,
+            'consumed_quantity' => '0.000000', 'unvalued_quantity' => '1.000000',
+        ]);
+        $this->actingAs($this->warehouse)->get(route('production.orders.show', $order))
+            ->assertOk()->assertSee('Raw-material cost snapshot')->assertSee('USD 10');
     }
 
     public function test_finished_goods_catalog_and_batch_views_are_permission_checked(): void

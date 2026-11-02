@@ -32,4 +32,9 @@ class ProductionBatch extends Model
     {
         return $this->hasOne(FinishedGoodMovement::class);
     }
+
+    public function costs()
+    {
+        return $this->hasMany(ProductionBatchCost::class, 'production_batch_id');
+    }
 }

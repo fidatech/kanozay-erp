@@ -180,6 +180,18 @@
    <p style="color:#b42318">Batch rejected by laboratory. No finished goods have been released.</p>
   @else
    <p style="color:#08734b">Finished goods released. This batch cannot be released again.</p>
+   <h4>Raw-material cost snapshot</h4>
+   @if($batch->costs->isNotEmpty())
+    <div class="table-wrap"><table><thead><tr><th>Currency</th><th>Issued quantity valued</th><th>Raw-material cost</th><th>Unvalued quantity</th></tr></thead><tbody>
+     @foreach($batch->costs as $cost)
+      <tr><td>{{ $cost->currency_code ?? 'Unvalued' }}</td><td>{{ $cost->consumed_quantity }}</td>
+       <td>{{ $cost->material_cost === null ? '—' : $cost->currency_code.' '.rtrim(rtrim((string) $cost->material_cost, '0'), '.') }}</td>
+       <td>{{ $cost->unvalued_quantity }}</td></tr>
+     @endforeach
+    </tbody></table></div>
+   @else
+    <p class="muted">No raw-material cost snapshot is available for this batch. Its issue records may predate valuation tracking or the order may not have had recorded material lines.</p>
+   @endif
   @endif
  @endif
 </div>

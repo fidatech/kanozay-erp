@@ -125,6 +125,7 @@ class ProductionBatchService
             if ($good->on_hand_packages > PHP_INT_MAX - $batch->accepted_packages) {
                 $this->reject('Finished goods balance exceeds the supported range.');
             }
+            app(ProductionCostService::class)->snapshot($batch);
             $good->movements()->create([
                 'production_batch_id' => $batch->id,
                 'type' => 'production_receipt',
