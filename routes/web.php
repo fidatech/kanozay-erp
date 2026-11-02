@@ -35,6 +35,9 @@ Route::middleware('auth')->get('/sales/quotations', [\App\Http\Controllers\Sales
 Route::middleware('auth')->get('/sales/quotations/create', [\App\Http\Controllers\SalesQuotationController::class, 'create'])->name('sales.quotations.create');
 Route::middleware('auth')->post('/sales/quotations', [\App\Http\Controllers\SalesQuotationController::class, 'store'])->name('sales.quotations.store');
 Route::middleware('auth')->get('/sales/quotations/{quotation}', [\App\Http\Controllers\SalesQuotationController::class, 'show'])->name('sales.quotations.show');
+Route::middleware('auth')->post('/sales/quotations/{quotation}/accept', [\App\Http\Controllers\SalesOrderController::class, 'accept'])->name('sales.orders.accept');
+Route::middleware('auth')->get('/sales/orders', [\App\Http\Controllers\SalesOrderController::class, 'index'])->name('sales.orders.index');
+Route::middleware('auth')->get('/sales/orders/{order}', [\App\Http\Controllers\SalesOrderController::class, 'show'])->name('sales.orders.show');
 Route::middleware('auth')->post('/production/finished-goods', [\App\Http\Controllers\FinishedGoodController::class, 'store'])->name('production.finished-goods.store');
 Route::middleware('auth')->post('/production/orders/{order}/batches', [\App\Http\Controllers\ProductionBatchController::class, 'store'])->name('production.orders.batches.store');
 Route::middleware('auth')->post('/production/orders/{order}/batches/{batch}/checks', [\App\Http\Controllers\ProductionBatchController::class, 'check'])->name('production.orders.batches.checks.store');

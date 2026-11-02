@@ -13,7 +13,12 @@ class SalesQuotation extends Model
 
     protected static function booted(): void
     {
-        static::updating(fn () => throw new LogicException('Issued quotations are immutable. Create a revised quotation for changes.'));
+        static::updating(function (SalesQuotation $quotation) {
+            $stateOnlyAcceptance = $quotation->getOriginal('status') === 'issued'
+                && $quotation->status === 'accepted'
+                && $quotation->getDirty() === ['status' => 'accepted'];
+            if (! $stateOnlyAcceptance) throw new LogicException('Issued quotations are immutable. Create a revised quotation for changes.');
+        });
         static::deleting(fn () => throw new LogicException('Issued quotations cannot be deleted.'));
     }
 

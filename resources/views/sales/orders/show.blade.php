@@ -1,0 +1,7 @@
+@extends('layouts.kanozay')
+@section('content')
+<div class="heading"><div><h1>{{ $order->number }}</h1><p>Confirmed sales order · {{ ucfirst($order->status) }}</p></div><a class="btn btn-light" href="{{ route('sales.orders.index') }}">Back to orders</a></div>
+<div class="card" style="padding:22px"><div class="form-grid"><div><strong>Customer</strong><div>{{ $order->customer->name }}</div></div><div><strong>Quotation</strong><div><a href="{{ route('sales.quotations.show', $order->quotation) }}">{{ $order->quotation->number }}</a></div></div><div><strong>Order date</strong><div>{{ $order->order_date->format('Y-m-d') }}</div></div><div><strong>Total</strong><div>{{ $order->currency_code }} {{ rtrim(rtrim((string)$order->total,'0'),'.') }}</div></div></div>
+<div class="table-wrap" style="margin-top:20px"><table><thead><tr><th>Description</th><th>Quantity</th><th>Unit</th><th>Unit price</th><th>Line total</th></tr></thead><tbody>@foreach($order->lines as $line)<tr><td>{{ $line->description }}</td><td>{{ number_format($line->quantity) }}</td><td>{{ $line->unit }}</td><td>{{ $order->currency_code }} {{ rtrim(rtrim((string)$line->unit_price,'0'),'.') }}</td><td>{{ $order->currency_code }} {{ rtrim(rtrim((string)$line->line_total,'0'),'.') }}</td></tr>@endforeach</tbody></table></div>
+<p class="muted">This order records the accepted quotation. No inventory reservation or dispatch has occurred.</p></div>
+@endsection
