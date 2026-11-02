@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Models\FinishedGood;
-use App\Models\FinishedGoodDispatch;
 use App\Models\ProductionBatch;
 use App\Models\ProductionOrder;
 use App\Models\ProductionRecipe;
@@ -57,6 +56,12 @@ class FinishedGoodDispatchTest extends TestCase
             'submission_token' => (string) Str::uuid(), 'production_batch_id' => $batch->id,
             'quantity_packages' => 1, 'dispatch_date' => '2026-11-02',
         ])->assertForbidden();
+        $user->givePermissionTo('inventory.update');
+        $this->actingAs($user)->post(route('production.finished-goods.dispatches.store', $good), [
+            'submission_token' => (string) Str::uuid(), 'production_batch_id' => $batch->id,
+            'quantity_packages' => 1, 'dispatch_date' => '2026-11-02',
+        ])->assertRedirect(route('production.finished-goods.show', $good));
+        $this->assertEquals(9, $good->fresh()->on_hand_packages);
     }
 
     private function releasedBatch(): array
@@ -72,13 +77,14 @@ class FinishedGoodDispatchTest extends TestCase
         ]);
         $good = FinishedGood::create([
             'sku' => 'FG-DISPATCH-001', 'name' => 'Synthetic product',
-            'package_unit' => 'bag', 'package_weight_kg' => '5.000', 'on_hand_packages' => 10,
+            'package_unit' => 'bag', 'package_weight_kg' => '5.000',
         ]);
+        $good->forceFill(['on_hand_packages' => 10])->save();
         $batch = ProductionBatch::create([
             'production_order_id' => $order->id, 'finished_good_id' => $good->id,
             'batch_number' => 'BAT-DISPATCH-001', 'reported_packages' => 10,
-            'accepted_packages' => 10, 'status' => 'released', 'released_by' => $user->id,
         ]);
+        $batch->forceFill(['accepted_packages' => 10, 'status' => 'released', 'released_by' => $user->id])->save();
         $good->movements()->create([
             'production_batch_id' => $batch->id, 'type' => 'production_receipt',
             'quantity_packages' => 10, 'occurred_on' => '2026-11-02', 'created_by' => $user->id,
@@ -87,3 +93,4 @@ class FinishedGoodDispatchTest extends TestCase
         return [$good, $batch, $user];
     }
 }
+
