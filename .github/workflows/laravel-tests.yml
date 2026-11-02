@@ -39,3 +39,12 @@ jobs:
           php artisan key:generate
       - name: Run Laravel test suite
         run: php artisan test
+      - name: Verify clean SQLite installation
+        run: |
+          touch database/database.sqlite
+          export DB_CONNECTION=sqlite
+          export DB_DATABASE="$PWD/database/database.sqlite"
+          php artisan migrate --force
+          php artisan db:seed --force
+          php artisan db:seed --class=ChartOfAccountsSeeder --force
+          php artisan route:list > /dev/null
