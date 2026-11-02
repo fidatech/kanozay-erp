@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Currency;
 use App\Models\EmployeeLeaveRequest;
 use App\Models\EmployeeProfile;
+use App\Models\PayrollPeriod;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Permission;
@@ -38,6 +39,11 @@ class EmployeeLeaveWorkflowTest extends TestCase
         $this->assertSame('approved', $leave->fresh()->status);
         $this->assertSame('100.0000', $employee->fresh()->monthly_salary);
         $this->assertSame(1, EmployeeLeaveRequest::count());
+        $this->actingAs($user)->post(route('hr.payroll.store'), [
+            'month' => now()->format('Y-m'), 'currency_id' => $currency->id,
+        ])->assertRedirect();
+        $this->actingAs($user)->get(route('hr.payroll.show', PayrollPeriod::sole()))
+            ->assertOk()->assertSee('Approved leave:')->assertSee($payload['starts_on'])->assertSee($payload['ends_on']);
     }
 
     public function test_leave_review_requires_hr_access(): void

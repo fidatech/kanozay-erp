@@ -6,12 +6,16 @@
 <div class="card" style="padding:20px;margin-bottom:16px"><h2>Employee amounts</h2><p>Amounts shown are in {{ $period->currency->code }}. Attendance counts are for review only; no salary, tax or leave deduction is calculated automatically.</p><div class="table-wrap"><table><thead><tr><th>Employee</th><th>Attendance recorded</th><th>Salary snapshot</th><th>Approved payable</th><th>Reason</th><th>Payment</th></tr></thead><tbody>
 @foreach($period->lines as $line)<tr><td>{{ $line->employee->employee_number }}<br><small>{{ $line->employee->full_name }}</small></td><td>@php
     $counts = $attendance[$line->employee_profile_id] ?? [];
+    $leaves = $approvedLeave->get($line->employee_profile_id, collect());
     $hasPayable = \Brick\Math\BigDecimal::of((string) $line->payable_amount)->isGreaterThan(0);
 @endphp
 @foreach($counts as $status => $count){{ ucfirst($status) }}: {{ $count }}<br>@endforeach
 @if(empty($counts))
 No records
 @endif
+@foreach($leaves as $leave)
+<br>Approved leave: {{ $leave->starts_on->toDateString() }} to {{ $leave->ends_on->toDateString() }}
+@endforeach
 </td><td>{{ $line->salary_snapshot }}</td><td>@if($period->status === 'draft' && auth()->user()->can('hr.update'))<form method="POST" action="{{ route('hr.payroll.lines.update',[$period,$line]) }}" style="display:flex;gap:6px;flex-wrap:wrap">@csrf @method('PATCH')<input name="payable_amount" value="{{ $line->payable_amount }}" inputmode="decimal" required style="width:130px"><input name="adjustment_reason" value="{{ $line->adjustment_reason }}" maxlength="500" placeholder="Reason if changed" style="width:180px"><button class="btn btn-secondary" type="submit">Save</button></form>@else {{ $line->payable_amount }} @endif</td><td>{{ $line->adjustment_reason ?? '—' }}</td><td>
 @if($line->payment_transaction_id)Paid · {{ $line->payment?->journal?->number ?? 'Posted' }}
 <a href="{{ route('hr.payroll.lines.payslip',[$period,$line]) }}">Payslip</a>
