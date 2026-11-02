@@ -32,6 +32,7 @@ class RolePermissionSeeder extends Seeder
         $rolePermissions = [
             'Administrator' => ['dashboard.view', 'administration.view', 'administration.update', 'users.view', 'users.create', 'users.update', 'roles.view', 'roles.create', 'roles.update'],
             'Finance Manager' => ['dashboard.view', 'finance.view', 'finance.create', 'finance.update', 'reports.view'],
+            'Shareholder Officer' => ['dashboard.view', 'shareholders.view', 'shareholders.create', 'shareholders.update'],
             'Production Manager' => ['dashboard.view', 'manufacturing.view', 'manufacturing.create', 'manufacturing.update', 'inventory.view', 'inventory.update', 'laboratory.view', 'laboratory.create', 'laboratory.update'],
             'Inventory Officer' => ['dashboard.view', 'inventory.view', 'inventory.create', 'inventory.update', 'purchases.view', 'purchases.create', 'purchases.update'],
             'Laboratory Officer' => ['dashboard.view', 'laboratory.view', 'laboratory.create', 'laboratory.update', 'manufacturing.view'],

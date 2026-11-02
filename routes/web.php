@@ -56,6 +56,10 @@ Route::middleware('auth')->get('/purchases/orders/{order}', [\App\Http\Controlle
 Route::middleware('auth')->get('/purchases/orders', [\App\Http\Controllers\PurchaseOrderController::class,'index'])->name('purchases.orders.index');
 
 Route::middleware('auth')->get('/workspace/{module}/{page}', [\App\Http\Controllers\ModulePageController::class, 'show'])->name('workspace.page');
+Route::middleware('auth')->get('/shareholders', [\App\Http\Controllers\ShareholderController::class, 'index'])->name('shareholders.index');
+Route::middleware('auth')->post('/shareholders', [\App\Http\Controllers\ShareholderController::class, 'store'])->name('shareholders.store');
+Route::middleware('auth')->get('/shareholders/{shareholder}', [\App\Http\Controllers\ShareholderController::class, 'show'])->name('shareholders.show');
+Route::middleware('auth')->post('/shareholders/{shareholder}/transactions', [\App\Http\Controllers\ShareholderController::class, 'postTransaction'])->name('shareholders.transactions.store');
 Route::middleware('auth')->post('/hr/employees', [\App\Http\Controllers\EmployeeProfileController::class, 'store'])->name('hr.employees.store');
 Route::middleware('auth')->patch('/hr/employees/{employee}/status', [\App\Http\Controllers\EmployeeProfileController::class, 'update'])->name('hr.employees.update');
 Route::middleware('auth')->post('/hr/employees/import-preview', [\App\Http\Controllers\EmployeeProfileController::class, 'importPreview'])->name('hr.employees.import-preview');

@@ -13,6 +13,10 @@ class ModulePageController extends Controller
             return app(EmployeeProfileController::class)->index($request);
         }
 
+        if ($module === 'shareholders' && in_array($page, ['register', 'capital', 'statements'], true)) {
+            return app(ShareholderController::class)->index($request);
+        }
+
         $modules = config('erp_pages', []);
         abort_unless(isset($modules[$module]['pages'][$page]) || ($page === 'overview' && isset($modules[$module])), 404);
 
