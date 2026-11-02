@@ -80,6 +80,9 @@ Route::middleware('auth')->get('/shareholders/{shareholder}', [\App\Http\Control
 Route::middleware('auth')->post('/shareholders/{shareholder}/transactions', [\App\Http\Controllers\ShareholderController::class, 'postTransaction'])->name('shareholders.transactions.store');
 Route::middleware('auth')->post('/hr/employees', [\App\Http\Controllers\EmployeeProfileController::class, 'store'])->name('hr.employees.store');
 Route::middleware('auth')->patch('/hr/employees/{employee}/status', [\App\Http\Controllers\EmployeeProfileController::class, 'update'])->name('hr.employees.update');
+Route::middleware('auth')->patch('/hr/employees/{employee}/department', [\App\Http\Controllers\EmployeeProfileController::class, 'assignDepartment'])->name('hr.employees.department');
+Route::middleware('auth')->post('/hr/departments', [\App\Http\Controllers\EmployeeDepartmentController::class, 'store'])->name('hr.departments.store');
+Route::middleware('auth')->patch('/hr/departments/{department}', [\App\Http\Controllers\EmployeeDepartmentController::class, 'update'])->name('hr.departments.update');
 Route::middleware('auth')->post('/hr/employees/import-preview', [\App\Http\Controllers\EmployeeProfileController::class, 'importPreview'])->name('hr.employees.import-preview');
 Route::middleware('auth')->post('/hr/employees/import-confirm', [\App\Http\Controllers\EmployeeProfileController::class, 'importConfirm'])->name('hr.employees.import-confirm');
 Route::middleware('auth')->get('/hr/payroll/{period}', [\App\Http\Controllers\PayrollPeriodController::class, 'show'])->name('hr.payroll.show');

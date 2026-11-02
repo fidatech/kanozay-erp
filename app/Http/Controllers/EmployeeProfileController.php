@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ActivityLog;
 use App\Models\Currency;
 use App\Models\EmployeeProfile;
+use App\Models\EmployeeDepartment;
 use App\Services\PayrollWorkbookImportService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -31,8 +32,9 @@ class EmployeeProfileController extends Controller
         }
 
         return view('hr.employees.index', [
-            'employees' => $query->with('salaryCurrency')->paginate(20)->withQueryString(),
+            'employees' => $query->with(['salaryCurrency', 'department'])->paginate(20)->withQueryString(),
             'currencies' => Currency::query()->where('is_active', true)->orderBy('code')->get(),
+            'departments' => EmployeeDepartment::where('is_active', true)->orderBy('code')->get(),
         ]);
     }
 
@@ -85,6 +87,18 @@ class EmployeeProfileController extends Controller
         ]);
     }
 
+    public function assignDepartment(Request $request, EmployeeProfile $employee)
+    {
+        abort_unless($request->user()->can('hr.update'), 403);
+        $data = $request->validate(['department_id' => ['nullable', Rule::exists('employee_departments', 'id')->where('is_active', true)]]);
+        DB::transaction(function () use ($employee, $data) {
+            $locked = EmployeeProfile::whereKey($employee->id)->lockForUpdate()->firstOrFail();
+            $locked->update(['department_id' => $data['department_id'] ?? null]);
+            ActivityLog::record('hr.employee.department', 'employee_profile', $locked->id, 'Department assignment updated for '.$locked->employee_number);
+        });
+        return back()->with('success', 'Employee department updated.');
+    }
+
     public function importConfirm(Request $request, PayrollWorkbookImportService $importer)
     {
         abort_unless($request->user()->can('hr.import'), 403);
@@ -115,6 +129,7 @@ class EmployeeProfileController extends Controller
             'father_name' => ['nullable', 'string', 'max:180'],
             'gender' => ['nullable', 'string', 'max:32'],
             'position' => ['nullable', 'string', 'max:180'],
+            'department_id' => ['nullable', Rule::exists('employee_departments', 'id')->where('is_active', true)],
             'phone' => ['nullable', 'string', 'max:80'],
             'national_id' => ['nullable', 'string', 'max:100'],
             'taxpayer_id' => ['nullable', 'string', 'max:100'],

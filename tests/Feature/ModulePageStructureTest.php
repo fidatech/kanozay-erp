@@ -27,6 +27,8 @@ class ModulePageStructureTest extends TestCase
                     $module === 'hr' && $page === 'payroll' => 'Payroll periods',
                     $module === 'hr' && $page === 'attendance' => 'Attendance register',
                     $module === 'hr' && $page === 'leave' => 'Leave requests',
+                    $module === 'hr' && $page === 'departments' => 'Departments',
+                    $module === 'hr' && $page === 'advances' => 'Salary advances',
                     $module === 'assets' && $page === 'register' => 'Fixed asset register',
                     $module === 'purchases' && $page === 'orders' => 'New Purchase Order',
                     $module === 'manufacturing' && $page === 'recipes' => 'Production Recipes',

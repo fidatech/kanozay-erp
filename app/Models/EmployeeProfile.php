@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class EmployeeProfile extends Model
 {
     protected $fillable = [
-        'employee_number', 'full_name', 'father_name', 'gender', 'position',
+        'employee_number', 'full_name', 'father_name', 'gender', 'position', 'department_id',
         'phone', 'national_id', 'taxpayer_id', 'monthly_salary', 'salary_currency_id', 'is_active', 'created_by',
     ];
 
@@ -28,4 +28,6 @@ class EmployeeProfile extends Model
     {
         return $this->belongsTo(Currency::class, 'salary_currency_id');
     }
+
+    public function department() { return $this->belongsTo(EmployeeDepartment::class, 'department_id'); }
 }
