@@ -1,5 +1,8 @@
 @extends('layouts.kanozay')
 @section('content')
+<style>
+.user-dialog{max-height:90dvh!important;overflow:hidden!important}.user-dialog .modal-form{display:flex!important;flex-direction:column;max-height:90dvh}.user-dialog .modal-body{min-height:0;flex:1;overflow-y:auto!important;display:grid;grid-template-columns:minmax(0,1fr)!important}.user-dialog .modal-head,.user-dialog .modal-foot{flex-shrink:0}.user-dialog .select2-container{width:100%!important}.user-dialog .select2-dropdown{z-index:2200}
+</style>
 <div class="heading"><div><h1>User Management</h1><p>Manage employee accounts and access levels</p></div>@can('users.create')<button class="btn" type="button" data-modal-open="create-user"><i class="fa-solid fa-plus"></i> Add User</button>@endcan</div>
 @if($errors->any())<div class="panel error" role="alert">{{ implode(' | ', $errors->all()) }}</div>@endif
 <section class="panel"><h2>Employee Accounts</h2><div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Actions</th></tr></thead><tbody>
@@ -11,22 +14,23 @@
 @empty<tr><td colspan="4" class="empty"><div class="k-empty-state" role="status"><div class="k-empty-icon"><i class="fa-solid fa-users" aria-hidden="true"></i></div><strong>No employee accounts yet</strong><p>Create a user account to grant access to the ERP.</p></div></td></tr>@endforelse
 </tbody></table></div>{{ $users->onEachSide(1)->links('vendor.pagination.kanozay') }}</section>
 @can('users.create')
-<dialog class="k-modal" id="create-user" aria-labelledby="create-user-title"><form method="POST" action="{{ route('admin.users.store') }}" class="modal-form">@csrf
+<dialog class="k-modal user-dialog" id="create-user" aria-labelledby="create-user-title"><form method="POST" action="{{ route('admin.users.store') }}" class="modal-form user-submit-form">@csrf
 <div class="modal-head"><h2 id="create-user-title">Add Employee</h2><button type="button" class="modal-close" data-modal-close aria-label="Close">×</button></div>
-<div class="modal-body"><label>Full Name<input name="name" value="{{ old('name') }}" required maxlength="255"></label><label>Email Address<input type="email" name="email" value="{{ old('email') }}" required></label><label>Password<input type="password" name="password" minlength="12" autocomplete="new-password" required></label><label>Confirm Password<input type="password" name="password_confirmation" minlength="12" autocomplete="new-password" required></label><label>Role<select name="role" required>@foreach($roles as $role)<option value="{{ $role->name }}" @selected(old('role')===$role->name)>{{ $role->name }}</option>@endforeach</select></label></div>
+<div class="modal-body"><label>Full Name<input name="name" value="{{ old('name') }}" required maxlength="255"></label><label>Email Address<input type="email" name="email" value="{{ old('email') }}" required></label><label>Password<input type="password" name="password" minlength="12" autocomplete="new-password" required></label><label>Confirm Password<input type="password" name="password_confirmation" minlength="12" autocomplete="new-password" required></label><label>Role<select name="role" data-no-select2="1" required>@foreach($roles as $role)<option value="{{ $role->name }}" @selected(old('role')===$role->name)>{{ $role->name }}</option>@endforeach</select></label></div>
 <div class="modal-foot"><button type="button" class="btn btn-light" data-modal-close>Cancel</button><button class="btn" type="submit">Create Employee</button></div></form></dialog>
 @endcan
 @can('users.update')
 @foreach($users as $user)
-<dialog class="k-modal" id="edit-user-{{ $user->id }}" aria-labelledby="edit-title-{{ $user->id }}"><form method="POST" action="{{ route('admin.users.update',$user) }}" class="modal-form">@csrf @method('PUT')
+<dialog class="k-modal user-dialog" id="edit-user-{{ $user->id }}" aria-labelledby="edit-title-{{ $user->id }}"><form method="POST" action="{{ route('admin.users.update',$user) }}" class="modal-form user-submit-form">@csrf @method('PUT')
 <div class="modal-head"><h2 id="edit-title-{{ $user->id }}">Edit Employee</h2><button type="button" class="modal-close" data-modal-close aria-label="Close">×</button></div>
-<div class="modal-body"><label>Full Name<input name="name" value="{{ $user->name }}" required maxlength="255"></label><label>Email Address<input type="email" name="email" value="{{ $user->email }}" required></label><label>New Password <small>(leave blank to keep current)</small><input type="password" name="password" minlength="12" autocomplete="new-password"></label><label>Confirm New Password<input type="password" name="password_confirmation" autocomplete="new-password"></label><label>Role<select name="role" required>@foreach($roles as $role)<option value="{{ $role->name }}" @selected($user->hasRole($role->name))>{{ $role->name }}</option>@endforeach</select></label></div>
+<div class="modal-body"><label>Full Name<input name="name" value="{{ $user->name }}" required maxlength="255"></label><label>Email Address<input type="email" name="email" value="{{ $user->email }}" required></label><label>New Password <small>(leave blank to keep current)</small><input type="password" name="password" minlength="12" autocomplete="new-password"></label><label>Confirm New Password<input type="password" name="password_confirmation" autocomplete="new-password"></label><label>Role<select name="role" data-no-select2="1" required>@foreach($roles as $role)<option value="{{ $role->name }}" @selected($user->hasRole($role->name))>{{ $role->name }}</option>@endforeach</select></label></div>
 <div class="modal-foot"><button type="button" class="btn btn-light" data-modal-close>Cancel</button><button class="btn" type="submit">Save Changes</button></div></form></dialog>
 @endforeach
 @endcan
 @endsection
 @push('scripts')
 <script>
+document.querySelectorAll('.user-submit-form').forEach(form=>form.addEventListener('submit',()=>{const button=form.querySelector('button[type=submit]');if(button){button.disabled=true;button.textContent='Saving...';}}));
 document.querySelectorAll('.delete-user-form').forEach(form => form.addEventListener('submit', async e => {
  e.preventDefault();
  if (typeof Swal === 'undefined') { if(window.confirm('Delete this employee account?')) form.submit(); return; }

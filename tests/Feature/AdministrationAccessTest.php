@@ -56,4 +56,24 @@ class AdministrationAccessTest extends TestCase
         $this->actingAs($viewer)->get(route('admin.roles.index'))->assertForbidden();
         $this->actingAs($viewer)->post(route('admin.users.store'), [])->assertForbidden();
     }
+    public function test_home_redirects_to_login_or_dashboard_and_forbidden_page_uses_application_navigation(): void
+    {
+        $this->get('/')->assertRedirect(route('login'));
+        $this->seed(RolePermissionSeeder::class);
+        $viewer = User::factory()->create();
+        $viewer->assignRole('Viewer');
+        $this->actingAs($viewer)->get('/')->assertRedirect(route('dashboard'));
+        $this->actingAs($viewer)->get(route('admin.users.index'))
+            ->assertForbidden()->assertSee('Access denied')->assertSee('Return to dashboard');
+    }
+
+    public function test_user_management_form_has_scrollable_native_role_selector(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $super = User::factory()->create();
+        $super->assignRole('Super Administrator');
+        $this->actingAs($super)->get(route('admin.users.index'))
+            ->assertOk()->assertSee('user-dialog')->assertSee('data-no-select2="1"', false);
+    }
+
 }

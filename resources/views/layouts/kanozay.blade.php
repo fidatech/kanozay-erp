@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="{{ session('locale', 'en') }}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{ $title ?? 'Kanozay Foods ERP' }}</title>
+@vite('resources/js/app.js')
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
 <style>
 :root{--navy:#081d61;--blue:#0868ef;--soft:#eef6ff;--line:#e2eaf4;--text:#101f58;--muted:#5e73a5;--bg:#f4faff}
@@ -482,7 +483,7 @@ body:not(.k-create-ready) .k-create-source{display:block!important}
  new MutationObserver(records=>{for(const record of records)for(const node of record.addedNodes)if(node.nodeType===1&&node.matches?.('.journal-line'))enhanceSelects(node);}).observe(document.documentElement,{childList:true,subtree:true});
 })();
 </script>
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
 @if(session()->has('status'))
 <script>
 document.addEventListener('DOMContentLoaded',function(){
