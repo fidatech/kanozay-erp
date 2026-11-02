@@ -46,7 +46,7 @@ The uploaded payroll and account workbooks contain confidential personal and fin
 
 The development branch includes guarded inventory workbook import, accounts workbook review, purchasing/manufacturing/quality workflows, partial sales and shareholder integration, payroll accrual/payment/payslips and guarded salary advance issuance and direct repayment, and a fixed-asset register with assignments. The reference chart is not a client-approved mapping. The source production formulas and owner-investment ledger require decisions described in [client-workbook-import-review.md](client-workbook-import-review.md).
 
-GitHub Actions run `41457074164` verified commit `2c8acb8195128cee60c529c138eedad6a218d977`: 259 passed, 1 skipped, 1,977 assertions. CI also built the frontend and installed a clean SQLite database with role and chart seeders. This does not verify a shared staging environment, browser print layout, client data reconciliation or MySQL setup. See [uat-readiness.md](uat-readiness.md) for the NO-GO decision and current blockers.
+GitHub Actions run `41457666569` verified commit `056908add38ec7ff7bd8db80103e16aa1104c207`: 261 passed, 1 skipped, 1,989 assertions. CI also built the frontend and installed a clean SQLite database with role and chart seeders. This does not verify a shared staging environment, browser print layout, client data reconciliation or MySQL setup. See [uat-readiness.md](uat-readiness.md) for the NO-GO decision and current blockers.
 
 ## Backup and recovery
 
