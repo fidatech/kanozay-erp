@@ -21,9 +21,18 @@ class ModulePageStructureTest extends TestCase
             $this->actingAs($user)->get(route('workspace.page',[$module,'overview']))
                 ->assertOk()->assertSee($data['label']);
             foreach($data['pages'] as $page=>$label){
+                $expectedContent = match (true) {
+                    $page === 'overview' => 'Daily operations',
+                    $module === 'hr' && $page === 'employees' => 'Employee number',
+                    $module === 'purchases' && $page === 'orders' => 'New Purchase Order',
+                    $module === 'manufacturing' && $page === 'recipes' => 'Production Recipes',
+                    $module === 'manufacturing' && $page === 'orders' => 'Production Orders',
+                    $module === 'shareholders' && in_array($page, ['register', 'capital', 'statements'], true) => 'Shareholder Register',
+                    default => 'Workflow pending',
+                };
                 $this->actingAs($user)->get(route('workspace.page',[$module,$page]))
                     ->assertOk()->assertSee($page === 'overview' ? $data['label'] : $label)
-                    ->assertSee($page === 'overview' ? 'Daily operations' : ($module === 'hr' && $page === 'employees' ? 'Employee number' : ($module === 'purchases' && $page === 'orders' ? 'New Purchase Order' : ($module === 'manufacturing' && $page === 'recipes' ? 'Production Recipes' : ($module === 'manufacturing' && $page === 'orders' ? 'Production Orders' : 'Workflow pending')))));
+                    ->assertSee($expectedContent);
             }
         }
     }
