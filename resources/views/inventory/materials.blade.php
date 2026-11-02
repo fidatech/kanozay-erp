@@ -7,6 +7,9 @@
  @can('inventory.create')
  <button type="button" class="btn" onclick="document.getElementById('create-material-modal').showModal()"><i class="fa-solid fa-plus"></i> Add material</button>
  @endcan
+ @can('inventory.update')
+ <button type="button" class="btn btn-light" onclick="document.getElementById('import-material-modal').showModal()">Import client workbook</button>
+ @endcan
 </div>
 <div class="card" style="padding:22px">
  @if(session('success'))<p role="status" style="color:#08734b">{{ session('success') }}</p>@endif
@@ -60,6 +63,15 @@
    <p class="muted">Use the same unit as the approved recipe. Unit conversion is not yet supported.</p>
   </div>
   <div class="modal-foot"><button type="button" class="btn btn-light" onclick="this.closest('dialog').close()">Cancel</button><button type="submit" class="btn">Save material</button></div>
+ </form>
+</dialog>
+@endcan
+@can('inventory.update')
+<dialog class="k-modal" id="import-material-modal">
+ <form class="modal-form" method="POST" action="{{ route('inventory.materials.import-preview') }}" enctype="multipart/form-data">@csrf
+  <div class="modal-head"><h2>Preview raw-material workbook</h2><button type="button" class="modal-close" onclick="this.closest('dialog').close()">&times;</button></div>
+  <div class="modal-body"><p>The system will validate the source stock worksheet and detect duplicates. Nothing is written until you confirm the reviewed preview.</p><label>Client workbook (.xls or .xlsx)<input type="file" name="file" accept=".xls,.xlsx" required></label></div>
+  <div class="modal-foot"><button type="button" class="btn btn-light" onclick="this.closest('dialog').close()">Cancel</button><button type="submit" class="btn">Review workbook</button></div>
  </form>
 </dialog>
 @endcan
