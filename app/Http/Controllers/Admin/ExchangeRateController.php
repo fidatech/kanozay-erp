@@ -18,7 +18,9 @@ class ExchangeRateController extends Controller
 {
     public function index(Request $request): View {
         abort_unless($request->user()->can('administration.view'),403);
-        return view('admin.exchange-rates.index',['currencies'=>Currency::where('is_active',true)->orderBy('code')->get(), 'rates'=>ExchangeRate::with(['fromCurrency','toCurrency','creator'])->latest('effective_date')->latest('id')->paginate(25)]);
+        $currencies=Currency::where('is_active',true)->orderBy('code')->get();
+        $latest=ExchangeRate::with(['fromCurrency','toCurrency'])->orderByDesc('effective_date')->orderByDesc('id')->get()->unique(fn ($rate) => $rate->from_currency_id.':'.$rate->to_currency_id)->keyBy(fn ($rate) => $rate->from_currency_id.':'.$rate->to_currency_id);
+        return view('admin.exchange-rates.index',['currencies'=>$currencies,'latestRates'=>$latest,'rates'=>ExchangeRate::with(['fromCurrency','toCurrency','creator'])->latest('effective_date')->latest('id')->paginate(25)]);
     }
     public function store(Request $request): RedirectResponse {
         abort_unless($request->user()->can('administration.update'),403);

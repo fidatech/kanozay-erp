@@ -25,4 +25,10 @@ class CurrencyConfigurationTest extends TestCase {
   $this->assertDatabaseCount('exchange_rates',3);
  }
 
+ public function test_rate_board_displays_both_directions_and_currency_modal():void {
+  $admin=$this->admin();$usd=Currency::create(['code'=>'USD','name'=>'Dollar','is_base'=>true]);$afn=Currency::create(['code'=>'AFN','name'=>'Afghani']);$pkr=Currency::create(['code'=>'PKR','name'=>'Rupee']);
+  ExchangeRate::create(['from_currency_id'=>$usd->id,'to_currency_id'=>$afn->id,'effective_date'=>'2026-11-01','rate'=>'65.125000000000','created_by'=>$admin->id]);
+  $this->actingAs($admin)->get(route('admin.exchange-rates.index'))->assertOk()->assertSee('Currency Pair Rate Board')->assertSee('fx-new-currency')->assertSee('data-from="'.$usd->id.'"',false)->assertSee('data-from="'.$afn->id.'"',false)->assertSee('65.125');
+ }
+
 }
