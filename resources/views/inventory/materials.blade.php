@@ -28,6 +28,10 @@
       <div class="modal-body">
        <p>Enter the verified initial quantity in <strong>{{ $material->unit }}</strong>. This ledger entry cannot be edited or deleted.</p>
        <label>Quantity <input name="quantity" type="number" step="0.000001" min="0.000001" required></label>
+       <label>Unit cost (optional) <input name="unit_cost" type="number" step="0.000001" min="0.000001"></label>
+       <label>Cost currency
+        <select name="currency_id"><option value="">Unvalued opening stock</option>@foreach($currencies as $currency)<option value="{{ $currency->id }}">{{ $currency->code }} — {{ $currency->name }}</option>@endforeach</select>
+       </label>
        <label>Opening date <input name="occurred_on" type="date" value="{{ now()->toDateString() }}" required></label>
        <label>Notes <textarea name="notes" maxlength="2000" rows="3"></textarea></label>
       </div>
