@@ -47,7 +47,8 @@ class ProductionCostService
             }
         }
 
-        foreach ($totals as $cost) {
+        foreach ($totals as $key => $cost) {
+            if ($key === 'unvalued') continue;
             ProductionBatchCost::create([
                 'production_batch_id' => $batch->id,
                 'currency_id' => $cost['currency_id'],

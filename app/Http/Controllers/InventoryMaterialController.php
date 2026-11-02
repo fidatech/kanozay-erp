@@ -64,6 +64,10 @@ class InventoryMaterialController extends Controller
     public function opening(Request $request, InventoryMaterial $material, InventoryStockService $stock)
     {
         abort_unless($request->user()->can('inventory.update'), 403);
+        $request->merge([
+            'quantity' => $this->normalizeQuantity($request->input('quantity')),
+            'unit_cost' => $this->normalizeQuantity($request->input('unit_cost')),
+        ]);
         $data = $request->validate([
             'quantity' => ['required', 'regex:/^(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,6})?$/', 'numeric', 'gt:0'],
             'occurred_on' => ['required', 'date', 'before_or_equal:today'],
