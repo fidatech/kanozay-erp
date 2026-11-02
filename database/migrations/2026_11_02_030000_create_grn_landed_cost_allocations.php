@@ -21,8 +21,10 @@ return new class extends Migration {
 
         Schema::create('goods_receipt_landed_cost_allocations', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('goods_receipt_landed_cost_id')->constrained()->restrictOnDelete();
-            $table->foreignId('goods_receipt_line_id')->constrained()->restrictOnDelete();
+            $table->unsignedBigInteger('goods_receipt_landed_cost_id');
+            $table->foreign('goods_receipt_landed_cost_id', 'grlca_cost_fk')->references('id')->on('goods_receipt_landed_costs')->restrictOnDelete();
+            $table->unsignedBigInteger('goods_receipt_line_id');
+            $table->foreign('goods_receipt_line_id', 'grlca_line_fk')->references('id')->on('goods_receipt_lines')->restrictOnDelete();
             $table->decimal('amount', 24, 2);
             $table->timestamps();
             $table->unique(['goods_receipt_landed_cost_id', 'goods_receipt_line_id'], 'grn_cost_line_unique');

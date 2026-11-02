@@ -18,7 +18,7 @@ return new class extends Migration
             $table->string('idempotency_key', 36)->unique();
             $table->foreignId('created_by')->constrained('users')->restrictOnDelete();
             $table->timestamps();
-            $table->index(['inventory_material_id', 'occurred_on']);
+            $table->index(['inventory_material_id', 'occurred_on'], 'isa_material_date_idx');
         });
     }
 

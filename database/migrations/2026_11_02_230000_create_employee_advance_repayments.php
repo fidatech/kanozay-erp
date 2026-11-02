@@ -16,7 +16,7 @@ return new class extends Migration {
             $table->uuid('submission_token')->unique();
             $table->foreignId('created_by')->constrained('users')->restrictOnDelete();
             $table->timestamps();
-            $table->index(['employee_salary_advance_id', 'received_on']);
+            $table->index(['employee_salary_advance_id', 'received_on'], 'ear_advance_date_idx');
         });
     }
     public function down(): void { Schema::dropIfExists('employee_advance_repayments'); }

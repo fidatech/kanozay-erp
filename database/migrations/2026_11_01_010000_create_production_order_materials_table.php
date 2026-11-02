@@ -16,7 +16,7 @@ return new class extends Migration {
             $table->decimal('required_quantity', 22, 6);
             $table->boolean('is_packaging')->default(false);
             $table->timestamps();
-            $table->unique(['production_order_id', 'line_number']);
+            $table->unique(['production_order_id', 'line_number'], 'pom_order_line_unique');
         });
     }
 

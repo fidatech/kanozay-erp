@@ -31,7 +31,7 @@ return new class extends Migration {
             $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
             $table->unique(['reference_type', 'reference_id'], 'inventory_stock_reference_unique');
-            $table->index(['inventory_material_id', 'occurred_on']);
+            $table->index(['inventory_material_id', 'occurred_on'], 'ism_material_date_idx');
         });
     }
 

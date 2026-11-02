@@ -35,7 +35,7 @@ return new class extends Migration {
             $table->boolean('is_valued')->default(false);
             $table->timestamps();
             $table->unique(['inventory_stock_movement_id', 'inventory_cost_layer_id'], 'inventory_cost_consumption_layer_unique');
-            $table->index(['inventory_cost_layer_id', 'is_valued']);
+            $table->index(['inventory_cost_layer_id', 'is_valued'], 'icc_layer_valued_idx');
         });
     }
 

@@ -19,7 +19,7 @@ return new class extends Migration {
             $table->foreignId('decided_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamp('decided_at')->nullable();
             $table->timestamps();
-            $table->index(['employee_profile_id', 'starts_on', 'ends_on']);
+            $table->index(['employee_profile_id', 'starts_on', 'ends_on'], 'elr_employee_dates_idx');
             $table->index(['status', 'starts_on']);
         });
     }
