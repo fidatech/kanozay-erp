@@ -4,7 +4,7 @@
  <div><h1>{{ $invoice->number }}</h1><p>Posted sales invoice and linked customer receivable</p></div>
  <div style="display:flex;gap:8px"><a class="btn btn-light" href="{{ route('sales.invoices.index') }}">Back to invoices</a><button class="btn" type="button" onclick="window.print()"><i class="fa-solid fa-print"></i> Print / Save PDF</button></div>
 </div>
-<div class="card invoice-sheet" style="max-width:900px;margin:0 auto;padding:42px;background:#fff;color:#1b2738">
+<div class="card invoice-sheet" dir="{{ session('locale','en') === 'en' ? 'ltr' : 'rtl' }}" style="max-width:900px;margin:0 auto;padding:42px;background:#fff;color:#1b2738">
  <header style="display:flex;align-items:center;justify-content:space-between;gap:24px;border-bottom:3px solid #5921a8;padding-bottom:18px">
   <div style="display:flex;align-items:center;gap:18px"><img src="{{ asset('images/kanozay-logo.jpg') }}" alt="Kanozay Foods Manufacturing" style="width:210px;max-height:92px;object-fit:contain">
    <div><h1 style="margin:0;color:#5921a8">{{ $company?->legal_name ?: ($company?->name ?: 'Kanozay Foods Manufacturing Company') }}</h1>
@@ -44,13 +44,12 @@
    <tr><th style="text-align:left">Total customer balance</th><td style="text-align:right"><strong>{{ $invoice->currency_code }} {{ rtrim(rtrim((string) \Brick\Math\BigDecimal::of($previousBalance)->plus($outstanding)->toScale(4), '0'), '.') }}</strong></td></tr>
   </tbody></table>
  </section>
- @if($invoice->tradeDocument?->description)<p style="margin-top:24px"><strong>Notes:</strong> {{ $invoice->tradeDocument->description }}</p>@endif
  <div style="display:grid;grid-template-columns:1fr 1fr;gap:80px;margin-top:70px;text-align:center">
   <div style="border-top:1px solid #667085;padding-top:8px">Prepared by</div><div style="border-top:1px solid #667085;padding-top:8px">Customer signature</div>
  </div>
 </div>
 <style>
 @page{size:A4;margin:12mm}
-@media print{body{background:#fff!important}.no-print,.rail,.sidebar,.topbar,nav{display:none!important}.content,.main,.invoice-sheet{width:100%!important;max-width:none!important;margin:0!important;padding:0!important;box-shadow:none!important;border:0!important}.invoice-sheet{break-inside:avoid}.invoice-sheet table{font-size:11pt}.invoice-sheet tr{break-inside:avoid}a{color:inherit;text-decoration:none}}
+@media print{body{background:#fff!important}.no-print,.top,.rail,.sidebar,.topbar,nav{display:none!important}.content,.main,.invoice-sheet{width:100%!important;max-width:none!important;margin:0!important;padding:0!important;box-shadow:none!important;border:0!important}.invoice-sheet{break-inside:avoid}.invoice-sheet table{font-size:11pt}.invoice-sheet tr{break-inside:avoid}a{color:inherit;text-decoration:none}.invoice-sheet[dir="rtl"]{direction:rtl}.invoice-sheet[dir="rtl"] header>div:last-child{text-align:left!important}.invoice-sheet[dir="rtl"] th{text-align:right!important}}
 </style>
 @endsection
