@@ -11,6 +11,7 @@ use App\Models\TradeParty;
 use App\Models\User;
 use App\Services\GoodsReceiptService;
 use App\Services\GoodsReceiptLandedCostService;
+use App\Services\InventoryStockService;
 use Brick\Math\BigDecimal;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -84,6 +85,43 @@ class GoodsReceiptLandedCostTest extends TestCase
 
         $this->assertDatabaseCount('goods_receipt_landed_costs', 1);
         $this->assertDatabaseCount('goods_receipt_landed_cost_allocations', 2);
+    }
+
+    public function test_grn_landed_cost_is_carried_into_fifo_issue_cost(): void
+    {
+        [$user, , $receipt] = $this->postedReceiptWithTwoLines();
+        app(GoodsReceiptLandedCostService::class)->record($receipt->id, 'freight', '20.00', $user->id);
+        $line = $receipt->lines()->orderBy('id')->first();
+        $material = $line->material;
+
+        app(InventoryStockService::class)->post($material, [
+            'type' => 'issue', 'direction' => 'out', 'quantity' => '0.500000',
+            'reference_type' => 'cost-test-issue', 'reference_id' => $line->id,
+            'occurred_on' => '2026-11-02', 'created_by' => $user->id,
+        ]);
+
+        $this->assertDatabaseHas('inventory_cost_consumptions', [
+            'quantity' => '0.500000', 'amount' => '52.5000000000', 'currency_code' => 'AFN', 'is_valued' => true,
+        ]);
+        $this->assertSame('0.500000', $material->fresh()->on_hand_quantity);
+    }
+
+    public function test_landed_cost_is_rejected_after_receipt_material_was_issued(): void
+    {
+        [$user, , $receipt] = $this->postedReceiptWithTwoLines();
+        $line = $receipt->lines()->orderBy('id')->first();
+        app(InventoryStockService::class)->post($line->material, [
+            'type' => 'issue', 'direction' => 'out', 'quantity' => '0.500000',
+            'reference_type' => 'cost-test-issue', 'reference_id' => $line->id,
+            'occurred_on' => '2026-11-02', 'created_by' => $user->id,
+        ]);
+
+        try {
+            app(GoodsReceiptLandedCostService::class)->record($receipt->id, 'freight', '20.00', $user->id);
+            $this->fail('Landed cost after issue should be rejected.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('receipt', $exception->errors());
+        }
     }
 
     public function test_landed_cost_route_requires_inventory_update_permission(): void

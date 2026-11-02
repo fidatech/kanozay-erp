@@ -43,6 +43,8 @@ class GoodsReceiptLandedCostService
             if ($lines->isEmpty() || $lines->contains(fn ($line) => $line->line_subtotal_snapshot === null)) {
                 throw ValidationException::withMessages(['receipt' => 'Historical receipt costs are missing; allocation is unavailable.']);
             }
+            $costing = app(InventoryCostService::class);
+            foreach ($lines as $line) $costing->assertLandedCostAllowed((int) $line->id);
             $weights = $lines->mapWithKeys(fn ($line) => [$line->id => (string) $line->line_subtotal_snapshot])->all();
             try {
                 $allocations = $this->allocator->allocate((string) $value, $weights);

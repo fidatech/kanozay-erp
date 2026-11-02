@@ -24,6 +24,6 @@ class GoodsReceiptLandedCostController extends Controller
         $service->record($receipt->id, $data['component'], $data['amount'], $request->user()->id, $data['reference'] ?? null);
 
         return redirect()->route('purchases.orders.show', $order)
-            ->with('success', 'Landed-cost allocation recorded for '.$receipt->number.'. No inventory valuation or journal was posted.');
+            ->with('success', 'Landed-cost allocation recorded for '.$receipt->number.'. Inventory cost layers now include this allocation; no general-ledger journal was posted.');
     }
 }

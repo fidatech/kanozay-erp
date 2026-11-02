@@ -68,6 +68,10 @@ class InventoryStockService
             ]);
             $locked->forceFill(['on_hand_quantity' => (string) $next->toScale(6)])->save();
 
+            if ($directions[$type] === 'out') {
+                app(InventoryCostService::class)->consume($entry);
+            }
+
             return $entry;
         });
     }

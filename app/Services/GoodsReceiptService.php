@@ -139,6 +139,7 @@ class GoodsReceiptService
                     'notes' => 'Goods receipt '.$receipt->id.' / PO '.$locked->number,
                     'created_by' => $actorId,
                 ]);
+                app(InventoryCostService::class)->receiveGoodsReceiptLine($line->id, $actorId);
             }
 
             $allReceived = $items->every(function ($item) use ($receivedByItem) {
