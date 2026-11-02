@@ -66,7 +66,7 @@ php artisan test
 npm run build
 ```
 
-The development branch CI runs both checks with SQLite. Passing CI is not evidence of a deployed environment, browser testing, client data approval, or print acceptance.
+The development branch CI runs both checks, then installs a separate clean SQLite file with migrations, default role seeding and the reference chart seeder. Passing CI is not evidence of a deployed environment, browser testing, client data approval, MySQL migration or print acceptance.
 
 ## Move from SQLite to a separate MySQL UAT database
 

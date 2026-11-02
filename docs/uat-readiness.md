@@ -1,88 +1,34 @@
 # Kanozay ERP UAT readiness report
 
-**Decision: NO-GO for employee acceptance testing**  
-**Review date:** 1 November 2026
-**Branch:** `development/kanozay-completion`  
-**Latest verified code commit:** `b6239eee320148c3f9a4e57f792a2e3f0d2f2f56`
+**Decision: NO-GO for employee acceptance testing**
+**Review date:** 2 November 2026
+**Branch:** `development/kanozay-completion`
+**Latest verified commit:** `4ed4a452cbaabe08bd32c6d8378d4f6024bf435a`
 
-## Evidence reviewed
+## Verification evidence
 
-- Current branch head `b6239eee320148c3f9a4e57f792a2e3f0d2f2f56` passed GitHub Actions run **#119**: **226 passed, 1 skipped, 1730 assertions**; the Vite build also passed. This run includes the purchasing permission regression tests.
-- GitHub Actions run **#115** passed module-role template tests, and run **#116** passed scoped module workspace route tests. Named roles now receive initial least-privilege templates; role changes are preserved when re-seeding. Finance, purchasing, and recipe controller permissions have scoped module checks while retaining the legacy administration permission as a compatibility path.
-- Permission tightening initially exposed outdated purchasing test fixtures in runs #117 and #118; those failures were corrected, and run #119 passed. No failing status is being carried as the latest result.
-- The CI workflow uses SQLite and runs Laravel tests plus the frontend build. It does not create a deployed UAT environment, exercise client workbook imports, visually inspect browser print output, or verify a clean production-style migration/seed procedure.
+- GitHub Actions run `41452434067` passed: **253 tests passed, 1 skipped, 1,920 assertions**. The frontend build, Laravel test suite, clean SQLite migration, default role/permission seeding, reference chart seeding, and route registration steps completed successfully.
+- The CI SQLite database is disposable and contains synthetic/reference data only. The client workbooks were not committed or imported into CI.
+- The local workspace has Node.js and passed `npm run build` and `git diff --check`. It has no PHP or Composer, so Laravel commands were verified in CI.
+- No authorized shared staging environment, human browser workflow run, print/PDF visual check, or MySQL UAT migration has been verified.
 
-- Repository source, migrations, controllers, services, Blade views, routes, seeders, tests, Composer and npm configuration, and GitHub Actions workflow.
-- The branch contains 47 Laravel test files and a push/pull-request Laravel test workflow configured for PHP 8.4, SQLite tests, and a Vite build.
-- The current execution workspace has Node.js but no PHP, Composer, or `vendor/`. `npm ci --no-audit --no-fund` completed and `npm run build` passed locally on the current development branch. Laravel tests and migrations cannot run here because `php` is unavailable.
-- GitHub Actions run **#97** for commit `a9a808a8a1c9aace324c339d1dd03d6afaaca5a2` completed successfully. The workflow reports **208 passed, 1 skipped, 1624 assertions**, and the frontend asset build completed successfully.
-- GitHub Actions run **#100** for commit `bb2f533c1c95a9ec2b9860f52a3cd788b9e65dd2` completed successfully. The workflow reports **211 passed, 1 skipped, 1638 assertions**, and the frontend asset build completed successfully. Run #99 exposed a test assertion that checked for a currency code still present in the filter dropdown; the assertion was narrowed to the report section and run #100 passed.
-- GitHub Actions run **#102** for commit `d3ef7da44ba3120c56423d7cabf1d9d05fde144e` completed successfully. The workflow reports **214 passed, 1 skipped, 1655 assertions**, and the frontend asset build completed successfully.
-- GitHub Actions run **#104** for commit `72ee7f52aa1c7e3b57ddfbe111b51702e2728793` completed successfully. The workflow reports **217 passed, 1 skipped, 1672 assertions**, and the frontend asset build completed successfully.
-- GitHub Actions run **#108** for commit `56e725381522494828d72b5d0d932ac62599dd78` completed successfully. The workflow reports **219 passed, 1 skipped, 1691 assertions**, and the frontend asset build completed successfully. Runs #106 and #107 caught a test helper name collision and an overly broad HTML assertion; both were corrected before run #108.
-- GitHub Actions run **#112** for commit `8346945b50fc02c64b3a91f453067cf23254a826` completed successfully: **222 passed, 1 skipped, 1705 assertions**, and the frontend build passed. This run verifies the permission-aware dashboard implementation.
-- No authorized staging/UAT deployment was identified or created. No production deployment was attempted.
+## Implemented workflow slices
 
-## Client workbook review
+- Procurement, GRN, raw-material stock movements, landed-cost allocation, material reservation/issue, production batches, QC decisions, and finished-goods release have code paths and feature tests.
+- Inventory valuation uses cost layers where source costs exist. Unvalued or legacy balances remain visible rather than assigned invented prices.
+- Quotations, sales-order conversion, invoice/batch dispatch, customer returns/credit notes, receivable journals and payment flows have partial integrations. The original invoice sample has not been found, and client print acceptance is pending.
+- Payroll now has employee records, a guarded workbook import, monthly salary snapshots, reviewed payable adjustments, approval/accrual journals, individual cash/bank/sarafi payments and branded payslips. Attendance, leave, advance handling and approved deduction rules remain incomplete; no automatic tax formula is applied.
+- Fixed assets now have a register, required source references, categories and assignment/return history. Depreciation schedules, disposal and asset accounting remain incomplete.
+- The raw-material workbook preview classifies packaging, excludes on-way/ordered quantities from opening stock, detects duplicates and supports reviewed confirmation. The accounts workbook review lists its 16 legacy ledgers without posting historical transactions.
 
-- The supplied liquid recipe sheet uses the water dose formula `SUM(F5:F17)-20`. Its listed non-water doses sum to 7.2996 kg, so the formula evaluates to **-12.7004 kg**. This is a source discrepancy; it has not been corrected or imported as an approved recipe.
-- The supplied powder recipe's seven named ingredients total **25.11 kg** against a 25 kg bag. The sheet also contains a separate “Pro Cost” line; its role is unclear and must be confirmed. The formula remains a draft and is not approved for production.
-- The raw materials/owner investment, account, and payroll workbooks contain client records. They were read locally for structure and anomaly review; none of their rows or personal data have been committed.
-- The payroll workbook contains employee number, name, father’s name, gender, position, phone, national ID, taxpayer ID, monthly salary, and a tax/transport deduction column with spreadsheet formulas. The employee import preview excludes the deduction column, detects row errors and duplicate employee numbers, requires a selected salary currency because the workbook does not identify one, and requires a second upload plus confirmation before writing records. No client employee data has been imported. Confirm the deduction meaning and payroll treatment with Kanozay before calculation or posting.
-- The raw-material workbook has 197 rows on its factory stock sheet. Its fields include material details, manufacture/expiry dates, units, quantity, unit price in USD, and total. The current stock schema has no material lot/expiry or valuation records, so those balances are not importable without preserving those fields and agreeing on opening-cost treatment. The separate owner-investment sheet has date, detail, in, out, balance, and comment fields; shareholder posting is not yet implemented.
-- The account workbook has 16 sheets spanning multiple operational and financial ledgers. It has not been imported; each sheet requires verified mapping to the chart of accounts, dates, currencies, parties, and source documents before posting.
-- Available brand files include the original multicolour and monochrome logo images and a one-page letterhead PDF. The multicolour original is now used on the ERP sign-in and header. The customer invoice sample was not available, so client-specific invoice reproduction remains blocked.
+## Blocking decisions and acceptance gaps
 
-## Blocking issues for UAT
+1. The production workbook contains a calculated negative water quantity and a powder ingredient total above the stated package target. These recipes must not be approved until corrected source formulas are confirmed by Kanozay.
+2. The 16-sheet accounts workbook requires approved account, date, currency, party and opening-balance mappings. The owner-investment movements also need approved classification and currency treatment.
+3. Payroll source data has no stated salary currency or approved tax/transport deduction rule. Attendance, leave, advance and payroll scenarios need client validation before real payroll processing.
+4. `01-Sample.xlsx` and the sample customer invoice have not been located in accessible project files. Invoice terminology/layout cannot be declared accepted from the present evidence.
+5. End-to-end employee browser tests, visual A4/RTL print checks, clean MySQL UAT setup, role-user pack, backup/restore drill and client reconciliation against underlying transactions are outstanding.
 
-1. **Runtime verification:** PHP is unavailable in this local workspace, so local migrations and tests were not run. CI run #112 verifies code commit `8346945b50fc02c64b3a91f453067cf23254a826`; every later backend change requires a fresh successful run.
-2. **Workflow coverage:** the current application contains functional accounting, customer/supplier, purchase order, GRN, raw-material stock receipts/issues and adjustments, landed-cost, recipe approval, production planning, material reservation/issue, batch, and QC code. Physical stock counts and transfers are not implemented. The HR employee register and confirmed import flow are implemented, but payroll periods, attendance, payroll calculation, approval, payment, and journals are not implemented. Sales invoicing/dispatch/returns, shareholder transaction posting, fixed-asset depreciation, and complete management reports are not ready to validate end to end.
-3. **Invoice acceptance:** obtain the client’s actual customer invoice sample and confirm required fields, currency/number formats, and approval/signature layout before implementing the print/PDF template.
-4. **Recipe approval:** obtain written Kanozay confirmation of the two formula discrepancies before importing or approving those recipes.
-5. **UAT data:** there are no synthetic scenario seeders or preconfigured test users in the repository. Create synthetic users and test transactions only after the deployment is isolated. The default database seeder was changed to create roles/permissions without a predictable default account.
-6. **Localization and print validation:** interface language selection exists, but full Dari/Pashto translations, RTL behavior, Jalali date display, and branded A4/RTL document rendering have not been verified.
-7. **Staging, backup, and rollback:** a staging environment is not available in this task context. No migration rehearsal, restore drill, or UAT rollback rehearsal has been run.
+## Decision rule
 
-## Minimum evidence required to change to GO
-
-- Fresh isolated UAT database accepts all migrations and seeders.
-- Full Laravel test suite and Vite build pass in CI.
-- Authorized roles can complete and are blocked from disallowed actions.
-- Purchase → approved order → partial/full GRN → landed cost → stock and payable reconciliation passes with no duplicate posting or over-receipt.
-- Approved recipe → production plan → reservation → issue → batch → QC release/rejection → finished-goods stock passes with correct quantities and no release of failed batches.
-- Sales invoice, dispatch, return, customer payment and ledger reconcile; invoice matches the client sample after review.
-- Payroll calculation and posting match a client-approved scenario; no unapproved statutory rules are assumed.
-- Journals balance, reports reconcile to transaction records, and the backup can be restored to a separate database.
-- Browser checks pass for desktop/mobile, login and permissions, modals, Select2 workflows, English/Dari/Pashto direction, and print/PDF output.
-
-## Change made during this review
-
-- Replaced the fabricated sign-in mark and generic header leaf with the supplied original multicolour Kanozay logo.
-- Removed the default seeder's predictable `test@example.com` login. The database seeder now installs reference roles and permissions only; first-admin creation remains interactive through `php artisan kanozay:admin`.
-- Added a regression test for the no-default-user seeding rule. It is **not executed** because PHP and Composer are unavailable in this workspace.
-- Corrected landed-cost rounding enum compatibility and expanded the GRN landed-cost tests for proportional allocation, reconciliation, duplicate component protection, and permissions. The branch CI passed on run #74.
-- Follow-on changes now use `brick/math` decimal operations for journal posting, trade settlement, currency exchange validation, general ledger running balances, aging, reconciliation, purchase totals, and finance amount display. Purchase and money transaction inputs enforce the database's four-decimal precision. Recipe workbook and approval weight checks also use decimal arithmetic. Regression tests were added for decimal journal balancing, settlement limits, currency conversion rounding, ledger totals, and input precision. These commits are **pending CI verification**; the available GitHub workflow-run connector only returns pull-request-triggered runs and no status is exposed for these branch pushes.
-- Commit `28cf1110e256affa1c7a192b86f9ed5e25942854` uses exact decimal allocation totals in sales and purchase overview overdue counts, formats amounts with the shared finance component, and tests fully paid versus partially settled overdue receivables. CI run #92 passed.
-- Commit `f93086fa5ff2ae4a64a03adaec3e179f677315af` adds a permission-gated employee register and a two-step payroll workbook import preview. Personal names, phone, national ID, and taxpayer ID are encrypted using `APP_KEY`. The source deduction column is excluded, salary currency is explicitly selected, duplicate employee numbers block import, and preview files are not retained. CI run #95 passed. Payroll periods, attendance, payroll calculation, approval, payment, and journal posting remain incomplete.
-- Commit `a9a808a8a1c9aace324c339d1dd03d6afaaca5a2` adds immutable stock adjustments with reason, permission enforcement, exact quantities, reservation/negative-stock protection, transaction rollback, and idempotency coverage. CI run #97 passed.
-- The posted-only trial balance report provides an as-of date, currency-separated exact decimal balances, access control, and CSV export. Its date, draft exclusion, currency filter, CSV, and permission tests passed in run #100. The report does not replace a reviewed balance sheet or period-close control.
-- The Profit and Loss report summarizes posted income and expense accounts within a date range, uses exact decimal arithmetic, keeps currencies separate, and offers CSV export. Its date-range, draft exclusion, currency separation, decimal total, CSV, and permission tests passed in run #102. It does not translate currencies or calculate a balance sheet.
-- The Balance Sheet report includes posted asset, liability, and equity balances through the selected date, plus current earnings from the configured fiscal-year start. Currency totals remain separate; CSV, permissions, fiscal-year calculations, draft/future exclusion, and reconciliation fixtures passed in run #104. Historical client balances and fiscal-year policy still need reconciliation in UAT.
-- The cash/bank/sarafi movement report uses linked financial-account ledger mappings, includes opening balances, reports posted inflows/outflows and closing balances by account/currency, and flags missing ledger mappings. Date, currency, draft/future exclusion, exact decimal, CSV, and permission tests passed in run #108. It is a movement register and does not classify inflows/outflows into operating, investing, or financing categories.
-- The dashboard replaces placeholder revenue/profit/inventory metrics and disabled controls with permission-scoped, transaction-backed operational counts and recent purchase orders, production plans, and posted journals. It filters date-bound data and omits unsupported values. Its role visibility, date filtering, and metric content passed in run #112.
-
-## Current blockers
-
-- Sales quotations, order conversion, invoicing with released-batch dispatch, and controlled returns/credit notes now exist. Client acceptance is still blocked by missing sample invoice verification, client approval of sales/COGS accounting mappings, and absent new-commit CI evidence.
-- Shareholder contribution/withdrawal posting has a partial ledger workflow; fixed-asset workflows are not implemented. Owner-investment rows still need mapping, currency treatment, and client approval before import.
-- Payroll import preview and employee register exist, but payroll calculation, approval, payment, and journals remain incomplete. The source workbook has no salary currency; tax/transport formula treatment remains excluded until approved.
-- The chart-of-accounts seeder is a reference tree only and is not automatically included in the default seeder. The 16-sheet account workbook is a set of legacy ledgers rather than a clearly designated chart of accounts; account/date/currency/party/source mappings and opening-balance cut-off require review.
-- No staging environment, role-user pack, backup/restore drill, browser test, or visual print/PDF verification is available. The actual invoice sample and `01-Sample.xlsx` are unavailable.
-
-## Next implementation order
-
-1. Continue removing floating-point arithmetic from financial posting paths as transaction workflows are completed.
-2. Validate migrations and the current purchase-to-GRN and manufacturing-to-QC flows on a clean SQLite UAT database and synthetic data. Review the unseeded chart of accounts before attempting customer/supplier ledger provisioning.
-3. Finish the agreed initial-release gaps in sales/invoices and dispatch, payroll, shareholder ledger, fixed assets, and transaction-backed reports.
-4. Obtain the missing invoice sample and client recipe approvals, then build validated import and print acceptance around those confirmed sources.
-5. Deploy only to an isolated UAT target, prepare named test users, and run the employee UAT checklist.
+Keep the application in an isolated UAT database with synthetic records. Change the decision to GO only after the acceptance criteria in `docs/uat-checklist.md` are exercised on the target environment, source documents are reviewed, and critical data-integrity issues are closed. No production deployment is authorized.

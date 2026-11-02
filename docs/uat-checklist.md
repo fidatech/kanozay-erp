@@ -35,7 +35,7 @@ The default database seeder does not seed the reference chart of accounts. Custo
 | UAT-PUR-04 | Add freight/customs/handling landed-cost items | Allocation totals reconcile to entered costs; review per-item unit costs | Ready to exercise |
 | UAT-INV-01 | Record a synthetic stock adjustment with a reason | Immutable ledger movement and current balance agree | Ready to exercise |
 | UAT-INV-02 | Reduce stock below reservations or below zero | Request is rejected and the prior balance is unchanged | Ready to exercise |
-| UAT-INV-03 | Reconcile source workbook opening quantities and costs | Do not import until lot, manufacture/expiry, unit, USD valuation, and opening-cost handling are approved | Blocked by schema and client approval |
+| UAT-INV-03 | Preview the client raw-stock workbook, including packaging and on-order sections | Duplicate/invalid rows block confirmation; ordered stock remains out of on-hand balance; confirm only reviewed in-factory rows | Ready for synthetic exercise; client opening date and cost reconciliation pending |
 
 ## Manufacturing and laboratory
 
@@ -46,7 +46,7 @@ The default database seeder does not seed the reference chart of accounts. Custo
 | UAT-MFG-03 | Create a production plan from an approved recipe | The order snapshots the approved formula/version and shows requirements/shortages | Ready after a client-approved recipe exists |
 | UAT-MFG-04 | Reserve and issue materials, then record a batch | Stock ledger reflects reservations and consumption; duplicate posting is prevented | Ready to exercise |
 | UAT-QC-01 | Record passing and failing lab checks | A failed/unreleased batch remains unavailable for sale; release requires approval | Ready to exercise |
-| UAT-FG-01 | Review production receipt and current finished-goods quantity | Released package count matches the batch receipt | Partial; dispatch, transfer, return, and valuation workflows remain incomplete |
+| UAT-FG-01 | Review production receipt, released quantity, invoice dispatch and customer return | Batch history and available packages reconcile; failed/unreleased stock cannot dispatch | Ready for synthetic exercise; transfer and valuation remain partial |
 
 ## Finance and reports
 
@@ -67,10 +67,12 @@ Use one currency per test and verify its journal lines. Never add amounts in dif
 | ID | Scenario | Expected result | Status |
 |---|---|---|---|
 | UAT-HR-01 | Preview a synthetic payroll-format workbook | Errors/duplicates are shown; salary currency must be selected; no source rows are written until confirmation | Ready to exercise with synthetic file |
-| UAT-HR-02 | Calculate, approve, pay, and journal payroll | Compare to client-approved rules and payroll scenario | Blocked; payroll calculation/posting is not implemented |
-| UAT-SALES-01 | Create quotation/order/invoice, dispatch stock, receive payment, print invoice | Reconcile stock, receivable, payment, and journal; compare printed document to the client sample | Blocked; sales dispatch/invoice workflow and invoice sample are unavailable |
-| UAT-SH-01 | Record shareholder contributions/withdrawals and reconcile investment statement | Use approved owner-investment mapping and client-confirmed currency/account | Blocked; shareholder posting and mapping are not implemented |
-| UAT-ASSET-01 | Register an asset and run approved depreciation/disposal | Reconcile cost, depreciation, disposal, and journal | Blocked; fixed-asset workflows and depreciation policy are not implemented |
+| UAT-HR-02 | Create a synthetic monthly payroll draft, adjust an amount with a reason, approve, pay and print a payslip | Salary snapshot is retained; accrual and payment journals balance; repeat payment does not duplicate; payslip matches line and payment | Ready for synthetic exercise; no approved tax/attendance calculation |
+| UAT-HR-03 | Reconcile attendance, leave, advances and deductions against client policy | Approved rules produce the agreed net salary and employee statement | Blocked by missing workflows and client policy |
+| UAT-SALES-01 | Create quotation/order/invoice, dispatch stock, receive payment, print invoice | Reconcile stock, receivable, payment and journal; compare printed document to the client sample | Ready for synthetic flow; original invoice sample and visual print approval missing |
+| UAT-SH-01 | Record synthetic shareholder contributions/withdrawals and reconcile investment statement | Journal and shareholder account reconcile in the selected currency | Partial workflow; source owner-investment mapping and business rules unapproved |
+| UAT-ASSET-01 | Register a synthetic asset with source reference, assign and return it | Unique tag, cost currency and custodian history remain consistent; no journal is fabricated | Ready for synthetic register exercise |
+| UAT-ASSET-02 | Run approved depreciation and disposal | Reconcile schedule, net value, proceeds and journals against approved policy | Blocked by policy and unfinished depreciation/disposal workflows |
 | UAT-DASH-01 | View dashboard as each test role and change date range | Counts reflect accessible records only; no revenue/profit/inventory value appears without supporting workflows | Ready to exercise |
 
 ## Record a result
