@@ -8,8 +8,8 @@
 <section class="panel"><h2>Employee Accounts</h2><div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Actions</th></tr></thead><tbody>
 @forelse($users as $user)
 <tr><td><strong>{{ $user->name }}</strong></td><td>{{ $user->email }}</td><td><span class="status">{{ $user->roles->pluck('name')->join(', ') ?: 'Unassigned' }}</span></td><td>
-@can('users.update')<button type="button" class="btn" data-modal-open="edit-user-{{ $user->id }}"><i class="fa-solid fa-pen"></i> Edit</button>@endcan
-@can('users.delete')<form class="inline delete-user-form" method="POST" action="{{ route('admin.users.destroy',$user) }}">@csrf @method('DELETE')<button type="submit" class="btn danger-btn"><i class="fa-solid fa-trash"></i> Delete</button></form>@endcan
+@if(!$user->hasRole('Super Administrator'))@can('users.update')<button type="button" class="btn" data-modal-open="edit-user-{{ $user->id }}"><i class="fa-solid fa-pen"></i> Edit</button>@endcan
+@can('users.delete')<form class="inline delete-user-form" method="POST" action="{{ route('admin.users.destroy',$user) }}">@csrf @method('DELETE')<button type="submit" class="btn danger-btn"><i class="fa-solid fa-trash"></i> Delete</button></form>@endcan @else<span class="muted">Protected account</span>@endif
 </td></tr>
 @empty<tr><td colspan="4" class="empty"><div class="k-empty-state" role="status"><div class="k-empty-icon"><i class="fa-solid fa-users" aria-hidden="true"></i></div><strong>No employee accounts yet</strong><p>Create a user account to grant access to the ERP.</p></div></td></tr>@endforelse
 </tbody></table></div>{{ $users->onEachSide(1)->links('vendor.pagination.kanozay') }}</section>
@@ -21,10 +21,12 @@
 @endcan
 @can('users.update')
 @foreach($users as $user)
+@if(!$user->hasRole('Super Administrator'))
 <dialog class="k-modal user-dialog" id="edit-user-{{ $user->id }}" aria-labelledby="edit-title-{{ $user->id }}"><form method="POST" action="{{ route('admin.users.update',$user) }}" class="modal-form user-submit-form">@csrf @method('PUT')
 <div class="modal-head"><h2 id="edit-title-{{ $user->id }}">Edit Employee</h2><button type="button" class="modal-close" data-modal-close aria-label="Close">×</button></div>
 <div class="modal-body"><label>Full Name<input name="name" value="{{ $user->name }}" required maxlength="255"></label><label>Email Address<input type="email" name="email" value="{{ $user->email }}" required></label><label>New Password <small>(leave blank to keep current)</small><input type="password" name="password" minlength="12" autocomplete="new-password"></label><label>Confirm New Password<input type="password" name="password_confirmation" autocomplete="new-password"></label><label>Role<select name="role" data-no-select2="1" required>@foreach($roles as $role)<option value="{{ $role->name }}" @selected($user->hasRole($role->name))>{{ $role->name }}</option>@endforeach</select></label></div>
 <div class="modal-foot"><button type="button" class="btn btn-light" data-modal-close>Cancel</button><button class="btn" type="submit">Save Changes</button></div></form></dialog>
+@endif
 @endforeach
 @endcan
 @endsection

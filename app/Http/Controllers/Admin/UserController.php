@@ -46,7 +46,7 @@ class UserController extends Controller
     public function update(Request $request, User $user): RedirectResponse
     {
         abort_unless($request->user()->can('users.update'), 403);
-        if ($user->hasRole('Super Administrator') && !$request->user()->hasRole('Super Administrator')) abort(403);
+        abort_if($user->hasRole('Super Administrator'), 403);
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],

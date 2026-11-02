@@ -43,8 +43,12 @@ class AdministrationAccessTest extends TestCase
         $this->assertTrue(Role::findByName('Auditor UAT', 'web')->hasPermissionTo('users.delete'));
         $this->actingAs($super)->put(route('admin.users.update', $super), [
             'name' => $super->name, 'email' => $super->email, 'role' => 'Viewer',
-        ])->assertSessionHasErrors('role');
+        ])->assertForbidden();
         $this->assertTrue($super->fresh()->hasRole('Super Administrator'));
+        $this->actingAs($super)->get(route('admin.users.index'))
+            ->assertOk()->assertDontSee('data-modal-open="edit-user-'.$super->id.'"', false)
+            ->assertDontSee('action="'.route('admin.users.destroy', $super).'"', false)
+            ->assertSee('Protected account');
     }
 
     public function test_unprivileged_user_cannot_manage_users_or_roles(): void
