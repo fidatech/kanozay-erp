@@ -73,10 +73,10 @@
 
 ## Current blockers
 
-- No sales invoice, finished-goods dispatch, sales return, or sales credit-note workflow is implemented. Current finished-goods movements are production-batch receipts only; the invoice sample is unavailable, and sales revenue/COGS/inventory posting mappings have not been client-approved.
-- Shareholder contribution/withdrawal posting and fixed-asset workflows are not implemented. The owner-investment workbook exists, but mapping, currency treatment, and shareholder account rules need client review.
-- Payroll import preview and employee register exist, but payroll calculation, approval, payment, and journals do not. The source workbook has no salary currency; tax/transport formula treatment remains excluded until approved.
-- The chart-of-accounts seeder is a reference tree only and is not automatically included in the default seeder. The provided account workbook has not been imported because its 16 sheets still need account/date/currency/party/source mapping.
+- Sales quotations, order conversion, invoicing with released-batch dispatch, and controlled returns/credit notes now exist. Client acceptance is still blocked by missing sample invoice verification, client approval of sales/COGS accounting mappings, and absent new-commit CI evidence.
+- Shareholder contribution/withdrawal posting has a partial ledger workflow; fixed-asset workflows are not implemented. Owner-investment rows still need mapping, currency treatment, and client approval before import.
+- Payroll import preview and employee register exist, but payroll calculation, approval, payment, and journals remain incomplete. The source workbook has no salary currency; tax/transport formula treatment remains excluded until approved.
+- The chart-of-accounts seeder is a reference tree only and is not automatically included in the default seeder. The 16-sheet account workbook is a set of legacy ledgers rather than a clearly designated chart of accounts; account/date/currency/party/source mappings and opening-balance cut-off require review.
 - No staging environment, role-user pack, backup/restore drill, browser test, or visual print/PDF verification is available. The actual invoice sample and `01-Sample.xlsx` are unavailable.
 
 ## Next implementation order
