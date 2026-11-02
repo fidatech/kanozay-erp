@@ -8,8 +8,8 @@
 - [ ] Create a new isolated database. Never point UAT at production.
 - [ ] Install Composer/npm dependencies, configure a private `APP_KEY`, build assets, run migrations, and seed reference roles/permissions as described in [handoff.md](handoff.md).
 - [ ] Create the first administrator with `php artisan kanozay:admin`.
-- [ ] Create named synthetic test users. The seed installs scoped initial templates for Administrator, Finance Manager, Production Manager, Inventory Officer, Laboratory Officer, Sales Officer, HR Officer, and Viewer. Verify each user's assigned role and allowed/denied actions in Administration → Roles before the test session.
-- [ ] Give every test user a synthetic name and email such as `uat.finance@example.test`. Use unique passwords set by the administrator; do not add credentials to Git or this checklist.
+- [ ] Create named synthetic test users, or on an isolated local UAT database run `php artisan kanozay:uat-users --confirm-isolated`. Verify each assigned role and allowed/denied actions in Administration → Roles before the test session.
+- [ ] Use synthetic names and email addresses only. The UAT command generates unique random passwords and prints them once; do not add credentials to Git, logs or this checklist.
 - [ ] Record the starting database backup and confirm that it can be restored into a separate disposable database.
 - [ ] Do not import source customer, supplier, employee, account, raw-stock, or investment rows during this session. Use synthetic fixtures only.
 - [ ] Record the current commit, test run, browser/device, user role, and observed result for each case below.
@@ -68,7 +68,7 @@ Use one currency per test and verify its journal lines. Never add amounts in dif
 |---|---|---|---|
 | UAT-HR-01 | Preview a synthetic payroll-format workbook | Errors/duplicates are shown; salary currency must be selected; no source rows are written until confirmation | Ready to exercise with synthetic file |
 | UAT-HR-02 | Create a synthetic monthly payroll draft, adjust an amount with a reason, approve, pay and print a payslip | Salary snapshot is retained; accrual and payment journals balance; repeat payment does not duplicate; payslip matches line and payment | Ready for synthetic exercise; no approved tax/attendance calculation |
-| UAT-HR-03 | Reconcile attendance, leave, advances and deductions against client policy | Approved rules produce the agreed net salary and employee statement | Blocked by missing workflows and client policy |
+| UAT-HR-03 | Reconcile attendance, leave, advances and deductions against client policy | Approved rules produce the agreed net salary and employee statement | Blocked by approved deduction policy and payroll reconciliation; attendance, leave and direct advances have partial workflows |
 | UAT-SALES-01 | Create quotation/order/invoice, dispatch stock, receive payment, print invoice | Reconcile stock, receivable, payment and journal; compare printed document to the client sample | Ready for synthetic flow; original invoice sample and visual print approval missing |
 | UAT-SH-01 | Record synthetic shareholder contributions/withdrawals and reconcile investment statement | Journal and shareholder account reconcile in the selected currency | Partial workflow; source owner-investment mapping and business rules unapproved |
 | UAT-ASSET-01 | Register a synthetic asset with source reference, assign and return it | Unique tag, cost currency and custodian history remain consistent; no journal is fabricated | Ready for synthetic register exercise |

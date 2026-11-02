@@ -51,6 +51,14 @@ php artisan serve --host=127.0.0.1 --port=8000
 
 Open `http://127.0.0.1:8000` and use the administrator credentials just created. The admin command prompts for the password; do not save it in Git or this guide.
 
+To create eight clearly synthetic, scoped test accounts on this isolated local database, run:
+
+```sh
+php artisan kanozay:uat-users --confirm-isolated
+```
+
+The command refuses non-local environments and repeated runs. It prints random one-time credentials only in the terminal; copy them to an approved private channel and do not paste them into Git or shared logs. The role set covers finance, shareholder, production, inventory, laboratory, sales, HR and read-only viewing. A Super Administrator is created separately by `kanozay:admin`. Never run this command against a customer database.
+
 The default seeder installs reference permissions and role templates only. It does not seed a user, a chart of accounts, or sample transactions. The chart of accounts in `ChartOfAccountsSeeder` is a reference structure, not a verified import of Kanozay's 16-sheet account workbook. Review and approve its use before running it:
 
 ```sh
