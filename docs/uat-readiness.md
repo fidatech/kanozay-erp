@@ -3,11 +3,11 @@
 **Decision: NO-GO for employee acceptance testing**
 **Review date:** 2 November 2026
 **Branch:** `development/kanozay-completion`
-**Latest verified commit:** `056908add38ec7ff7bd8db80103e16aa1104c207`
+**Latest verified commit:** `602ca57f7cb3993c0513a5b9bc3ceb4837b0a6f3`
 
 ## Verification evidence
 
-- GitHub Actions run `41457666569` passed: **261 tests passed, 1 skipped, 1,989 assertions**. The frontend build, Laravel test suite, clean SQLite migration, default role/permission seeding, reference chart seeding, and route registration steps completed successfully.
+- GitHub Actions run `41458208435` passed: **262 tests passed, 1 skipped, 1,997 assertions**. The frontend build, Laravel test suite, clean SQLite migration, default role/permission seeding, reference chart seeding, and route registration steps completed successfully.
 - The CI SQLite database is disposable and contains synthetic/reference data only. The client workbooks were not committed or imported into CI.
 - The local workspace has Node.js and passed `npm run build` and `git diff --check`. It has no PHP or Composer, so Laravel commands were verified in CI.
 - No authorized shared staging environment, human browser workflow run, print/PDF visual check, or MySQL UAT migration has been verified.
@@ -27,7 +27,7 @@
 2. The 16-sheet accounts workbook requires approved account, date, currency, party and opening-balance mappings. The owner-investment movements also need approved classification and currency treatment.
 3. Payroll source data has no stated salary currency or approved tax/transport deduction rule. Attendance, leave, advance and payroll scenarios need client validation before real payroll processing.
 4. `01-Sample.xlsx` and the sample customer invoice have not been located in accessible project files. Invoice terminology/layout cannot be declared accepted from the present evidence.
-5. End-to-end employee browser tests, visual A4/RTL print checks, clean MySQL UAT setup, role-user pack, backup/restore drill and client reconciliation against underlying transactions are outstanding.
+5. End-to-end employee browser tests, visual A4/RTL print checks, clean MySQL UAT setup, human role-user exercise, backup/restore drill and client reconciliation against underlying transactions are outstanding.
 
 ## Decision rule
 

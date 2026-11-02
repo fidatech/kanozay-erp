@@ -20,7 +20,7 @@ Use a new, isolated UAT database. Do not point these commands at production or i
 4. Build assets with `npm run build`.
 5. Run `php artisan migrate --force` and `php artisan db:seed --force`. The default seeder creates reference roles, scoped role permission templates, and permissions; it does not create a login, chart-of-accounts entries, or synthetic transactions. Role access is verified in CI, but review each role before giving it to an employee.
 6. Run `php artisan kanozay:admin` interactively to create the first administrator. The command refuses to run once any user exists and asks for the password without placing it in shell history.
-7. Create named test users with minimum permissions through the user-management UI. Use synthetic names and addresses until the client explicitly approves importing production employee/customer records.
+7. Create named test users with minimum permissions through the user-management UI, or use `php artisan kanozay:uat-users --confirm-isolated` on a disposable local database for eight synthetic role users with one-time random credentials. Use synthetic names and addresses until the client explicitly approves importing production employee/customer records.
 8. Verify `/up`, sign-in, roles, and the UAT checks in [uat-readiness.md](uat-readiness.md) before inviting employees.
 
 These are setup instructions, not evidence that a deployment or UAT environment currently exists.
@@ -46,7 +46,7 @@ The uploaded payroll and account workbooks contain confidential personal and fin
 
 The development branch includes guarded inventory workbook import, accounts workbook review, purchasing/manufacturing/quality workflows, partial sales and shareholder integration, payroll accrual/payment/payslips and guarded salary advance issuance and direct repayment, and a fixed-asset register with assignments. The reference chart is not a client-approved mapping. The source production formulas and owner-investment ledger require decisions described in [client-workbook-import-review.md](client-workbook-import-review.md).
 
-GitHub Actions run `41457666569` verified commit `056908add38ec7ff7bd8db80103e16aa1104c207`: 261 passed, 1 skipped, 1,989 assertions. CI also built the frontend and installed a clean SQLite database with role and chart seeders. This does not verify a shared staging environment, browser print layout, client data reconciliation or MySQL setup. See [uat-readiness.md](uat-readiness.md) for the NO-GO decision and current blockers.
+GitHub Actions run `41458208435` verified commit `602ca57f7cb3993c0513a5b9bc3ceb4837b0a6f3`: 262 passed, 1 skipped, 1,997 assertions. CI also built the frontend and installed a clean SQLite database with role and chart seeders. This does not verify a shared staging environment, browser print layout, client data reconciliation or MySQL setup. See [uat-readiness.md](uat-readiness.md) for the NO-GO decision and current blockers.
 
 ## Backup and recovery
 
