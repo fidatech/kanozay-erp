@@ -56,8 +56,11 @@
   @empty<tr><td colspan="6" class="empty">No finished goods have been dispatched.</td></tr>@endforelse
  </tbody></table></div>
  {{ $dispatchLines->links() }}
- <p class="muted">Every dispatch is an immutable stock document linked to one released production batch. Customer returns and controlled reversals are not yet available.</p>
+ <p class="muted">Every dispatch is linked to one released production batch. Only QC-approved customer returns count toward saleable batch availability.</p>
 </div>
+<div class="card" style="padding:18px;margin-top:18px"><h2>Customer returns</h2><p>Returns linked to the original invoice line and batch.</p><div class="table-wrap"><table><thead><tr><th>Date</th><th>Credit note</th><th>Batch</th><th>Packages</th><th>Disposition</th></tr></thead><tbody>
+@forelse($returnLines as $line)<tr><td>{{ $line->creditNote->credit_date->format('Y-m-d') }}</td><td><a href="{{ route('sales.credit-notes.show',$line->creditNote) }}">{{ $line->creditNote->number }}</a></td><td>{{ $line->production_batch_id }}</td><td>{{ number_format($line->quantity_packages) }}</td><td>{{ $line->restocked?'QC approved to saleable stock':'Quarantined / not restocked' }}</td></tr>@empty<tr><td colspan="5" class="empty">No customer returns recorded.</td></tr>@endforelse
+</tbody></table></div>{{ $returnLines->links() }}</div>
 <script>
 document.querySelectorAll('[data-confirm-dispatch]').forEach(form=>form.addEventListener('submit',async event=>{
  if(form.dataset.confirmed==='yes')return;
