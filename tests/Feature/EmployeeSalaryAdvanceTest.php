@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Currency;
 use App\Models\EmployeeProfile;
+use App\Models\EmployeeAdvanceRepayment;
 use App\Models\EmployeeSalaryAdvance;
 use App\Models\FinancialAccount;
 use App\Models\JournalEntry;
@@ -54,6 +55,19 @@ class EmployeeSalaryAdvanceTest extends TestCase
         $this->assertSame('100.0000', $employee->fresh()->monthly_salary);
         $this->actingAs($user)->get(route('hr.advances.index'))->assertOk()->assertSee('SYN-ADV-01');
         $this->actingAs($user)->post(route('hr.advances.store'), array_merge($payload, ['amount' => '50']))->assertSessionHasErrors('submission_token');
+
+        $advance = EmployeeSalaryAdvance::sole();
+        $repayment = ['destination_account_id' => $cash->id, 'received_on' => now()->toDateString(), 'amount' => '10.2500', 'submission_token' => (string) Str::uuid()];
+        $this->actingAs($user)->post(route('hr.advances.repay', $advance), $repayment)->assertRedirect();
+        $this->actingAs($user)->post(route('hr.advances.repay', $advance), $repayment)->assertRedirect();
+        $this->assertSame(1, EmployeeAdvanceRepayment::count());
+        $this->actingAs($user)->post(route('hr.advances.repay', $advance), array_merge($repayment, ['amount' => '20', 'submission_token' => (string) Str::uuid()]))->assertSessionHasErrors('amount');
+        $this->assertSame(2, JournalEntry::count());
+        $this->actingAs($user)->post(route('hr.advances.repay', $advance), array_merge($repayment, ['amount' => '15.25', 'submission_token' => (string) Str::uuid()]))->assertRedirect();
+        $this->assertSame(2, EmployeeAdvanceRepayment::count());
+        $this->assertSame(3, MoneyTransaction::count());
+        $this->assertSame(3, JournalEntry::where('status', 'posted')->count());
+        $this->actingAs($user)->get(route('hr.advances.index'))->assertOk()->assertSee('Repaid in full');
     }
 
     public function test_advance_rejects_wrong_currency_and_requires_dual_permission(): void

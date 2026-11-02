@@ -1,6 +1,6 @@
 @extends('layouts.kanozay')
 @section('content')
-<div class="heading"><div><h1>Salary advances</h1><p>Each issue creates a cash outflow and employee advance receivable. No automatic payroll deduction or repayment policy is assumed.</p></div><a class="btn btn-light" href="{{ route('workspace.page', ['hr', 'payroll']) }}">Payroll</a></div>
+<div class="heading"><div><h1>Salary advances</h1><p>Each issue creates a cash outflow and employee advance receivable. Direct cash repayments are posted separately; payroll deductions require client approval.</p></div><a class="btn btn-light" href="{{ route('workspace.page', ['hr', 'payroll']) }}">Payroll</a></div>
 @if(session('success'))<p role="status" class="notice">{{ session('success') }}</p>@endif
 @if($errors->any())<p role="alert" class="notice notice-warning">{{ $errors->first() }}</p>@endif
 @if(auth()->user()->can('hr.update') && auth()->user()->can('finance.update'))
@@ -15,11 +15,24 @@
 <label>Reason<input name="reason" value="{{ old('reason') }}" minlength="5" maxlength="500" required></label>
 <div><button class="btn" type="submit">Pay and post advance</button></div></form></div>
 @endif
-<div class="card" style="padding:20px"><h2>Posted advances</h2><div class="table-wrap"><table><thead><tr><th>Issue date</th><th>Employee</th><th>Amount</th><th>Reason</th><th>Journal</th></tr></thead><tbody>
+<div class="card" style="padding:20px"><h2>Posted advances</h2><div class="table-wrap"><table><thead><tr><th>Issue date</th><th>Employee</th><th>Issued</th><th>Outstanding</th><th>Reason</th><th>Journal</th><th>Direct repayment</th></tr></thead><tbody>
 @forelse($advances as $advance)
-<tr><td>{{ $advance->issued_on->toDateString() }}</td><td>{{ $advance->employee->employee_number }} — {{ $advance->employee->full_name }}</td><td>{{ $advance->amount }} {{ $advance->currency->code }}</td><td>{{ $advance->reason }}</td><td>{{ $advance->transaction?->journal?->number }}</td></tr>
+<tr><td>{{ $advance->issued_on->toDateString() }}</td><td>{{ $advance->employee->employee_number }} — {{ $advance->employee->full_name }}</td><td>{{ $advance->amount }} {{ $advance->currency->code }}</td><td>{{ $advance->outstanding_amount }} {{ $advance->currency->code }}</td><td>{{ $advance->reason }}</td><td>{{ $advance->transaction?->journal?->number }}</td><td>
+@if($advance->outstanding_amount !== '0.0000' && auth()->user()->can('hr.update') && auth()->user()->can('finance.update'))
+<form method="POST" action="{{ route('hr.advances.repay', $advance) }}" style="display:flex;gap:6px;flex-wrap:wrap">
+@csrf
+<input type="hidden" name="submission_token" value="{{ (string) \Illuminate\Support\Str::uuid() }}">
+<select name="destination_account_id" required><option value="">Receiving account</option>@foreach($accounts as $account)<option value="{{ $account->id }}">{{ $account->name }} · {{ $account->currency->code }}</option>@endforeach</select>
+<input name="amount" inputmode="decimal" placeholder="Repayment amount" required style="width:130px"><input type="date" name="received_on" value="{{ now()->toDateString() }}" required><button class="btn btn-secondary" type="submit">Receive</button>
+</form>
+@elseif($advance->outstanding_amount === '0.0000')
+Repaid in full
+@else
+—
+@endif
+</td></tr>
 @empty
-<tr><td colspan="5" class="empty">No advances posted.</td></tr>
+<tr><td colspan="7" class="empty">No advances posted.</td></tr>
 @endforelse
 </tbody></table></div>{{ $advances->links() }}</div>
 @endsection

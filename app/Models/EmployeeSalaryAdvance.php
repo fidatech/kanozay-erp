@@ -14,4 +14,5 @@ class EmployeeSalaryAdvance extends Model
     public function employee() { return $this->belongsTo(EmployeeProfile::class, 'employee_profile_id'); }
     public function currency() { return $this->belongsTo(Currency::class); }
     public function transaction() { return $this->belongsTo(MoneyTransaction::class, 'money_transaction_id'); }
+    public function repayments() { return $this->hasMany(EmployeeAdvanceRepayment::class, 'employee_salary_advance_id'); }
 }
