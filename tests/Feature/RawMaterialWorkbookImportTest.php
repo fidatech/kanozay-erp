@@ -59,6 +59,19 @@ class RawMaterialWorkbookImportTest extends TestCase
         $this->assertSame(0, InventoryStockMovement::count());
     }
 
+    public function test_preview_does_not_round_source_values_beyond_supported_precision(): void
+    {
+        $user = User::factory()->create();
+        Permission::findOrCreate('inventory.update', 'web');
+        $user->givePermissionTo('inventory.update');
+        $path = $this->workbook([['Salt', 'kg', '1.1234567', '0.1234567']]);
+
+        $this->actingAs($user)->post(route('inventory.materials.import-preview'), [
+            'file' => new UploadedFile($path, 'raw-stock.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true),
+        ])->assertOk()->assertSee('positive number with up to six decimal places');
+        $this->assertSame(0, InventoryMaterial::count());
+    }
+
     private function workbook(array $items): string
     {
         $book = new Spreadsheet();

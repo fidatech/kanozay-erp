@@ -27,8 +27,8 @@ class RawMaterialWorkbookImportService
         for ($row = 3; $row <= min(1000, $sheet->getHighestDataRow()); $row++) {
             $number = $sheet->getCell('A'.$row)->getCalculatedValue();
             if (! is_numeric($number)) continue;
-            $name = trim((string) $sheet->getCell('B'.$row)->getFormattedValue());
-            $unit = trim((string) $sheet->getCell('F'.$row)->getFormattedValue());
+            $name = trim(preg_replace('/\s+/', ' ', (string) $sheet->getCell('B'.$row)->getFormattedValue()));
+            $unit = trim(preg_replace('/\s+/', ' ', (string) $sheet->getCell('F'.$row)->getFormattedValue()));
             $quantity = $this->number($sheet->getCell('G'.$row)->getCalculatedValue());
             $unitCost = $this->number($sheet->getCell('H'.$row)->getCalculatedValue());
             $rowErrors = [];
@@ -37,7 +37,7 @@ class RawMaterialWorkbookImportService
             if ($quantity === null || ! preg_match('/^(?:0|[1-9][0-9]{0,13})(?:\.[0-9]{1,6})?$/', $quantity) || BigDecimal::of($quantity)->compareTo(BigDecimal::zero()) <= 0) $rowErrors[] = 'Quantity must be a positive number with up to six decimal places.';
             if ($unitCost !== null && (! preg_match('/^(?:0|[1-9][0-9]{0,13})(?:\.[0-9]{1,6})?$/', $unitCost) || BigDecimal::of($unitCost)->compareTo(BigDecimal::zero()) < 0)) $rowErrors[] = 'USD unit price must be zero or a positive number with up to six decimal places.';
 
-            $key = mb_strtolower(preg_replace('/\s+/', ' ', $name).'|'.preg_replace('/\s+/', ' ', $unit));
+            $key = mb_strtolower($name.'|'.$unit);
             if ($name !== '' && $unit !== '' && isset($seen[$key])) $rowErrors[] = 'Material name and unit are duplicated within this workbook.';
             $seen[$key] = true;
             if ($name !== '' && $unit !== '' && InventoryMaterial::query()->whereRaw('lower(name) = ?', [mb_strtolower($name)])->whereRaw('lower(unit) = ?', [mb_strtolower($unit)])->exists()) $rowErrors[] = 'A material with this name and unit already exists.';
@@ -70,8 +70,8 @@ class RawMaterialWorkbookImportService
                 $material = InventoryMaterial::create(['sku' => $sku, 'name' => $name, 'unit' => $unit, 'is_packaging' => false, 'is_active' => true]);
                 $stock->post($material, [
                     'type' => 'opening', 'direction' => 'in', 'quantity' => $item['quantity'],
-                    'unit_cost' => $item['unit_cost_usd'] !== null && BigDecimal::of($item['unit_cost_usd'])->compareTo(BigDecimal::zero()) > 0 ? $item['unit_cost_usd'] : null,
-                    'currency_id' => $item['unit_cost_usd'] !== null && BigDecimal::of($item['unit_cost_usd'])->compareTo(BigDecimal::zero()) > 0 ? $currency->id : null,
+                    'unit_cost' => $item['unit_cost_usd'],
+                    'currency_id' => $item['unit_cost_usd'] !== null ? $currency->id : null,
                     'reference_type' => 'opening', 'reference_id' => $material->id,
                     'occurred_on' => $date, 'notes' => 'Imported from Kanozay raw-material opening stock workbook, source row '.$item['source_row'],
                     'created_by' => $actor->id,
@@ -85,7 +85,8 @@ class RawMaterialWorkbookImportService
     private function number(mixed $value): ?string
     {
         if ($value === null || trim((string) $value) === '') return null;
-        $text = strtr(trim((string) $value), ['٠'=>'0','١'=>'1','٢'=>'2','٣'=>'3','٤'=>'4','٥'=>'5','٦'=>'6','٧'=>'7','٨'=>'8','٩'=>'9','۰'=>'0','۱'=>'1','۲'=>'2','۳'=>'3','۴'=>'4','۵'=>'5','۶'=>'6','۷'=>'7','۸'=>'8','۹'=>'9','٫'=>'.','٬'=>'']);
-        return is_numeric($text) ? (string) BigDecimal::of($text)->toScale(6) : null;
+        $text = strtr(trim((string) $value), ['٠'=>'0','١'=>'1','٢'=>'2','٣'=>'3','٤'=>'4','٥'=>'5','٦'=>'6','٧'=>'7','٨'=>'8','٩'=>'9','۰'=>'0','۱'=>'1','۲'=>'2','۳'=>'3','۴'=>'4','۵'=>'5','۶'=>'6','۷'=>'7','۸'=>'8','۹'=>'9','٫'=>'.','٬'=>',']);
+        $text = str_replace(',', '', $text);
+        return is_numeric($text) ? (string) BigDecimal::of($text) : null;
     }
 }
