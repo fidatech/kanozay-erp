@@ -154,8 +154,11 @@ Route::middleware('auth')->group(function () {
 Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::get('chart-of-accounts', [\App\Http\Controllers\Admin\LedgerAccountController::class,'index'])->name('accounts.index');
     Route::post('chart-of-accounts/workbook-review', \App\Http\Controllers\Admin\LegacyAccountsWorkbookReviewController::class)->name('accounts.workbook-review');
+    Route::get('chart-of-accounts/template', [\App\Http\Controllers\Admin\ChartOfAccountsWorkbookController::class,'sample'])->name('accounts.template');
+    Route::post('chart-of-accounts/import', [\App\Http\Controllers\Admin\ChartOfAccountsWorkbookController::class,'import'])->name('accounts.import');
     Route::post('chart-of-accounts', [\App\Http\Controllers\Admin\LedgerAccountController::class,'store'])->name('accounts.store');
     Route::put('chart-of-accounts/{account}', [\App\Http\Controllers\Admin\LedgerAccountController::class,'update'])->name('accounts.update');
+    Route::delete('chart-of-accounts/{account}', [\App\Http\Controllers\Admin\LedgerAccountController::class,'destroy'])->name('accounts.destroy');
     Route::get('financial-settings', [\App\Http\Controllers\Admin\FinancialSettingController::class,'edit'])->name('financial-settings.edit');
     Route::put('financial-settings', [\App\Http\Controllers\Admin\FinancialSettingController::class,'update'])->name('financial-settings.update');
     Route::get('document-numbering', [\App\Http\Controllers\Admin\DocumentSequenceController::class,'index'])->name('sequences.index');
