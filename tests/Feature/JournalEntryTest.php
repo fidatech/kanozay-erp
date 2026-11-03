@@ -55,4 +55,42 @@ class JournalEntryTest extends TestCase {
  }
  public function test_journal_lines_show_party_names_without_account_codes():void {[$u,$c,$a,$b]=$this->setupAccounts();$party=\App\Models\TradeParty::create(['type'=>'customer','name'=>'Kabul Wholesale Customer','created_by'=>$u->id]);\Illuminate\Support\Facades\DB::table('entity_ledger_accounts')->insert(['entity_type'=>'customer','entity_id'=>$party->id,'currency_id'=>$c->id,'purpose'=>'receivable','ledger_account_id'=>$a->id,'created_at'=>now(),'updated_at'=>now()]);$entry=JournalEntry::create(['number'=>'JE-PARTY-01','entry_date'=>'2026-10-25','description'=>'Party journal','currency_id'=>$c->id,'created_by'=>$u->id,'status'=>'posted']);$entry->lines()->create(['ledger_account_id'=>$a->id,'debit'=>100,'credit'=>0]);$entry->lines()->create(['ledger_account_id'=>$b->id,'debit'=>0,'credit'=>100]);$this->actingAs($u)->get(route('finance.journals.index'))->assertOk()->assertSee('Kabul Wholesale Customer')->assertSee('>100</span>',false);}
  public function test_journal_creation_requires_permission():void {[$u,$c,$a,$b]=$this->setupAccounts();$other=User::factory()->create();$this->actingAs($other)->get(route('finance.journals.index'))->assertForbidden();$this->actingAs($u)->get(route('finance.journals.index'))->assertOk();}
+ public function test_draft_validation_rejects_unbalanced_and_mixed_line_values():void {
+  [$u,$c,$a,$b]=$this->setupAccounts();
+  $payload=['entry_date'=>'2026-10-25','description'=>'Validation UAT','currency_id'=>$c->id,'lines'=>[
+   ['ledger_account_id'=>$a->id,'debit'=>'100.0000','credit'=>'0'],
+   ['ledger_account_id'=>$b->id,'debit'=>'0','credit'=>'99.9999'],
+  ]];
+  $this->actingAs($u)->post(route('finance.journals.store'),$payload)->assertSessionHasErrors('lines');
+  $payload['lines'][1]=['ledger_account_id'=>$b->id,'debit'=>'1','credit'=>'1'];
+  $this->actingAs($u)->post(route('finance.journals.store'),$payload)->assertSessionHasErrors('lines.1.debit');
+  $payload['lines'][1]=['ledger_account_id'=>$b->id,'debit'=>'0','credit'=>'100'];
+  $this->actingAs($u)->post(route('finance.journals.store'),$payload)->assertRedirect();
+  $this->assertDatabaseCount('journal_entries',1);
+  $this->assertDatabaseHas('activity_logs',['action'=>'journal.created']);
+  $this->assertDatabaseHas('journal_entries',['status'=>'draft']);
+ }
+ public function test_reversal_journal_cannot_itself_be_reversed():void {
+  [$u,$c,$a,$b]=$this->setupAccounts();
+  $entry=JournalEntry::create(['number'=>'JE-REVERSE-01','entry_date'=>'2026-10-25','description'=>'Test reversal','currency_id'=>$c->id,'created_by'=>$u->id,'status'=>'draft']);
+  $entry->lines()->create(['ledger_account_id'=>$a->id,'debit'=>'100','credit'=>'0']);
+  $entry->lines()->create(['ledger_account_id'=>$b->id,'debit'=>'0','credit'=>'100']);
+  $this->actingAs($u);$service=app(JournalPostingService::class);$service->post($entry,$u->id);
+  $reversal=$service->reverse($entry,$u->id);
+  $this->expectException(ValidationException::class);
+  $service->reverse($reversal,$u->id);
+ }
+
+ public function test_finance_editor_can_view_and_create_journal_without_administration_permission():void {
+  [$u,$c,$a,$b]=$this->setupAccounts();$finance=User::factory()->create();$finance->givePermissionTo(Permission::findOrCreate('finance.update','web'));
+  $this->actingAs($finance)->get(route('finance.journals.index'))->assertOk()->assertSee('journal-balance-preview')->assertSee('Save Draft');
+  $this->actingAs($finance)->post(route('finance.journals.store'),[
+   'entry_date'=>'2026-10-25','description'=>'Finance journal','currency_id'=>$c->id,'lines'=>[
+    ['ledger_account_id'=>$a->id,'debit'=>'100.0000','credit'=>'0'],
+    ['ledger_account_id'=>$b->id,'debit'=>'0','credit'=>'100.0000'],
+   ],
+  ])->assertRedirect();
+  $this->assertDatabaseHas('journal_entries',['description'=>'Finance journal','status'=>'draft']);
+ }
+
 }
