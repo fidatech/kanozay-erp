@@ -50,6 +50,23 @@
 .fx-inline-actions{display:flex;align-items:center;gap:9px;margin-top:2px}.fx-inline-actions button{flex:1;min-height:42px;padding:10px;border:1px solid #bed3e8;border-radius:10px;font-weight:700;cursor:pointer}
 .fx-save{background:#155b9d;color:#fff;border-color:#155b9d!important}.fx-save:hover{background:#104a83}.fx-save:disabled{opacity:.65;cursor:wait}.fx-cancel{background:#fff;color:#385a7d}.fx-cancel:hover{background:#f3f7fc}
 .fx-error{margin:0;color:#b42318;font-size:12px;line-height:1.5}.fx-history-wrapper{margin-top:18px}.fx-pair-card.is-saving{border-color:#70b4eb}
+/* Compact editing mode: replaces the read-only body instead of extending the card. */
+.fx-pair-card.is-editing .fx-pair-display,.fx-pair-card.is-editing .fx-pair-footer{display:none!important}
+.fx-pair-card form.fx-inline-form{display:grid!important;grid-template-columns:minmax(0,1fr)!important;align-items:stretch!important;gap:10px!important;width:100%!important;max-width:100%!important;min-width:0!important;margin:0!important;padding:14px 16px 16px!important;box-sizing:border-box!important}
+.fx-pair-card form.fx-inline-form[hidden]{display:none!important}
+.fx-pair-card form.fx-inline-form label{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:5px!important;width:100%!important;min-width:0!important;max-width:100%!important;margin:0!important;line-height:1.35!important}
+.fx-pair-card form.fx-inline-form input:not([type=hidden]),.fx-pair-card form.fx-inline-form textarea{display:block!important;flex:0 0 auto!important;width:100%!important;max-width:100%!important;min-width:0!important;min-height:39px!important;height:39px!important;padding:8px 10px!important;border:1px solid #cddced!important;border-radius:8px!important;background:#fff!important;font-size:12px!important;line-height:1.35!important;box-shadow:none;box-sizing:border-box!important}
+.fx-pair-card form.fx-inline-form input:focus,.fx-pair-card form.fx-inline-form textarea:focus{border-color:#397fd0!important;box-shadow:0 0 0 3px rgba(57,127,208,.12)!important;outline:none!important}
+.fx-pair-card form.fx-inline-form textarea{height:57px!important;min-height:57px!important;resize:vertical}
+.fx-pair-card form.fx-inline-form .fx-form-hint{font-size:10px;color:#7d90a4;font-weight:400}
+.fx-pair-card form.fx-inline-form .fx-inline-actions{display:grid!important;grid-template-columns:1fr 1fr!important;gap:8px!important;margin-top:2px;width:100%!important}
+.fx-pair-card form.fx-inline-form .fx-inline-actions button{min-width:0!important;width:100%!important;min-height:39px!important;padding:8px 6px!important;white-space:nowrap;font-size:12px!important}
+.fx-optional-notes{border:0;padding:0;margin:0;min-width:0}
+.fx-optional-notes summary{cursor:pointer;color:#35658d;font-weight:700;font-size:11px;list-style:none;display:flex;align-items:center;gap:6px;padding:3px 0}
+.fx-optional-notes summary::-webkit-details-marker{display:none}.fx-optional-notes summary::before{content:'+';font-weight:800;color:#2674b4}
+.fx-optional-notes[open] summary::before{content:'−'}.fx-optional-notes label{margin-top:8px!important}
+.fx-inline-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:2px}
+.fx-inline-heading strong{font-size:12px;color:#21456e}.fx-inline-heading button{border:0;background:transparent;color:#647d98;cursor:pointer;font-size:17px;padding:3px 5px}
 @media(max-width:650px){.fx-pair-tools{width:100%}.fx-pair-search{flex:1}.fx-pair-search input{width:100%}.fx-pair-board{grid-template-columns:1fr}.fx-pair-card{border-radius:13px}}
 </style>
 <section class="panel fx-pairs">
@@ -85,10 +102,11 @@
     @csrf
     <input type="hidden" name="from_currency_id" value="{{ $source->id }}">
     <input type="hidden" name="to_currency_id" value="{{ $destination->id }}">
+    <div class="fx-inline-heading"><strong>Edit {{ $source->code }} → {{ $destination->code }}</strong><button type="button" class="fx-cancel" aria-label="Close editing">×</button></div>
     <label>Rate · 1 {{ $source->code }} in {{ $destination->code }}<input type="text" name="rate" inputmode="decimal" autocomplete="off" required pattern="[0-9]+(\.[0-9]{1,12})?" placeholder="Enter positive rate" value="{{ $pairRate ? rtrim(rtrim((string)$pairRate->rate,'0'),'.') : '' }}"><span class="fx-form-hint">Up to 12 decimal places</span></label>
     <label>Effective date<input type="date" name="effective_date" required value="{{ now()->toDateString() }}"></label>
     <label>Rate source<input name="source" maxlength="150" placeholder="Bank / Sarafi / Agreed" value="{{ $pairRate?->source }}"></label>
-    <label>Notes (optional)<textarea name="notes" maxlength="1000" rows="2" placeholder="Internal reference or context"></textarea></label>
+    <details class="fx-optional-notes"><summary>Add notes (optional)</summary><label>Internal notes<textarea name="notes" maxlength="1000" rows="2" placeholder="Internal reference or context"></textarea></label></details>
     <p class="fx-error" role="alert" hidden></p>
     <div class="fx-inline-actions"><button class="fx-cancel" type="button">Cancel</button><button class="fx-save" type="submit"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Save rate</button></div>
    </form>
@@ -121,8 +139,8 @@ document.addEventListener('DOMContentLoaded',()=>{
  board.addEventListener('click',event=>{
   const card=event.target.closest('.fx-pair-card');if(!card)return;
   const toggle=event.target.closest('.fx-pair-set');
-  if(toggle){const form=card.querySelector('.fx-inline-form');if(!form)return;form.hidden=!form.hidden;toggle.setAttribute('aria-expanded',String(!form.hidden));if(!form.hidden)form.querySelector('input[name=rate]').focus();}
-  if(event.target.closest('.fx-cancel')){const form=card.querySelector('.fx-inline-form');form.hidden=true;card.querySelector('.fx-pair-set').setAttribute('aria-expanded','false');form.querySelector('.fx-error').hidden=true;}
+  if(toggle){const form=card.querySelector('.fx-inline-form');if(!form)return;form.hidden=false;card.classList.add('is-editing');toggle.setAttribute('aria-expanded','true');form.querySelector('input[name=rate]').focus();}
+  if(event.target.closest('.fx-cancel')){const form=card.querySelector('.fx-inline-form');form.hidden=true;card.classList.remove('is-editing');card.querySelector('.fx-pair-set').setAttribute('aria-expanded','false');form.querySelector('.fx-error').hidden=true;}
  });
  board.addEventListener('submit',async event=>{
   const form=event.target.closest('.fx-inline-form');if(!form)return;event.preventDefault();
@@ -141,7 +159,7 @@ document.addEventListener('DOMContentLoaded',()=>{
    const status=card.querySelector('.fx-pair-status');status.classList.remove('is-unset');status.querySelector('span').textContent='Recorded';
    form.querySelector('input[name=rate]').value=rate.textContent;
    card.querySelector('.fx-pair-set span').textContent='Update rate';
-   form.hidden=true;card.querySelector('.fx-pair-set').setAttribute('aria-expanded','false');
+   form.hidden=true;card.classList.remove('is-editing');card.querySelector('.fx-pair-set').setAttribute('aria-expanded','false');
    const table=document.getElementById('fx-rate-history');
    const placeholder=table?.querySelector('td.empty')?.closest('tr');if(placeholder)placeholder.remove();
    if(table){const row=document.createElement('tr');
