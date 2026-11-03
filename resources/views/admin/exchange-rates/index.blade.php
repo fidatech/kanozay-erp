@@ -18,19 +18,39 @@
 .fx-pair-title{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:16px}
 .fx-pair-title h2{margin:0 0 6px}.fx-pair-tools{display:flex;align-items:flex-end;gap:9px;flex-wrap:wrap}
 .fx-pair-search{display:grid;gap:6px;font-size:12px;font-weight:700}.fx-pair-search input{min-height:39px;padding:8px 12px;border:1px solid #cbdced;border-radius:9px}
-.fx-pair-board{display:grid;grid-template-columns:repeat(auto-fill,minmax(255px,1fr));gap:14px}
-.fx-pair-card{border:1px solid #dfe9f5;background:#fbfdff;border-radius:13px;padding:17px;display:flex;flex-direction:column;gap:10px;min-width:0}
-.fx-pair-card[hidden]{display:none!important}.fx-pair-codes{display:flex;align-items:center;gap:10px;font-size:14px}.fx-pair-codes i{font-size:11px;color:#7188a3}
-.fx-pair-rate{font-size:23px;font-weight:800;color:#1a629a;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
-.fx-pair-missing{font-size:15px;font-weight:700;color:#996826}.fx-pair-meta{color:#6c8099;font-size:11px;line-height:1.5}
-.fx-pair-set{margin-top:auto;border:1px solid #b9d5ed;background:#eaf5ff;color:#185b98;border-radius:9px;padding:10px;cursor:pointer;font-weight:700;min-height:39px}
-.fx-pair-set:hover{background:#d8ecff}.fx-inline-form{display:grid;gap:11px;border-top:1px solid #e0ebf6;padding-top:13px;margin-top:2px}
-.fx-inline-form[hidden],.fx-pair-display[hidden]{display:none!important}.fx-inline-form label{display:grid;gap:5px;font-weight:650;font-size:12px;color:#34506f}
-.fx-inline-form input,.fx-inline-form textarea{min-height:38px;padding:9px 10px;width:100%;border:1px solid #cddfec;border-radius:8px;box-sizing:border-box;font:inherit}
-.fx-inline-form textarea{min-height:60px;resize:vertical}.fx-inline-actions{display:flex;gap:8px}.fx-inline-actions button{flex:1;border:1px solid #bad2e9;border-radius:9px;padding:9px;cursor:pointer}
-.fx-save{background:#155ca0;color:white;border-color:#155ca0!important}.fx-cancel{background:white;color:#355578}.fx-error{color:#b42318;font-size:12px}
-.fx-history-wrapper{margin-top:18px}.fx-pair-card.is-saving{opacity:.7}
-@media(max-width:650px){.fx-pair-tools{width:100%}.fx-pair-search{flex:1}.fx-pair-search input{width:100%}}
+/* Pair cards: readable, independent direction entries with inline editing. */
+.fx-pair-board{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,292px),1fr));gap:15px;align-items:start}
+.fx-pair-card{position:relative;display:flex;flex-direction:column;min-width:0;gap:0;overflow:hidden;border:1px solid #dce7f3;border-radius:16px;background:#fff;box-shadow:0 3px 12px rgba(25,55,90,.035);transition:border-color .18s,box-shadow .18s,transform .18s}
+.fx-pair-card:hover{border-color:#aacbe9;box-shadow:0 10px 22px rgba(24,70,120,.075)}
+.fx-pair-card[hidden],.fx-inline-form[hidden],.fx-pair-display[hidden],.fx-pair-rate[hidden],.fx-pair-missing[hidden],.fx-error[hidden]{display:none!important}
+.fx-pair-top{padding:17px 18px 13px;display:flex;justify-content:space-between;align-items:start;gap:9px;border-bottom:1px solid #eff3f8}
+.fx-pair-kicker{margin:0 0 8px;color:#7a8ba1;font-size:10px;font-weight:750;text-transform:uppercase;letter-spacing:.09em}
+.fx-pair-codes{display:flex;align-items:center;gap:9px;min-width:0;font-size:14px;font-weight:800;color:#163c6e;letter-spacing:.02em}
+.fx-pair-codes strong{padding:7px 9px;background:#eef5ff;border:1px solid #e2edfb;border-radius:8px;white-space:nowrap}
+.fx-pair-codes i{font-size:11px;color:#7e97b2}
+.fx-pair-status{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:6px 9px;border-radius:20px;white-space:nowrap;font-size:10px;font-weight:800;background:#edf8f2;color:#177b50}
+.fx-pair-status.is-unset{background:#fff6e7;color:#9a671e}.fx-pair-status i{font-size:7px}
+.fx-pair-display{padding:18px 18px 15px;min-height:136px;display:flex;flex-direction:column;justify-content:center;gap:8px}
+.fx-rate-label{color:#71849d;font-size:11px;font-weight:700}
+.fx-pair-rate{font-size:clamp(22px,2vw,28px);line-height:1.25;letter-spacing:-.035em;font-weight:850;color:#123f77;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.fx-pair-missing{font-size:22px;font-weight:800;color:#9d702e;letter-spacing:-.02em}
+.fx-pair-equation{font-size:12px;color:#496784;font-weight:650;line-height:1.5}
+.fx-pair-meta{font-size:11px;color:#74869a;line-height:1.55;overflow-wrap:anywhere}
+.fx-pair-footer{display:flex;flex-direction:column;gap:12px;margin-top:auto;padding:13px 18px 17px;background:#f8fbff;border-top:1px solid #edf2f8}
+.fx-meta-label{font-size:10px;text-transform:uppercase;letter-spacing:.055em;color:#93a1b3;font-weight:700;margin:0 0 4px}
+.fx-effective-date{min-height:18px}
+.fx-pair-set{display:inline-flex;justify-content:center;align-items:center;gap:8px;width:100%;min-height:42px;border:1px solid #bdd6ef;border-radius:10px;background:#eaf4ff;color:#125c9f;font-weight:750;cursor:pointer;transition:background .15s,border-color .15s}
+.fx-pair-set:hover{background:#d9ecff;border-color:#83b8e8}.fx-pair-set:focus-visible,.fx-inline-actions button:focus-visible{outline:3px solid #79b8f9;outline-offset:2px}
+.fx-pair-set[aria-expanded=true]{background:#155b9d;border-color:#155b9d;color:#fff}.fx-pair-set[aria-expanded=true] i{transform:rotate(180deg)}
+.fx-inline-form{display:grid;gap:13px;padding:17px 18px 20px;background:#fff;border-top:1px solid #dce7f5}
+.fx-inline-form label{display:grid;gap:6px;color:#304d72;font-size:12px;font-weight:700;line-height:1.4}
+.fx-inline-form input:not([type=hidden]),.fx-inline-form textarea{width:100%;min-height:42px;border:1px solid #d2dfed;border-radius:9px;background:#fff;padding:10px 12px;font:inherit;font-weight:500;color:#173f68;box-sizing:border-box;outline:0}
+.fx-inline-form input:focus,.fx-inline-form textarea:focus{border-color:#428fdb;box-shadow:0 0 0 3px rgba(52,137,218,.13)}
+.fx-inline-form textarea{min-height:72px;resize:vertical}.fx-inline-form .fx-form-hint{font-size:11px;color:#7689a0;font-weight:400}
+.fx-inline-actions{display:flex;align-items:center;gap:9px;margin-top:2px}.fx-inline-actions button{flex:1;min-height:42px;padding:10px;border:1px solid #bed3e8;border-radius:10px;font-weight:700;cursor:pointer}
+.fx-save{background:#155b9d;color:#fff;border-color:#155b9d!important}.fx-save:hover{background:#104a83}.fx-save:disabled{opacity:.65;cursor:wait}.fx-cancel{background:#fff;color:#385a7d}.fx-cancel:hover{background:#f3f7fc}
+.fx-error{margin:0;color:#b42318;font-size:12px;line-height:1.5}.fx-history-wrapper{margin-top:18px}.fx-pair-card.is-saving{border-color:#70b4eb}
+@media(max-width:650px){.fx-pair-tools{width:100%}.fx-pair-search{flex:1}.fx-pair-search input{width:100%}.fx-pair-board{grid-template-columns:1fr}.fx-pair-card{border-radius:13px}}
 </style>
 <section class="panel fx-pairs">
  <div class="fx-pair-title">
@@ -45,26 +65,32 @@
  @foreach($currencies as $destination)
  @if($source->id !== $destination->id)
  @php($pairRate=$latestRates->get($source->id.':'.$destination->id))
- <article class="fx-pair-card" data-pair="{{ strtolower($source->code.' '.$destination->code) }}" data-from="{{ $source->id }}" data-to="{{ $destination->id }}">
-  <div class="fx-pair-codes"><strong>{{ $source->code }}</strong><i class="fa-solid fa-arrow-right" aria-hidden="true"></i><strong>{{ $destination->code }}</strong></div>
-  <div class="fx-pair-display">
+ <article class="fx-pair-card" data-pair="{{ strtolower($source->code.' '.$destination->code) }}" data-from="{{ $source->id }}" data-to="{{ $destination->id }}" aria-label="{{ $source->code }} to {{ $destination->code }} exchange rate">
+  <div class="fx-pair-top">
+   <div><p class="fx-pair-kicker">Currency direction</p><div class="fx-pair-codes"><strong>{{ $source->code }}</strong><i class="fa-solid fa-arrow-right" aria-hidden="true"></i><strong>{{ $destination->code }}</strong></div></div>
+   <span class="fx-pair-status {{ $pairRate ? '' : 'is-unset' }}"><i class="fa-solid fa-circle" aria-hidden="true"></i><span>{{ $pairRate ? 'Recorded' : 'Not set' }}</span></span>
+  </div>
+  <div class="fx-pair-display" aria-live="polite">
+   <div class="fx-rate-label">Current recorded rate</div>
    <div class="fx-pair-rate" @if(!$pairRate) hidden @endif>{{ $pairRate ? rtrim(rtrim((string)$pairRate->rate,'0'),'.') : '' }}</div>
-   <div class="fx-pair-missing" @if($pairRate) hidden @endif>Not set</div>
-   <div class="fx-pair-meta">1 {{ $source->code }} = rate in {{ $destination->code }}</div>
-   <div class="fx-pair-meta fx-effective-date">@if($pairRate){{ $pairRate->effective_date->format('Y-m-d') }} · {{ $pairRate->source ?: 'Manual' }}@else No rate recorded for this direction @endif</div>
+   <div class="fx-pair-missing" @if($pairRate) hidden @endif>No rate yet</div>
+   <div class="fx-pair-equation">1 {{ $source->code }} = <span class="fx-equation-value">{{ $pairRate ? rtrim(rtrim((string)$pairRate->rate,'0'),'.') : '—' }}</span> {{ $destination->code }}</div>
+  </div>
+  <div class="fx-pair-footer">
+   <div><p class="fx-meta-label">Effective date · Source</p><div class="fx-pair-meta fx-effective-date">@if($pairRate){{ $pairRate->effective_date->format('Y-m-d') }} · {{ $pairRate->source ?: 'Manual' }}@else No recorded rate for this direction @endif</div></div>
+   @can('administration.update')<button type="button" class="fx-pair-set" aria-expanded="false" aria-controls="fx-form-{{ $source->id }}-{{ $destination->id }}"><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i><span>{{ $pairRate ? 'Update rate' : 'Set rate' }}</span></button>@endcan
   </div>
   @can('administration.update')
-   <button type="button" class="fx-pair-set" aria-expanded="false">{{ $pairRate ? 'Update rate' : 'Set rate' }}</button>
-   <form method="POST" action="{{ route('admin.exchange-rates.store') }}" class="fx-inline-form" hidden>
+   <form id="fx-form-{{ $source->id }}-{{ $destination->id }}" method="POST" action="{{ route('admin.exchange-rates.store') }}" class="fx-inline-form" hidden>
     @csrf
     <input type="hidden" name="from_currency_id" value="{{ $source->id }}">
     <input type="hidden" name="to_currency_id" value="{{ $destination->id }}">
-    <label>Rate: 1 {{ $source->code }} = ? {{ $destination->code }}<input type="text" name="rate" inputmode="decimal" autocomplete="off" required pattern="[0-9]+(\.[0-9]{1,12})?" placeholder="Enter positive rate" value="{{ $pairRate ? rtrim(rtrim((string)$pairRate->rate,'0'),'.') : '' }}"></label>
+    <label>Rate · 1 {{ $source->code }} in {{ $destination->code }}<input type="text" name="rate" inputmode="decimal" autocomplete="off" required pattern="[0-9]+(\.[0-9]{1,12})?" placeholder="Enter positive rate" value="{{ $pairRate ? rtrim(rtrim((string)$pairRate->rate,'0'),'.') : '' }}"><span class="fx-form-hint">Up to 12 decimal places</span></label>
     <label>Effective date<input type="date" name="effective_date" required value="{{ now()->toDateString() }}"></label>
     <label>Rate source<input name="source" maxlength="150" placeholder="Bank / Sarafi / Agreed" value="{{ $pairRate?->source }}"></label>
-    <label>Notes (optional)<textarea name="notes" maxlength="1000" rows="2"></textarea></label>
+    <label>Notes (optional)<textarea name="notes" maxlength="1000" rows="2" placeholder="Internal reference or context"></textarea></label>
     <p class="fx-error" role="alert" hidden></p>
-    <div class="fx-inline-actions"><button class="fx-cancel" type="button">Cancel</button><button class="fx-save" type="submit">Save rate</button></div>
+    <div class="fx-inline-actions"><button class="fx-cancel" type="button">Cancel</button><button class="fx-save" type="submit"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Save rate</button></div>
    </form>
   @endcan
  </article>
@@ -110,9 +136,11 @@ document.addEventListener('DOMContentLoaded',()=>{
    const current=data.current,display=card.querySelector('.fx-pair-display');
    const rate=display.querySelector('.fx-pair-rate'),missing=display.querySelector('.fx-pair-missing');
    rate.textContent=current.rate.replace(/0+$/,'').replace(/\.$/,'');rate.hidden=false;missing.hidden=true;
-   display.querySelector('.fx-effective-date').textContent=current.effective_date+' · '+current.source;
+   display.querySelector('.fx-equation-value').textContent=rate.textContent;
+   card.querySelector('.fx-effective-date').textContent=current.effective_date+' · '+current.source;
+   const status=card.querySelector('.fx-pair-status');status.classList.remove('is-unset');status.querySelector('span').textContent='Recorded';
    form.querySelector('input[name=rate]').value=rate.textContent;
-   card.querySelector('.fx-pair-set').textContent='Update rate';
+   card.querySelector('.fx-pair-set span').textContent='Update rate';
    form.hidden=true;card.querySelector('.fx-pair-set').setAttribute('aria-expanded','false');
    const table=document.getElementById('fx-rate-history');
    const placeholder=table?.querySelector('td.empty')?.closest('tr');if(placeholder)placeholder.remove();
