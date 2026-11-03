@@ -34,4 +34,12 @@ class LedgerAccountTest extends TestCase {
   $this->assertTrue($account->fresh()->is_active);
  }
 
+ public function test_coa_filters_and_sweetalert_delete_confirmation_are_rendered():void {
+  $admin=$this->admin();LedgerAccount::create($this->payload(['code'=>'T-900','name'=>'Unused Test','is_group'=>0]));
+  $this->actingAs($admin)->get(route('admin.accounts.index',['q'=>'Unused']))->assertOk()
+   ->assertSee('coa-search-form')->assertSee('name="q"',false)->assertSee('name="type"',false)
+   ->assertSee('coa-delete-form')->assertSee('data-account-code="T-900"',false)
+   ->assertSee('window.Swal.fire')->assertSee('Yes, delete')->assertDontSee('onsubmit="return confirm',false);
+ }
+
 }
