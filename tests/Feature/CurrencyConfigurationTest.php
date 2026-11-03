@@ -31,4 +31,32 @@ class CurrencyConfigurationTest extends TestCase {
   $this->actingAs($admin)->get(route('admin.exchange-rates.index'))->assertOk()->assertSee('Currency Pair Rate Board')->assertSee('fx-new-currency')->assertSee('data-from="'.$usd->id.'"',false)->assertSee('data-from="'.$afn->id.'"',false)->assertSee('65.125');
  }
 
+ public function test_card_rate_save_returns_json_and_updates_only_requested_direction():void {
+  $admin=$this->admin();$usd=Currency::create(['code'=>'USD','name'=>'Dollar','is_base'=>true]);$afn=Currency::create(['code'=>'AFN','name'=>'Afghani']);
+  $payload=['from_currency_id'=>$usd->id,'to_currency_id'=>$afn->id,'rate'=>'65.250000000000','effective_date'=>'2026-11-02','source'=>'UAT'];
+  $this->actingAs($admin)->postJson(route('admin.exchange-rates.store'),$payload)->assertCreated()
+   ->assertJsonPath('current.rate','65.250000000000')->assertJsonPath('current.effective_date','2026-11-02')
+   ->assertJsonPath('rate.from_currency_id',$usd->id)->assertJsonPath('rate.to_currency_id',$afn->id);
+  $this->assertDatabaseCount('exchange_rates',1);
+  $this->actingAs($admin)->postJson(route('admin.exchange-rates.store'),array_merge($payload,['rate'=>'64.000000000000','effective_date'=>'2026-10-01']))
+   ->assertCreated()->assertJsonPath('current.rate','65.250000000000')->assertJsonPath('rate.rate','64.000000000000');
+  $this->actingAs($admin)->postJson(route('admin.exchange-rates.store'),array_merge($payload,['from_currency_id'=>$afn->id,'to_currency_id'=>$usd->id,'rate'=>'0.015320000000']))
+   ->assertCreated()->assertJsonPath('current.rate','0.015320000000');
+  $this->assertDatabaseCount('exchange_rates',3);
+  $this->assertDatabaseHas('activity_logs',['action'=>'exchange_rate.recorded']);
+ }
+ public function test_exchange_page_has_inline_rate_cards_without_automatic_create_dialog():void {
+  $admin=$this->admin();Currency::create(['code'=>'USD','name'=>'Dollar','is_base'=>true]);Currency::create(['code'=>'AFN','name'=>'Afghani']);
+  $response=$this->actingAs($admin)->get(route('admin.exchange-rates.index'))->assertOk()
+   ->assertSee('fx-inline-form')->assertSee('fx-pair-set')->assertSee('fx-add-currency')
+   ->assertDontSee('data-new-entry-form=\"1\"', false)->assertDontSee('class=\"rate-grid\"');
+  $this->assertSame(2,substr_count($response->getContent(),'class="fx-inline-form"'));
+ }
+ public function test_rate_card_json_validation_rejects_invalid_without_record():void {
+  $admin=$this->admin();$usd=Currency::create(['code'=>'USD','name'=>'Dollar','is_base'=>true]);
+  $this->actingAs($admin)->postJson(route('admin.exchange-rates.store'),['from_currency_id'=>$usd->id,'to_currency_id'=>$usd->id,'rate'=>'0','effective_date'=>'2026-11-03'])
+   ->assertUnprocessable()->assertJsonValidationErrors(['to_currency_id','rate']);
+  $this->assertDatabaseCount('exchange_rates',0);
+ }
+
 }
