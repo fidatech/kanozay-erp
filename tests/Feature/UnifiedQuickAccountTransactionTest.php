@@ -37,8 +37,10 @@ class UnifiedQuickAccountTransactionTest extends TestCase
         $customer = TradeParty::create(['type' => 'customer', 'name' => 'Test Customer', 'is_active' => true, 'created_by' => $user->id]);
         $customer->currencies()->attach($afn->id);
         $provisioner->provision('customer', $customer->id, $customer->name, $afn->id);
-        $expense = LedgerAccount::where('code', '5110')->first()
-            ?? LedgerAccount::create(['code' => 'EXP-TEST', 'name' => 'Test Miscellaneous Expense', 'type' => 'expense', 'is_group' => false, 'is_active' => true]);
+        $expense = LedgerAccount::create([
+            'code' => 'EXP-TEST', 'name' => 'Test Miscellaneous Expense',
+            'type' => 'expense', 'is_group' => false, 'is_active' => true,
+        ]);
         return [$user, $afn, $usd, $cash, $bank, $usdCash, $customer, $expense];
     }
 
@@ -127,4 +129,23 @@ class UnifiedQuickAccountTransactionTest extends TestCase
             ->assertSee('Other General Ledger Accounts')
             ->assertSee('value="party:'.$customer->id.'"', false);
     }
+    public function test_receiving_from_bank_and_ordinary_gl_account_creates_correct_debits_and_credits(): void
+    {
+        [$user, $afn, $usd, $cash, $bank, $usdCash, $customer, $expense] = $this->fixture();
+        $bankToCash = $this->payload($cash, 'financial:' . $bank->id, ['amount'=>'300', 'type'=>'credit']);
+        $this->actingAs($user)->post(route('finance.journals.quick-account.store'),$bankToCash)->assertRedirect();
+        $first = MoneyTransaction::sole();
+        $this->assertSame('transfer',$first->type);
+        $this->assertSame($bank->id,$first->source_account_id);
+        $this->assertSame($cash->id,$first->destination_account_id);
+        $this->actingAs($user)->post(route('finance.journals.quick-account.store'),
+            $this->payload($cash,'ledger:'.$expense->id,['type'=>'credit','amount'=>'90']))->assertRedirect();
+        $this->assertDatabaseHas('money_transactions',[
+            'type'=>'receipt','counterpart_ledger_account_id'=>$expense->id
+        ]);
+        $this->assertDatabaseCount('journal_entries',2);
+        $this->actingAs($user)->get(route('finance.journals.index',['tx_type'=>'transfer']))
+            ->assertOk()->assertSee('AFN Bank')->assertSee('AFN Cash');
+    }
+
 }
