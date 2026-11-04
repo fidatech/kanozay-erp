@@ -14,6 +14,8 @@ class FinancialAccountController extends Controller {
  private function assertUnused(FinancialAccount $account): \Illuminate\Support\Collection {
   if(DB::table('money_transactions')->where('source_account_id',$account->id)->orWhere('destination_account_id',$account->id)->exists())
    throw \Illuminate\Validation\ValidationException::withMessages(['currency_id'=>'This financial account has transactions. Its currency and ledger cannot be changed or deleted.']);
+  if(DB::table('currency_exchanges')->where('source_account_id',$account->id)->orWhere('destination_account_id',$account->id)->exists())
+   throw \Illuminate\Validation\ValidationException::withMessages(['currency_id'=>'This financial account has currency exchanges. Its currency and ledger cannot be changed or deleted.']);
   $links=DB::table('entity_ledger_accounts')->where('entity_type',$account->type)->where('entity_id',$account->id)->get();
   foreach($links as $link){
    if(DB::table('journal_lines')->where('ledger_account_id',$link->ledger_account_id)->exists())
