@@ -82,7 +82,10 @@ class QuickPartyTransactionTest extends TestCase
         $this->actingAs($admin)->get(route('finance.journals.index'))->assertOk()
             ->assertSee('No active cashbox exists for this currency')
             ->assertSee('qt-new-cashbox')->assertSee('value="__add_new__"',false)->assertDontSee('id="qt-add-cash"',false)->assertSee('select2:select.qtCashbox')
-            ->assertSee('qt-cashbox-currency')->assertSee('Manage financial accounts');
+            ->assertSee('qt-cashbox-currency')->assertSee('Currency (automatic)')
+            ->assertSeeInOrder(['id="qt-cash-wrap"','Currency (automatic)'],false)
+            ->assertSee('readonly aria-label="Currency selected by cashbook"',false)
+            ->assertSee('syncCurrency')->assertSee('renderCashbooks');
         $this->actingAs($admin)->postJson(route('finance.accounts.store'),[
             'type'=>'cashbox','name'=>'Testing cashbox','currency_id'=>$currency->id,
         ])->assertCreated()->assertJsonPath('account.name','Testing cashbox')
@@ -102,6 +105,22 @@ class QuickPartyTransactionTest extends TestCase
             'type'=>'cashbox','name'=>'Unauthorized','currency_id'=>$currency->id,
         ])->assertForbidden();
         $this->assertDatabaseCount('financial_accounts',0);
+    }
+
+    public function test_explicit_cashbook_cannot_be_posted_using_another_currency():void {
+        [$user,$afn,$cash,$customer]=$this->setupData();
+        $usd=Currency::create(['code'=>'USD','name'=>'US Dollar','is_active'=>true]);
+        $customer->currencies()->attach($usd->id);
+        app(EntityAccountProvisioner::class)->provision('customer',$customer->id,$customer->name,$usd->id);
+        $usdCash=FinancialAccount::create(['type'=>'cashbox','name'=>'USD Cashbook','currency_id'=>$usd->id,'is_active'=>true,'created_by'=>$user->id]);
+        app(EntityAccountProvisioner::class)->provision('cashbox',$usdCash->id,$usdCash->name,$usd->id);
+        $payload=$this->payload($customer,$usd,['cash_account_id'=>$cash->id]);
+        $this->actingAs($user)->post(route('finance.journals.quick.store'),$payload)->assertSessionHasErrors('cash_account_id');
+        $this->assertDatabaseCount('money_transactions',0);
+        $this->assertDatabaseCount('journal_entries',0);
+        $payload['cash_account_id']=$usdCash->id;
+        $this->actingAs($user)->post(route('finance.journals.quick.store'),$payload)->assertRedirect();
+        $this->assertDatabaseHas('money_transactions',['currency_id'=>$usd->id,'destination_account_id'=>$usdCash->id]);
     }
 
 }
