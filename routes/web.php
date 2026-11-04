@@ -130,6 +130,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/finance/accounts', [\App\Http\Controllers\FinancialAccountController::class,'index'])->name('finance.accounts.index');
     Route::post('/finance/accounts', [\App\Http\Controllers\FinancialAccountController::class,'store'])->name('finance.accounts.store');
     Route::put('/finance/accounts/{account}', [\App\Http\Controllers\FinancialAccountController::class,'update'])->name('finance.accounts.update');
+    Route::delete('/finance/accounts/{account}', [\App\Http\Controllers\FinancialAccountController::class,'destroy'])->name('finance.accounts.destroy');
     Route::get('/finance/overview', function () { abort_unless(auth()->user()->canAny(['administration.view', 'finance.view', 'reports.view']), 403); return view('finance.overview', ['customers' => \App\Models\TradeParty::where('type','customer')->where('is_active',true)->count(), 'suppliers' => \App\Models\TradeParty::where('type','supplier')->where('is_active',true)->count(), 'receivables' => \App\Models\TradeDocument::where('type','receivable')->count(), 'payables' => \App\Models\TradeDocument::where('type','payable')->count()]); })->name('finance.overview');
     Route::get('/finance/general-ledger', [\App\Http\Controllers\GeneralLedgerController::class,'index'])->name('finance.ledger.index');
     Route::get('/finance/trial-balance', [\App\Http\Controllers\TrialBalanceController::class,'index'])->name('finance.trial-balance.index');
