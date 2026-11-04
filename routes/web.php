@@ -127,6 +127,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/finance/exchanges', [\App\Http\Controllers\CurrencyExchangeController::class,'store'])->name('finance.exchanges.store');
     Route::get('/finance/money', [\App\Http\Controllers\MoneyTransactionController::class,'index'])->name('finance.money.index');
     Route::post('/finance/money', [\App\Http\Controllers\MoneyTransactionController::class,'store'])->name('finance.money.store');
+    Route::get('/finance/all-accounts', [\App\Http\Controllers\UnifiedAccountDirectoryController::class,'index'])->name('finance.directory.index');
     Route::get('/finance/accounts', [\App\Http\Controllers\FinancialAccountController::class,'index'])->name('finance.accounts.index');
     Route::post('/finance/accounts', [\App\Http\Controllers\FinancialAccountController::class,'store'])->name('finance.accounts.store');
     Route::put('/finance/accounts/{account}', [\App\Http\Controllers\FinancialAccountController::class,'update'])->name('finance.accounts.update');
