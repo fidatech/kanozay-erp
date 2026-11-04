@@ -75,4 +75,33 @@ class QuickPartyTransactionTest extends TestCase
         $this->actingAs(User::factory()->create())->post(route('finance.journals.quick.store'),$this->payload($customer,$currency))->assertForbidden();
         $this->assertDatabaseCount('journal_entries',0);
     }
+    public function test_cashbox_empty_state_and_inline_create_provisions_account_without_balance():void {
+        $this->seed(ChartOfAccountsSeeder::class);
+        $admin=User::factory()->create();$admin->givePermissionTo(Permission::findOrCreate('finance.update','web'));
+        $currency=Currency::create(['code'=>'AFN','name'=>'Afghani','is_base'=>true,'is_active'=>true]);
+        $this->actingAs($admin)->get(route('finance.journals.index'))->assertOk()
+            ->assertSee('No active cashbox exists for this currency')
+            ->assertSee('qt-new-cashbox')->assertSee('qt-add-cash')
+            ->assertSee('qt-cashbox-currency')->assertSee('Manage financial accounts');
+        $this->actingAs($admin)->postJson(route('finance.accounts.store'),[
+            'type'=>'cashbox','name'=>'Testing cashbox','currency_id'=>$currency->id,
+        ])->assertCreated()->assertJsonPath('account.name','Testing cashbox')
+          ->assertJsonPath('account.currency_id',$currency->id)
+          ->assertJsonPath('account.type','cashbox');
+        $cash=FinancialAccount::sole();
+        $this->assertDatabaseHas('entity_ledger_accounts',[
+            'entity_type'=>'cashbox','entity_id'=>$cash->id,'currency_id'=>$currency->id,'purpose'=>'cash',
+        ]);
+        $this->assertDatabaseCount('journal_entries',0);
+        $this->assertDatabaseCount('money_transactions',0);
+    }
+    public function test_cashbox_modal_creation_requires_finance_write_permission():void {
+        $this->seed(ChartOfAccountsSeeder::class);
+        $currency=Currency::create(['code'=>'AFN','name'=>'Afghani','is_active'=>true,'is_base'=>true]);
+        $this->actingAs(User::factory()->create())->postJson(route('finance.accounts.store'),[
+            'type'=>'cashbox','name'=>'Unauthorized','currency_id'=>$currency->id,
+        ])->assertForbidden();
+        $this->assertDatabaseCount('financial_accounts',0);
+    }
+
 }
