@@ -28,8 +28,8 @@
    <label>Transaction date<input type="date" name="transaction_date" required value="{{ old('transaction_date',now()->toDateString()) }}"></label>
    <label>Customer / Supplier<select name="trade_party_id" required id="qt-party"><option value="">Select customer or supplier</option>@foreach($quickParties as $party)<option value="{{ $party->id }}" data-currencies="{{ $party->currencies->pluck('id')->implode(',') }}" @selected((string)old('trade_party_id')===(string)$party->id)>{{ $party->name }} ({{ ucfirst($party->type) }})</option>@endforeach</select></label>
    <fieldset style="border:0;padding:0;margin:0"><legend style="font-size:12px;font-weight:700;color:#2d4d70;margin-bottom:7px">Transaction type</legend><div class="qt-type"><label><input type="radio" name="type" value="credit" @checked(old('type','credit')==='credit')> <i class="fa-solid fa-arrow-down" aria-hidden="true"></i> Credit · Received</label><label class="qt-debit"><input type="radio" name="type" value="debit" @checked(old('type')==='debit')> <i class="fa-solid fa-arrow-up" aria-hidden="true"></i> Debit · Paid</label></div></fieldset>
-   <label>Currency<select name="currency_id" id="qt-currency" required><option value="">Select currency</option>@foreach($currencies as $currency)<option value="{{ $currency->id }}" @selected((string)old('currency_id')===(string)$currency->id || (!old('currency_id') && $currency->is_base))>{{ $currency->code }} — {{ $currency->name }}</option>@endforeach</select></label>
-   <div class="qt-finance-select" id="qt-cash-wrap"><label>Cashbox / Cashbook<select name="cash_account_id" id="qt-cash"><option value="__add_new__">+ Add New Cashbox</option><option value="">Select cashbox</option></select></label><p class="qt-cash-empty" id="qt-cash-empty" hidden>No active cashbox exists for this currency. Choose “+ Add New Cashbox” from the list to create one.</p><span class="qt-help" id="qt-cash-hint">Select the cash account for this payment, or add a new one from the list.</span></div>
+   <div class="qt-finance-select" id="qt-cash-wrap"><label>Cashbox / Cashbook<select name="cash_account_id" id="qt-cash" required><option value="">Select cashbox</option><option value="__add_new__">+ Add New Cashbox</option></select></label><p class="qt-cash-empty" id="qt-cash-empty" hidden>No active cashbox exists. Choose “+ Add New Cashbox” to create one.</p><span class="qt-help" id="qt-cash-hint">Choose the cashbook first. Its currency will be selected automatically.</span></div>
+   <label>Currency (automatic)<input type="hidden" name="currency_id" id="qt-currency" value="{{ old('currency_id') }}"><input type="text" id="qt-currency-display" value="" placeholder="Select a cashbook first" readonly aria-label="Currency selected by cashbook"><span class="qt-help">Currency is determined by the selected cashbook and cannot be changed here.</span></label>
    <label>Amount<input type="text" name="amount" id="qt-amount" inputmode="decimal" autocomplete="off" required placeholder="0.00" value="{{ old('amount') }}"><span class="qt-amount-hint">Use a positive amount; commas are allowed.</span></label>
    <label>Note / Description<textarea name="description" maxlength="2000" placeholder="Optional payment note">{{ old('description') }}</textarea></label>
    <div class="qt-mini-note" id="qt-direction-info">Credit means money received into the selected cashbox. Debit means money paid out.</div>
@@ -66,49 +66,98 @@
 document.addEventListener('DOMContentLoaded',()=>{
  const form=document.getElementById('quick-party-transaction');if(!form)return;
  const cashboxes=@json($quickCashboxes->map(fn($item)=>['id'=>$item->id,'name'=>$item->name,'currency_id'=>$item->currency_id])->values());
- const currency=form.querySelector('#qt-currency'),select=form.querySelector('#qt-cash'),wrap=form.querySelector('#qt-cash-wrap');
- const party=form.querySelector('#qt-party');
- const sync=()=>{[...party.options].forEach(option=>{if(!option.value)return;const allowed=(option.dataset.currencies||'').split(',').includes(currency.value);option.disabled=!allowed;if(!allowed&&party.value===option.value)party.value='';});
- const filtered=cashboxes.filter(c=>String(c.currency_id)===currency.value);const previous=select.value;select.replaceChildren(new Option('+ Add New Cashbox','__add_new__'),new Option(filtered.length?'Select cashbox':'No cashbox configured',''));filtered.forEach(c=>select.add(new Option(c.name,c.id)));wrap.classList.add('is-needed');select.required=filtered.length>1;if(filtered.length===1)select.value=String(filtered[0].id);else if(filtered.some(c=>String(c.id)===previous))select.value=previous;else select.value='';document.getElementById('qt-cash-empty').hidden=filtered.length>0;document.getElementById('qt-cash-hint').hidden=false;};
- currency.addEventListener('change',sync);sync();
+ const currencies=@json($currencies->map(fn($item)=>['id'=>$item->id,'code'=>$item->code,'name'=>$item->name,'is_base'=>$item->is_base])->values());
+ const select=form.querySelector('#qt-cash');
+ const currency=form.querySelector('#qt-currency'),display=form.querySelector('#qt-currency-display');
+ const party=form.querySelector('#qt-party'),empty=document.getElementById('qt-cash-empty');
+ const refreshSelect2=element=>{
+  if(window.jQuery&&window.jQuery(element).data('select2'))window.jQuery(element).trigger('change.select2');
+ };
+ const syncCurrency=()=>{
+  const cash=cashboxes.find(a=>String(a.id)===String(select.value));
+  const selectedCurrency=cash?currencies.find(c=>String(c.id)===String(cash.currency_id)):null;
+  currency.value=selectedCurrency?String(selectedCurrency.id):'';
+  display.value=selectedCurrency?selectedCurrency.code+' — '+selectedCurrency.name:'';
+  [...party.options].forEach(option=>{
+   if(!option.value)return;
+   const allowed=!!selectedCurrency&&(option.dataset.currencies||'').split(',').includes(String(selectedCurrency.id));
+   option.disabled=!allowed;
+   if(!allowed&&party.value===option.value)party.value='';
+  });
+  refreshSelect2(party);
+ };
+ const renderCashbooks=(preferred='')=>{
+  select.replaceChildren(new Option('Select cashbox',''),new Option('+ Add New Cashbox','__add_new__'));
+  cashboxes.forEach(a=>{
+   const currencyInfo=currencies.find(c=>String(c.id)===String(a.currency_id));
+   select.add(new Option(a.name+(currencyInfo?' ('+currencyInfo.code+')':''),String(a.id)));
+  });
+  const valid=cashboxes.some(a=>String(a.id)===String(preferred));
+  select.value=valid?String(preferred):(cashboxes.length===1?String(cashboxes[0].id):'');
+  empty.hidden=cashboxes.length!==0;
+  refreshSelect2(select);
+  syncCurrency();
+ };
+ renderCashbooks(@json(old('cash_account_id','')));
  const modal=document.getElementById('qt-new-cashbox');
  if(modal){
   const createForm=document.getElementById('qt-cashbox-form'),error=document.getElementById('qt-cashbox-error');
   let lastCashboxId=select.value;
   const openCashboxModal=()=>{
-   // Reset the special option before opening, so it can be picked again after Cancel.
-   select.value=lastCashboxId && lastCashboxId!=='__add_new__'?lastCashboxId:'';
-   if(window.jQuery && window.jQuery(select).data('select2'))window.jQuery(select).trigger('change.select2');
+   select.value=lastCashboxId&&lastCashboxId!=='__add_new__'?lastCashboxId:'';
+   refreshSelect2(select);syncCurrency();
    createForm.reset();error.hidden=true;
-   document.getElementById('qt-cashbox-currency').value=currency.value||'';
+   const modalCurrency=document.getElementById('qt-cashbox-currency');
+   const base=currencies.find(c=>c.is_base);
+   modalCurrency.value=currency.value||(base?String(base.id):'');
+   refreshSelect2(modalCurrency);
    if(!modal.open)modal.showModal();
    createForm.querySelector('input[name=name]').focus();
   };
-  const handleCashboxChange=()=>{
-   if(select.value==='__add_new__')openCashboxModal();
-   else lastCashboxId=select.value;
+  const onCashboxChange=()=>{
+   if(select.value==='__add_new__'){openCashboxModal();return;}
+   lastCashboxId=select.value;syncCurrency();
   };
-  select.addEventListener('change',handleCashboxChange);
-  // Select2 emits jQuery events; its selections do not always reach native listeners.
+  select.addEventListener('change',onCashboxChange);
   if(window.jQuery){
    window.jQuery(select).on('select2:select.qtCashbox',event=>{
     if(String(event.params?.data?.id)==='__add_new__')openCashboxModal();
-   });
-   window.jQuery(select).on('change.qtCashbox',handleCashboxChange);
+   }).on('change.qtCashbox',onCashboxChange);
   }
   ['qt-cashbox-close','qt-cashbox-cancel'].forEach(id=>document.getElementById(id)?.addEventListener('click',()=>modal.close()));
   createForm.addEventListener('submit',async event=>{
    event.preventDefault();const save=createForm.querySelector('button[type=submit]');save.disabled=true;error.hidden=true;
    try{
     const response=await fetch(createForm.action,{method:'POST',headers:{Accept:'application/json','X-Requested-With':'XMLHttpRequest'},body:new FormData(createForm)});
-    const data=await response.json();if(!response.ok)throw new Error(Object.values(data.errors||{}).flat().join(' ')||data.message||'Could not create cashbox.');
-    const created=data.account;cashboxes.push({id:created.id,name:created.name,currency_id:created.currency_id});
-    currency.value=String(created.currency_id);sync();select.value=String(created.id);lastCashboxId=select.value;if(window.jQuery && window.jQuery(select).data('select2'))window.jQuery(select).trigger('change.select2');modal.close();
+    const data=await response.json();
+    if(!response.ok)throw new Error(Object.values(data.errors||{}).flat().join(' ')||data.message||'Could not create cashbox.');
+    const created=data.account;
+    cashboxes.push({id:created.id,name:created.name,currency_id:created.currency_id});
+    renderCashbooks(created.id);lastCashboxId=select.value;modal.close();
     if(window.Swal)window.Swal.fire({icon:'success',title:'Cashbox added',text:created.name,showConfirmButton:false,timer:1700});
    }catch(e){error.textContent=e.message;error.hidden=false;}finally{save.disabled=false;}
   });
+ }else{
+  select.addEventListener('change',syncCurrency);
+  if(window.jQuery)window.jQuery(select).on('change.qtCashbox',syncCurrency);
  }
- const amount=form.querySelector('#qt-amount');amount.addEventListener('input',()=>{const cleaned=amount.value.replace(/[^0-9.,]/g,'').replace(/,/g,'');const parts=cleaned.split('.');let value=parts[0].replace(/\B(?=(\d{3})+(?!\d))/g,',');if(parts.length>1)value+='.'+parts.slice(1).join('').slice(0,4);amount.value=value;});
- form.addEventListener('submit',event=>{if(!cashboxes.some(c=>String(c.currency_id)===currency.value)){event.preventDefault();if(window.Swal)window.Swal.fire({icon:'warning',title:'Cashbox required',text:'Create an active cashbox for this currency in Financial Accounts.'});else alert('Create an active cashbox for this currency.');return;}form.querySelector('button[type=submit]').disabled=true;});
+ const amount=form.querySelector('#qt-amount');
+ amount.addEventListener('input',()=>{
+  const cleaned=amount.value.replace(/[^0-9.,]/g,'').replace(/,/g,'');
+  const parts=cleaned.split('.');
+  let value=parts[0].replace(/\B(?=(\d{3})+(?!\d))/g,',');
+  if(parts.length>1)value+='.'+parts.slice(1).join('').slice(0,4);
+  amount.value=value;
+ });
+ form.addEventListener('submit',event=>{
+  const validCash=cashboxes.some(c=>String(c.id)===String(select.value));
+  if(!validCash||!currency.value){
+   event.preventDefault();
+   if(window.Swal)window.Swal.fire({icon:'warning',title:'Select a cashbook',text:'Choose an existing cashbook or add a new one before posting.'});
+   else alert('Choose a cashbook before posting.');
+   return;
+  }
+  form.querySelector('button[type=submit]').disabled=true;
+ });
 });
 </script>
