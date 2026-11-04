@@ -53,7 +53,7 @@ class JournalEntryTest extends TestCase {
   ])->assertSessionHasErrors('lines.0.debit');
   $this->assertDatabaseCount('journal_entries',0);
  }
- public function test_journal_lines_show_party_names_without_account_codes():void {[$u,$c,$a,$b]=$this->setupAccounts();$party=\App\Models\TradeParty::create(['type'=>'customer','name'=>'Kabul Wholesale Customer','created_by'=>$u->id]);\Illuminate\Support\Facades\DB::table('entity_ledger_accounts')->insert(['entity_type'=>'customer','entity_id'=>$party->id,'currency_id'=>$c->id,'purpose'=>'receivable','ledger_account_id'=>$a->id,'created_at'=>now(),'updated_at'=>now()]);$entry=JournalEntry::create(['number'=>'JE-PARTY-01','entry_date'=>'2026-10-25','description'=>'Party journal','currency_id'=>$c->id,'created_by'=>$u->id,'status'=>'posted']);$entry->lines()->create(['ledger_account_id'=>$a->id,'debit'=>100,'credit'=>0]);$entry->lines()->create(['ledger_account_id'=>$b->id,'debit'=>0,'credit'=>100]);$this->actingAs($u)->get(route('finance.journals.index'))->assertOk()->assertSee('Kabul Wholesale Customer')->assertSee('>100</span>',false);}
+ public function test_journal_lines_show_party_names_without_account_codes():void {[$u,$c,$a,$b]=$this->setupAccounts();$party=\App\Models\TradeParty::create(['type'=>'customer','name'=>'Kabul Wholesale Customer','created_by'=>$u->id]);\Illuminate\Support\Facades\DB::table('entity_ledger_accounts')->insert(['entity_type'=>'customer','entity_id'=>$party->id,'currency_id'=>$c->id,'purpose'=>'receivable','ledger_account_id'=>$a->id,'created_at'=>now(),'updated_at'=>now()]);$entry=JournalEntry::create(['number'=>'JE-PARTY-01','entry_date'=>'2026-10-25','description'=>'Party journal','currency_id'=>$c->id,'created_by'=>$u->id,'status'=>'posted']);$entry->lines()->create(['ledger_account_id'=>$a->id,'debit'=>100,'credit'=>0]);$entry->lines()->create(['ledger_account_id'=>$b->id,'debit'=>0,'credit'=>100]);$this->actingAs($u)->get(route('finance.journals.index',['advanced'=>1]))->assertOk()->assertSee('Kabul Wholesale Customer')->assertSee('>100</span>',false);}
  public function test_journal_creation_requires_permission():void {[$u,$c,$a,$b]=$this->setupAccounts();$other=User::factory()->create();$this->actingAs($other)->get(route('finance.journals.index'))->assertForbidden();$this->actingAs($u)->get(route('finance.journals.index'))->assertOk();}
  public function test_draft_validation_rejects_unbalanced_and_mixed_line_values():void {
   [$u,$c,$a,$b]=$this->setupAccounts();
@@ -83,7 +83,7 @@ class JournalEntryTest extends TestCase {
 
  public function test_finance_editor_can_view_and_create_journal_without_administration_permission():void {
   [$u,$c,$a,$b]=$this->setupAccounts();$finance=User::factory()->create();$finance->givePermissionTo(Permission::findOrCreate('finance.update','web'));
-  $this->actingAs($finance)->get(route('finance.journals.index'))->assertOk()->assertSee('journal-balance-preview')->assertSee('Save Draft');
+  $this->actingAs($finance)->get(route('finance.journals.index',['advanced'=>1]))->assertOk()->assertSee('journal-balance-preview')->assertSee('Save Draft');
   $this->actingAs($finance)->post(route('finance.journals.store'),[
    'entry_date'=>'2026-10-25','description'=>'Finance journal','currency_id'=>$c->id,'lines'=>[
     ['ledger_account_id'=>$a->id,'debit'=>'100.0000','credit'=>'0'],
