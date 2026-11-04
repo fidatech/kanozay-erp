@@ -29,10 +29,10 @@
    <label>Account / Counterpart<select name="counterpart_key" required id="qt-party">
 <option value="">Select an account</option>
 <optgroup label="Customers">@foreach($quickParties->where('type','customer') as $party)
-<option value="party:{{ $party->id }}" data-currencies="{{ $party->currencies->pluck('id')->implode(',') }}" @selected(old('counterpart_key',request('trade_party_id') ? 'party:'.request('trade_party_id') : '')==='party:'.$party->id)>{{ $party->name }}</option>
+<option value="party:{{ $party->id }}" data-currencies="{{ $party->currencies->pluck('id')->implode(',') }}" @selected(old('counterpart_key')==='party:'.$party->id)>{{ $party->name }}</option>
 @endforeach</optgroup>
 <optgroup label="Suppliers">@foreach($quickParties->where('type','supplier') as $party)
-<option value="party:{{ $party->id }}" data-currencies="{{ $party->currencies->pluck('id')->implode(',') }}" @selected(old('counterpart_key',request('trade_party_id') ? 'party:'.request('trade_party_id') : '')==='party:'.$party->id)>{{ $party->name }}</option>
+<option value="party:{{ $party->id }}" data-currencies="{{ $party->currencies->pluck('id')->implode(',') }}" @selected(old('counterpart_key')==='party:'.$party->id)>{{ $party->name }}</option>
 @endforeach</optgroup>
 <optgroup label="Cashbooks, Banks and Sarafis">@foreach($quickFinancials as $financial)
 <option value="financial:{{ $financial->id }}" data-currencies="{{ $financial->currency_id }}">{{ $financial->name }} ({{ ucfirst($financial->type) }})</option>
@@ -115,6 +115,11 @@ document.addEventListener('DOMContentLoaded',()=>{
   syncCurrency();
  };
  renderCashbooks(@json(old('cash_account_id','')));
+ const directoryPartyId=@json(request('trade_party_id'));
+ if(directoryPartyId && !party.value){
+  const match=[...party.options].find(option=>option.value==='party:'+directoryPartyId && !option.disabled);
+  if(match){party.value=match.value;refreshSelect2(party);}
+ }
  const modal=document.getElementById('qt-new-cashbox');
  if(modal){
   const createForm=document.getElementById('qt-cashbox-form'),error=document.getElementById('qt-cashbox-error');
