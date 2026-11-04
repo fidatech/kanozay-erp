@@ -21,12 +21,26 @@
 <div class="qt-shell">
  <section class="qt-card">
   <h2>Quick Credit / Debit</h2>
-  <p class="qt-caption">Record money received from a customer or supplier, or paid to them. Each entry automatically creates a balanced posted journal.</p>
+  <p class="qt-caption">Record receipts, payments or transfers against a linked account. Balanced journal lines are created automatically.</p>
   @canany(['administration.update','finance.update'])
-  <form class="qt-form" method="POST" action="{{ route('finance.journals.quick.store') }}" id="quick-party-transaction">
+  <form class="qt-form" method="POST" action="{{ route('finance.journals.quick-account.store') }}" id="quick-party-transaction">
    @csrf<input type="hidden" name="submission_token" value="{{ old('submission_token',(string)\Illuminate\Support\Str::uuid()) }}">
    <label>Transaction date<input type="date" name="transaction_date" required value="{{ old('transaction_date',now()->toDateString()) }}"></label>
-   <label>Customer / Supplier<select name="trade_party_id" required id="qt-party"><option value="">Select customer or supplier</option>@foreach($quickParties as $party)<option value="{{ $party->id }}" data-currencies="{{ $party->currencies->pluck('id')->implode(',') }}" @selected((string)old('trade_party_id',request('trade_party_id'))===(string)$party->id)>{{ $party->name }} ({{ ucfirst($party->type) }})</option>@endforeach</select></label>
+   <label>Account / Counterpart<select name="counterpart_key" required id="qt-party">
+<option value="">Select an account</option>
+<optgroup label="Customers">@foreach($quickParties->where('type','customer') as $party)
+<option value="party:{{ $party->id }}" data-currencies="{{ $party->currencies->pluck('id')->implode(',') }}" @selected(old('counterpart_key',request('trade_party_id') ? 'party:'.request('trade_party_id') : '')==='party:'.$party->id)>{{ $party->name }}</option>
+@endforeach</optgroup>
+<optgroup label="Suppliers">@foreach($quickParties->where('type','supplier') as $party)
+<option value="party:{{ $party->id }}" data-currencies="{{ $party->currencies->pluck('id')->implode(',') }}" @selected(old('counterpart_key',request('trade_party_id') ? 'party:'.request('trade_party_id') : '')==='party:'.$party->id)>{{ $party->name }}</option>
+@endforeach</optgroup>
+<optgroup label="Cashbooks, Banks and Sarafis">@foreach($quickFinancials as $financial)
+<option value="financial:{{ $financial->id }}" data-currencies="{{ $financial->currency_id }}">{{ $financial->name }} ({{ ucfirst($financial->type) }})</option>
+@endforeach</optgroup>
+<optgroup label="Other General Ledger Accounts">@foreach($quickGeneralLedgers as $ledger)
+<option value="ledger:{{ $ledger->id }}" data-currencies="any">{{ $ledger->code }} — {{ $ledger->name }}</option>
+@endforeach</optgroup>
+</select></label>
    <fieldset style="border:0;padding:0;margin:0"><legend style="font-size:12px;font-weight:700;color:#2d4d70;margin-bottom:7px">Transaction type</legend><div class="qt-type"><label><input type="radio" name="type" value="credit" @checked(old('type','credit')==='credit')> <i class="fa-solid fa-arrow-down" aria-hidden="true"></i> Credit · Received</label><label class="qt-debit"><input type="radio" name="type" value="debit" @checked(old('type')==='debit')> <i class="fa-solid fa-arrow-up" aria-hidden="true"></i> Debit · Paid</label></div></fieldset>
    <div class="qt-finance-select" id="qt-cash-wrap"><label>Cashbox / Cashbook<select name="cash_account_id" id="qt-cash" required><option value="">Select cashbox</option><option value="__add_new__">+ Add New Cashbox</option></select></label><p class="qt-cash-empty" id="qt-cash-empty" hidden>No active cashbox exists. Choose “+ Add New Cashbox” to create one.</p></div>
    <label>Currency (automatic)<input type="hidden" name="currency_id" id="qt-currency" value="{{ old('currency_id') }}"><input type="text" id="qt-currency-display" value="" placeholder="Select a cashbook first" readonly aria-label="Currency selected by cashbook"></label>
@@ -79,9 +93,12 @@ document.addEventListener('DOMContentLoaded',()=>{
   display.value=selectedCurrency?selectedCurrency.code+' — '+selectedCurrency.name:'';
   [...party.options].forEach(option=>{
    if(!option.value)return;
-   const allowed=!!selectedCurrency&&(option.dataset.currencies||'').split(',').includes(String(selectedCurrency.id));
-   option.disabled=!allowed;
-   if(!allowed&&party.value===option.value)party.value='';
+   const supported=option.dataset.currencies||'';
+   const allowed=!!selectedCurrency&&(supported==='any'||supported.split(',').includes(String(selectedCurrency.id)));
+   // Disallow using a cashbook as its own financial counterpart.
+   const sameCashbook=option.value==='financial:'+select.value;
+   option.disabled=!allowed||sameCashbook;
+   if(option.disabled&&party.value===option.value)party.value='';
   });
   refreshSelect2(party);
  };
