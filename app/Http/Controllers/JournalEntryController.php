@@ -31,6 +31,7 @@ class JournalEntryController extends Controller {
   $counterparts=DB::table('entity_ledger_accounts')->whereIn('ledger_account_id',$transactions->getCollection()->pluck('counterpart_ledger_account_id')->filter())
     ->whereIn('entity_type',['customer','supplier'])->get(['ledger_account_id','entity_id','entity_type']);
   $partiesById=TradeParty::whereIn('id',$counterparts->pluck('entity_id'))->get()->keyBy('id');
+  $transactionLedgerNames=LedgerAccount::whereIn('id',$transactions->getCollection()->pluck('counterpart_ledger_account_id')->filter())->pluck('name','id');
   $transactionPartyNames=[];
   foreach($counterparts as $link){$party=$partiesById->get($link->entity_id);if($party && $party->type===$link->entity_type)$transactionPartyNames[$link->ledger_account_id]=$party->name;}
   $quickParties=TradeParty::with('currencies:id')->where('is_active',true)->whereIn('type',['customer','supplier'])->orderBy('name')->get(['id','name','type']);
@@ -39,7 +40,7 @@ class JournalEntryController extends Controller {
   $mappedLedgerIds=DB::table('entity_ledger_accounts')->pluck('ledger_account_id');
   $quickGeneralLedgers=LedgerAccount::where('is_active',true)->where('is_group',false)
     ->whereNotIn('id',$mappedLedgerIds)->where('code','not like','1120.FX.%')->orderBy('code')->get(['id','code','name','type']);
-  return view('finance.journals.index',['transactions'=>$transactions,'transactionPartyNames'=>$transactionPartyNames,'quickParties'=>$quickParties,'quickCashboxes'=>$quickCashboxes,'quickFinancials'=>$quickFinancials,'quickGeneralLedgers'=>$quickGeneralLedgers,'journals'=>$journals,'reversedIds'=>$reversedIds,'journalAccountLabels'=>$journalAccountLabels,'accounts'=>LedgerAccount::where('is_active',true)->where('is_group',false)->orderBy('code')->get(),'currencies'=>Currency::where('is_active',true)->orderBy('code')->get()]);
+  return view('finance.journals.index',['transactions'=>$transactions,'transactionPartyNames'=>$transactionPartyNames,'transactionLedgerNames'=>$transactionLedgerNames,'quickParties'=>$quickParties,'quickCashboxes'=>$quickCashboxes,'quickFinancials'=>$quickFinancials,'quickGeneralLedgers'=>$quickGeneralLedgers,'journals'=>$journals,'reversedIds'=>$reversedIds,'journalAccountLabels'=>$journalAccountLabels,'accounts'=>LedgerAccount::where('is_active',true)->where('is_group',false)->orderBy('code')->get(),'currencies'=>Currency::where('is_active',true)->orderBy('code')->get()]);
  }
  public function store(Request $request){$this->guard($request,true);$data=$request->validate(['entry_date'=>['required','date'],'description'=>['required','string','max:2000'],'reference'=>['nullable','string','max:100'],'currency_id'=>['required',Rule::exists('currencies','id')->where('is_active',true)],'lines'=>['required','array','min:2','max:100'],'lines.*.ledger_account_id'=>['required','integer',Rule::exists('ledger_accounts','id')->where('is_active',true)->where('is_group',false)],'lines.*.debit'=>['required','numeric','min:0','decimal:0,4','max:999999999999.9999'],'lines.*.credit'=>['required','numeric','min:0','decimal:0,4','max:999999999999.9999'],'lines.*.memo'=>['nullable','string','max:255']]);
   $debits=BigDecimal::zero();$credits=BigDecimal::zero();
