@@ -75,15 +75,27 @@ document.addEventListener('DOMContentLoaded',()=>{
  if(modal){
   const createForm=document.getElementById('qt-cashbox-form'),error=document.getElementById('qt-cashbox-error');
   let lastCashboxId=select.value;
-  select.addEventListener('change',()=>{
-   if(select.value==='__add_new__'){
-    select.value=lastCashboxId&&lastCashboxId!=='__add_new__'?lastCashboxId:'';
-    if(window.jQuery && window.jQuery(select).data('select2'))window.jQuery(select).trigger('change.select2');
-    createForm.reset();error.hidden=true;
-    document.getElementById('qt-cashbox-currency').value=currency.value||'';
-    modal.showModal();createForm.querySelector('input[name=name]').focus();
-   }else{lastCashboxId=select.value;}
-  });
+  const openCashboxModal=()=>{
+   // Reset the special option before opening, so it can be picked again after Cancel.
+   select.value=lastCashboxId && lastCashboxId!=='__add_new__'?lastCashboxId:'';
+   if(window.jQuery && window.jQuery(select).data('select2'))window.jQuery(select).trigger('change.select2');
+   createForm.reset();error.hidden=true;
+   document.getElementById('qt-cashbox-currency').value=currency.value||'';
+   if(!modal.open)modal.showModal();
+   createForm.querySelector('input[name=name]').focus();
+  };
+  const handleCashboxChange=()=>{
+   if(select.value==='__add_new__')openCashboxModal();
+   else lastCashboxId=select.value;
+  };
+  select.addEventListener('change',handleCashboxChange);
+  // Select2 emits jQuery events; its selections do not always reach native listeners.
+  if(window.jQuery){
+   window.jQuery(select).on('select2:select.qtCashbox',event=>{
+    if(String(event.params?.data?.id)==='__add_new__')openCashboxModal();
+   });
+   window.jQuery(select).on('change.qtCashbox',handleCashboxChange);
+  }
   ['qt-cashbox-close','qt-cashbox-cancel'].forEach(id=>document.getElementById(id)?.addEventListener('click',()=>modal.close()));
   createForm.addEventListener('submit',async event=>{
    event.preventDefault();const save=createForm.querySelector('button[type=submit]');save.disabled=true;error.hidden=true;
