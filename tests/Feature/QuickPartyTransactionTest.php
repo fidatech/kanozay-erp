@@ -81,7 +81,7 @@ class QuickPartyTransactionTest extends TestCase
         $currency=Currency::create(['code'=>'AFN','name'=>'Afghani','is_base'=>true,'is_active'=>true]);
         $this->actingAs($admin)->get(route('finance.journals.index'))->assertOk()
             ->assertSee('No active cashbox exists for this currency')
-            ->assertSee('qt-new-cashbox')->assertSee('qt-add-cash')
+            ->assertSee('qt-new-cashbox')->assertSee('value="__add_new__"',false)->assertDontSee('id="qt-add-cash"',false)
             ->assertSee('qt-cashbox-currency')->assertSee('Manage financial accounts');
         $this->actingAs($admin)->postJson(route('finance.accounts.store'),[
             'type'=>'cashbox','name'=>'Testing cashbox','currency_id'=>$currency->id,
