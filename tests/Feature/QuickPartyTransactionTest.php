@@ -80,7 +80,7 @@ class QuickPartyTransactionTest extends TestCase
         $admin=User::factory()->create();$admin->givePermissionTo(Permission::findOrCreate('finance.update','web'));
         $currency=Currency::create(['code'=>'AFN','name'=>'Afghani','is_base'=>true,'is_active'=>true]);
         $this->actingAs($admin)->get(route('finance.journals.index'))->assertOk()
-            ->assertSee('No active cashbox exists for this currency')
+            ->assertSee('No active cashbox exists.')
             ->assertSee('qt-new-cashbox')->assertSee('value="__add_new__"',false)->assertDontSee('id="qt-add-cash"',false)->assertSee('select2:select.qtCashbox')
             ->assertSee('qt-cashbox-currency')->assertSee('Currency (automatic)')
             ->assertSeeInOrder(['id="qt-cash-wrap"','Currency (automatic)'],false)
