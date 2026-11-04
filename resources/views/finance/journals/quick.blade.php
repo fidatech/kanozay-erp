@@ -78,6 +78,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   select.addEventListener('change',()=>{
    if(select.value==='__add_new__'){
     select.value=lastCashboxId&&lastCashboxId!=='__add_new__'?lastCashboxId:'';
+    if(window.jQuery && window.jQuery(select).data('select2'))window.jQuery(select).trigger('change.select2');
     createForm.reset();error.hidden=true;
     document.getElementById('qt-cashbox-currency').value=currency.value||'';
     modal.showModal();createForm.querySelector('input[name=name]').focus();
@@ -90,7 +91,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     const response=await fetch(createForm.action,{method:'POST',headers:{Accept:'application/json','X-Requested-With':'XMLHttpRequest'},body:new FormData(createForm)});
     const data=await response.json();if(!response.ok)throw new Error(Object.values(data.errors||{}).flat().join(' ')||data.message||'Could not create cashbox.');
     const created=data.account;cashboxes.push({id:created.id,name:created.name,currency_id:created.currency_id});
-    currency.value=String(created.currency_id);sync();select.value=String(created.id);lastCashboxId=select.value;modal.close();
+    currency.value=String(created.currency_id);sync();select.value=String(created.id);lastCashboxId=select.value;if(window.jQuery && window.jQuery(select).data('select2'))window.jQuery(select).trigger('change.select2');modal.close();
     if(window.Swal)window.Swal.fire({icon:'success',title:'Cashbox added',text:created.name,showConfirmButton:false,timer:1700});
    }catch(e){error.textContent=e.message;error.hidden=false;}finally{save.disabled=false;}
   });
