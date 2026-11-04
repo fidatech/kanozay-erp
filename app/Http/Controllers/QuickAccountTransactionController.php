@@ -108,6 +108,9 @@ class QuickAccountTransactionController extends Controller
                     throw ValidationException::withMessages(['counterpart_key' => 'Use the mapped customer, supplier or financial account instead.']);
                 }
                 $counterpartLedger = LedgerAccount::find($id);
+                if ($counterpartLedger && str_starts_with($counterpartLedger->code, '1120.FX.')) {
+                    throw ValidationException::withMessages(['counterpart_key' => 'FX clearing accounts require the Currency Exchange workflow.']);
+                }
             }
             if (!$counterpartLedger || !$counterpartLedger->is_active || $counterpartLedger->is_group
                 || (int) $counterpartLedger->id === (int) $cashLedger->id) {
