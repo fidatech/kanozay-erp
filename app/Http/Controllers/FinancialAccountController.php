@@ -23,7 +23,7 @@ class FinancialAccountController extends Controller {
  }
  private function detachUnusedLedgers(\Illuminate\Support\Collection $links):void {
   foreach($links as $link){
-   DB::table('entity_ledger_accounts')->where('id',$link->id)->delete();
+   DB::table('entity_ledger_accounts')->where('entity_type',$link->entity_type)->where('entity_id',$link->entity_id)->where('currency_id',$link->currency_id)->where('purpose',$link->purpose)->where('ledger_account_id',$link->ledger_account_id)->delete();
    try {
     \App\Models\LedgerAccount::whereKey($link->ledger_account_id)->firstOrFail()->delete();
    } catch(\Illuminate\Database\QueryException $e) {
