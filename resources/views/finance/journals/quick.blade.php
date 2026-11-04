@@ -65,8 +65,8 @@
 <script>
 document.addEventListener('DOMContentLoaded',()=>{
  const form=document.getElementById('quick-party-transaction');if(!form)return;
- const cashboxes=@json($quickCashboxes->map(fn($item)=>['id'=>$item->id,'name'=>$item->name,'currency_id'=>$item->currency_id])->values());
- const currencies=@json($currencies->map(fn($item)=>['id'=>$item->id,'code'=>$item->code,'name'=>$item->name,'is_base'=>$item->is_base])->values());
+ const cashboxes=@json($quickCashboxes);
+ const currencies=@json($currencies);
  const select=form.querySelector('#qt-cash');
  const currency=form.querySelector('#qt-currency'),display=form.querySelector('#qt-currency-display');
  const party=form.querySelector('#qt-party'),empty=document.getElementById('qt-cash-empty');
