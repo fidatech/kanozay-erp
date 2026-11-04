@@ -141,6 +141,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/finance/journals', [\App\Http\Controllers\JournalEntryController::class,'index'])->name('finance.journals.index');
     Route::post('/finance/journals', [\App\Http\Controllers\JournalEntryController::class,'store'])->name('finance.journals.store');
     Route::post('/finance/journals/quick-transaction', [\App\Http\Controllers\QuickPartyTransactionController::class,'store'])->name('finance.journals.quick.store');
+    Route::post('/finance/journals/quick-account', [\App\Http\Controllers\QuickAccountTransactionController::class,'store'])->name('finance.journals.quick-account.store');
     Route::patch('/finance/journals/{journal}/post', [\App\Http\Controllers\JournalEntryController::class,'post'])->name('finance.journals.post');
     Route::post('/finance/journals/{journal}/reverse', [\App\Http\Controllers\JournalEntryController::class,'reverse'])->name('finance.journals.reverse');
     Route::get('/approvals', [\App\Http\Controllers\ApprovalController::class, 'index'])->name('approvals.index');
