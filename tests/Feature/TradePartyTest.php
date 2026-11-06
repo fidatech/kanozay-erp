@@ -23,8 +23,8 @@ class TradePartyTest extends TestCase {
     ->assertSee('k-create-ready',false);
   }
  }
- public function test_customer_register_renders_without_blade_parse_error():void {[$user]=$this->makeFixtures();$this->actingAs($user)->get(route('finance.customers.index'))->assertOk()->assertSee('Customer Register')->assertSee('Manage customer profiles')->assertSee('name="type" value="customer"',false);}
- public function test_supplier_register_renders_without_blade_parse_error():void {[$user]=$this->makeFixtures();$this->actingAs($user)->get(route('finance.suppliers.index'))->assertOk()->assertSee('Supplier Register')->assertSee('Manage supplier profiles')->assertSee('name="type" value="supplier"',false);}
+ public function test_customer_register_renders_without_blade_parse_error():void {[$user]=$this->makeFixtures();$this->actingAs($user)->get(route('finance.customers.index'))->assertOk()->assertSee('Customer Register')->assertSee('Manage customer details')->assertSee('name="type" value="customer"',false);}
+ public function test_supplier_register_renders_without_blade_parse_error():void {[$user]=$this->makeFixtures();$this->actingAs($user)->get(route('finance.suppliers.index'))->assertOk()->assertSee('Supplier Register')->assertSee('Manage supplier details')->assertSee('name="type" value="supplier"',false);}
  public function test_customer_and_supplier_pages_ignore_opposite_type_query():void {[$user]=$this->makeFixtures();$this->actingAs($user)->get(route('finance.customers.index',['type'=>'supplier']))->assertOk()->assertSee('Customer Register')->assertSee('name="type" value="customer"',false);$this->actingAs($user)->get(route('finance.suppliers.index',['type'=>'customer']))->assertOk()->assertSee('Supplier Register')->assertSee('name="type" value="supplier"',false);}
  public function test_customer_search_filters_name_and_keeps_suppliers_out():void {[$user,$afn]=$this->makeFixtures();TradeParty::create(['type'=>'customer','name'=>'Alpha Customer','is_active'=>true,'created_by'=>$user->id]);TradeParty::create(['type'=>'customer','name'=>'Beta Customer','is_active'=>true,'created_by'=>$user->id]);TradeParty::create(['type'=>'supplier','name'=>'Alpha Supplier','is_active'=>true,'created_by'=>$user->id]);$this->actingAs($user)->get(route('finance.customers.index',['search'=>'Alpha']))->assertOk()->assertSee('Alpha Customer')->assertDontSee('Beta Customer')->assertDontSee('Alpha Supplier');}
  public function test_supplier_search_filters_by_phone():void {[$user]=$this->makeFixtures();TradeParty::create(['type'=>'supplier','name'=>'Supplier One','phone'=>'0700123456','is_active'=>true,'created_by'=>$user->id]);TradeParty::create(['type'=>'supplier','name'=>'Supplier Two','phone'=>'0799999999','is_active'=>true,'created_by'=>$user->id]);$this->actingAs($user)->get(route('finance.suppliers.index',['search'=>'0700123456']))->assertOk()->assertSee('Supplier One')->assertDontSee('Supplier Two');}
@@ -43,38 +43,39 @@ class TradePartyTest extends TestCase {
  public function test_blank_opening_amount_creates_no_journal():void {[$user,$afn]=$this->makeFixtures();$before=\Illuminate\Support\Facades\DB::table('journal_entries')->count();$this->actingAs($user)->post(route('finance.parties.store'),['type'=>'customer','name'=>'No Opening Balance Customer','currency_ids'=>[$afn->id],'opening_balances'=>[$afn->id=>''],'opening_directions'=>[$afn->id=>'they_owe_us'],'opening_date'=>'2026-10-25'])->assertRedirect();$this->assertSame($before,\Illuminate\Support\Facades\DB::table('journal_entries')->count());$this->assertDatabaseCount('trade_opening_balances',0);}
  public function test_unselected_opening_currency_rolls_back_creation():void {[$user,$afn,$usd]=$this->makeFixtures();$this->actingAs($user)->post(route('finance.parties.store'),['type'=>'customer','name'=>'Invalid Opening','currency_ids'=>[$afn->id],'opening_date'=>'2026-10-25','opening_balances'=>[$usd->id=>'100']])->assertSessionHasErrors('opening_balances');$this->assertDatabaseCount('trade_parties',0);}
  public function test_invalid_currency_does_not_create_party():void {[$user]=$this->makeFixtures();$this->actingAs($user)->post(route('finance.parties.store'),['type'=>'customer','name'=>'Test','currency_ids'=>[999]])->assertSessionHasErrors('currency_ids.0');$this->assertDatabaseCount('trade_parties',0);}
- public function test_new_customer_register_has_compact_row_and_opening_balance_modal():void {
+ public function test_new_customer_register_has_simple_actions_and_no_opening_editor():void {
   [$user,$afn,$usd]=$this->makeFixtures();
   $this->actingAs($user)->post(route('finance.parties.store'),[
-   'type'=>'customer','name'=>'Jamil','currency_ids'=>[$afn->id,$usd->id],
+   'type'=>'customer','name'=>'Jamil','phone'=>'0700123456','currency_ids'=>[$afn->id,$usd->id],
   ])->assertRedirect();
   $party=TradeParty::sole();
   $this->actingAs($user)->get(route('finance.customers.index'))->assertOk()
    ->assertSee('Customer Register')
    ->assertSee('Jamil')
-   ->assertSee('data-open-party="'.$party->id.'"',false)
-   ->assertSee('id="party-opening-dialog-'.$party->id.'"',false)
-   ->assertSee('class="party-opening-modal-form"',false)
-   ->assertDontSee('class="party-opening-existing"',false);
+   ->assertSee('data-edit-party="'.$party->id.'"',false)
+   ->assertSee('Statement')
+   ->assertSee('WhatsApp')
+   ->assertSee('sp-delete-form')
+   ->assertDontSee('party-opening-modal-form');
   $this->assertDatabaseCount('trade_opening_balances',0);
  }
- public function test_supplier_register_has_compact_opening_balance_editor():void {
+ public function test_supplier_register_has_simple_actions():void {
   [$user,$afn]=$this->makeFixtures();
   $this->actingAs($user)->post(route('finance.parties.store'),[
    'type'=>'supplier','name'=>'Supplier A','currency_ids'=>[$afn->id],
   ])->assertRedirect();
   $this->actingAs($user)->get(route('finance.suppliers.index'))->assertOk()
    ->assertSee('Supplier Register')
-   ->assertSee('party-opening-trigger')
-   ->assertSee('party-opening-modal-form');
+   ->assertSee('sp-edit-form')
+   ->assertSee('sp-delete-form')
+   ->assertSee('WhatsApp');
  }
 
  public function test_customer_creation_without_opening_balance_starts_with_zero_and_no_journal():void {
   [$user,$afn,$usd]=$this->makeFixtures();
   $this->actingAs($user)->get(route('finance.customers.index'))->assertOk()
-   ->assertSee('id="party-optional-opening"',false)
-   ->assertSee('Add opening balance')
-   ->assertSee('Leave amounts blank to start with a zero balance.');
+   ->assertSee('data-new-entry-form="1"',false)
+   ->assertDontSee('party-optional-opening');
   $this->actingAs($user)->post(route('finance.parties.store'),[
    'type'=>'customer','name'=>'Zero Customer','currency_ids'=>[$afn->id,$usd->id],
   ])->assertRedirect(route('finance.customers.index'));
@@ -86,7 +87,7 @@ class TradePartyTest extends TestCase {
  public function test_supplier_creation_without_opening_balance_has_no_financial_posting():void {
   [$user,$afn]=$this->makeFixtures();
   $this->actingAs($user)->get(route('finance.suppliers.index'))->assertOk()
-   ->assertSee('id="party-optional-opening"',false);
+   ->assertSee('data-new-entry-form="1"',false);
   $this->actingAs($user)->post(route('finance.parties.store'),[
    'type'=>'supplier','name'=>'Zero Supplier','currency_ids'=>[$afn->id],
   ])->assertRedirect(route('finance.suppliers.index'));
@@ -94,6 +95,60 @@ class TradePartyTest extends TestCase {
   $this->assertCount(1,$party->currencies);
   $this->assertDatabaseCount('trade_opening_balances',0);
   $this->assertDatabaseCount('journal_entries',0);
+ }
+
+ public function test_unused_customer_can_be_deleted_with_ledger_links():void {
+  [$user,$afn]=$this->makeFixtures();
+  $this->actingAs($user)->post(route('finance.parties.store'),[
+   'type'=>'customer','name'=>'Unused Customer','currency_ids'=>[$afn->id],
+  ])->assertRedirect();
+  $party=TradeParty::sole();
+  $this->actingAs($user)->delete(route('finance.parties.destroy',$party))->assertRedirect(route('finance.customers.index'));
+  $this->assertDatabaseCount('trade_parties',0);
+  $this->assertDatabaseCount('entity_ledger_accounts',0);
+  $this->assertDatabaseHas('activity_logs',['action'=>'trade_party.deleted','subject_id'=>$party->id]);
+ }
+ public function test_customer_with_journal_history_cannot_be_deleted():void {
+  [$user,$afn]=$this->makeFixtures();
+  $this->actingAs($user)->post(route('finance.parties.store'),[
+   'type'=>'customer','name'=>'Used Customer','currency_ids'=>[$afn->id],
+  ])->assertRedirect();
+  $party=TradeParty::sole();
+  $ledger=\\Illuminate\\Support\\Facades\\DB::table('entity_ledger_accounts')->where([
+   'entity_type'=>'customer','entity_id'=>$party->id,'currency_id'=>$afn->id,'purpose'=>'receivable'
+  ])->value('ledger_account_id');
+  $journal=\\App\\Models\\JournalEntry::create([
+   'number'=>'JE-T-001','entry_date'=>'2026-11-04','description'=>'Test',
+   'status'=>'posted','currency_id'=>$afn->id,'created_by'=>$user->id
+  ]);
+  $journal->lines()->create(['ledger_account_id'=>$ledger,'debit'=>'100','credit'=>'0']);
+  $this->actingAs($user)->delete(route('finance.parties.destroy',$party))->assertSessionHasErrors('party');
+  $this->assertDatabaseHas('trade_parties',['id'=>$party->id]);
+  $this->actingAs($user)->get(route('finance.parties.statement',$party))->assertOk()
+   ->assertSee('100.00')->assertSee('JE-T-001');
+ }
+ public function test_whatsapp_message_uses_posted_balances_not_draft_amounts():void {
+  [$user,$afn]=$this->makeFixtures();
+  $party=TradeParty::create(['type'=>'customer','name'=>'Statement Customer','phone'=>'0700123456','is_active'=>true,'created_by'=>$user->id]);
+  $party->currencies()->attach($afn->id);
+  $party->provisionLedgerAccountsForCurrency($afn->id);
+  $id=\\Illuminate\\Support\\Facades\\DB::table('entity_ledger_accounts')->where([
+   'entity_type'=>'customer','entity_id'=>$party->id,'purpose'=>'receivable'
+  ])->value('ledger_account_id');
+  $journal=\\App\\Models\\JournalEntry::create([
+   'number'=>'JE-W-01','entry_date'=>'2026-11-04','description'=>'Paid',
+   'status'=>'posted','currency_id'=>$afn->id,'created_by'=>$user->id
+  ]);
+  $journal->lines()->create(['ledger_account_id'=>$id,'debit'=>'500','credit'=>'0']);
+  $draft=\\App\\Models\\JournalEntry::create([
+   'number'=>'JE-W-02','entry_date'=>'2026-11-04','description'=>'Draft',
+   'status'=>'draft','currency_id'=>$afn->id,'created_by'=>$user->id
+  ]);
+  $draft->lines()->create(['ledger_account_id'=>$id,'debit'=>'999','credit'=>'0']);
+  $this->actingAs($user)->get(route('finance.customers.index'))->assertOk()
+   ->assertSee('AFN 500.00')
+   ->assertDontSee('AFN 1499.00')
+   ->assertSee('data-whatsapp-phone="0700123456"',false);
  }
 
 }
