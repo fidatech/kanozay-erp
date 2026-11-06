@@ -9,7 +9,7 @@
 .sp-create-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}.sp-create-form label,.sp-edit-form label{display:grid;gap:6px;color:#355473;font-size:12px;font-weight:700}.sp-create-form input,.sp-create-form select,.sp-edit-form input{min-height:42px;width:100%;box-sizing:border-box;border:1px solid #d5e1ed;border-radius:8px;padding:9px 11px}.sp-create-form button{justify-self:end;grid-column:1/-1}.sp-create-form .sp-wide{grid-column:1/-1}
 .sp-dialog{width:min(520px,calc(100vw - 24px));max-height:87vh;border:1px solid #d9e5f2;border-radius:14px;padding:0;box-shadow:0 22px 70px #143c6555}.sp-dialog::backdrop{background:rgba(10,27,48,.55)}.sp-dialog-head{display:flex;justify-content:space-between;align-items:center;padding:17px 20px;border-bottom:1px solid #e5ebf3}.sp-dialog-head h2{margin:0;font-size:18px}.sp-dialog-head button{border:none;background:transparent;font-size:22px;cursor:pointer;color:#6b7f93}.sp-edit-form{padding:18px 20px;display:grid;grid-template-columns:1fr 1fr;gap:12px}.sp-dialog-footer{grid-column:1/-1;display:flex;gap:9px;justify-content:flex-end;margin-top:7px}.sp-dialog-footer button{min-height:38px}
 @media(max-width:720px){.sp-create-form,.sp-edit-form{grid-template-columns:1fr}.sp-create-form .sp-wide,.sp-create-form button{grid-column:1}.sp-table{min-width:820px}.sp-filter{flex-wrap:wrap}}
-</style>
+.sp-status{display:inline-flex;padding:5px 9px;border-radius:30px;font-size:11px;font-weight:700}.sp-status.active{background:#e9f8ef;color:#167548}.sp-status.inactive{background:#f2f4f7;color:#67788d}.sp-table .sp-actions{flex-wrap:nowrap}@media(max-width:1050px){.sp-table .sp-actions{flex-wrap:wrap}}</style>
 <div class="heading">
  <div><h1><i class="fa-solid {{ $type==='customer'?'fa-users':'fa-truck-field' }}"></i> {{ ucfirst($type) }}s</h1><p>Manage {{ $type }} details and view account balances.</p></div>
 </div>
@@ -21,14 +21,8 @@
  @canany(['administration.update','finance.update'])
  <form class="sp-create-form" data-new-entry-form="1" method="POST" action="{{ route('finance.parties.store') }}">
   @csrf<input type="hidden" name="type" value="{{ $type }}">
-  <label>Name<input name="name" maxlength="180" required value="{{ old('name') }}"></label>
-  <label>Phone<input name="phone" maxlength="80" value="{{ old('phone') }}" placeholder="Phone or WhatsApp number"></label>
-  <label>Address<input name="address" maxlength="2000" value="{{ old('address') }}"></label>
-  <label>Email (optional)<input type="email" name="email" maxlength="180" value="{{ old('email') }}"></label>
-  <label>Code (optional)<input name="code" maxlength="40" value="{{ old('code') }}"></label>
-  <label>Currencies<select name="currency_ids[]" multiple required>@foreach($currencies as $currency)
-   <option value="{{ $currency->id }}" @selected(in_array($currency->id,old('currency_ids',[])))>{{ $currency->code }}</option>
-  @endforeach</select></label>
+  <label>Name <span aria-hidden="true">*</span><input name="name" maxlength="180" required value="{{ old('name') }}" placeholder="{{ ucfirst($type) }} name"></label>
+  <label>Phone (optional)<input name="phone" maxlength="80" value="{{ old('phone') }}" placeholder="Phone / WhatsApp"></label>
   <button class="btn" type="submit">Create {{ ucfirst($type) }}</button>
  </form>
  @endcanany
@@ -41,7 +35,7 @@
   @if(request()->filled('search'))<a class="sp-action" href="{{ $type==='customer'?route('finance.customers.index'):route('finance.suppliers.index') }}">Clear</a>@endif
  </form>
  <div class="table-wrap"><table class="sp-table">
- <thead><tr><th>Code</th><th>Name</th><th>Phone</th><th>Address</th><th>Currencies</th><th>Posted Balance</th><th>Actions</th></tr></thead>
+ <thead><tr><th>Name</th><th>Phone</th><th>Status</th><th>Balance</th><th>Actions</th></tr></thead>
  <tbody>
  @forelse($parties as $party)
   @php
@@ -54,11 +48,10 @@
     $message="Hello ".$party->name.",\nYour current ".$type." account balance:\n".implode("\n",$lines)."\nPlease contact our accounts department if you have any questions.";
   @endphp
   <tr>
-   <td>{{ $party->code ?: '—' }}</td>
-   <td><a href="{{ route($type==='customer'?'finance.customers.show':'finance.suppliers.show',$party) }}"><strong>{{ $party->name }}</strong></a><small>{{ $party->email }}</small></td>
-   <td>{{ $party->phone ?: '—' }}</td><td>{{ $party->address ?: '—' }}</td>
-   <td>{{ $party->currencies->pluck('code')->join(', ') }}</td>
-   <td>@foreach($lines as $line)<span class="sp-balance">{{ $line }}</span>@endforeach</td>
+   <td><a href="{{ route($type==='customer'?'finance.customers.show':'finance.suppliers.show',$party) }}"><strong>{{ $party->name }}</strong></a></td>
+   <td>{{ $party->phone ?: '—' }}</td>
+   <td><span class="sp-status {{ $party->is_active?'active':'inactive' }}">{{ $party->is_active?'Active':'Inactive' }}</span></td>
+   <td>@forelse($lines as $line)<span class="sp-balance">{{ $line }}</span>@empty<span class="sp-muted">0.00</span>@endforelse</td>
    <td><div class="sp-actions">
     @canany(['administration.update','finance.update'])
      <button class="sp-action" type="button" data-edit-party="{{ $party->id }}"><i class="fa-solid fa-pen"></i> Edit</button>
@@ -71,7 +64,7 @@
    </div></td>
   </tr>
  @empty
- <tr><td colspan="7" style="padding:28px;text-align:center;color:#8394a9">No {{ $type }}s found.</td></tr>
+ <tr><td colspan="5" style="padding:28px;text-align:center;color:#8394a9">No {{ $type }}s found.</td></tr>
  @endforelse
  </tbody></table></div>
  {{ $parties->links() }}
@@ -84,11 +77,8 @@
  <div class="sp-dialog-head"><h2>Edit {{ ucfirst($type) }} — {{ $party->name }}</h2><button type="button" data-close-dialog aria-label="Close">×</button></div>
  <form class="sp-edit-form" method="POST" action="{{ route($type==='customer'?'finance.customers.update':'finance.suppliers.update',$party) }}">
   @csrf @method('PATCH')
-  <label>Name<input name="name" required maxlength="180" value="{{ $party->name }}"></label>
-  <label>Phone<input name="phone" maxlength="80" value="{{ $party->phone }}"></label>
-  <label>Address<input name="address" maxlength="2000" value="{{ $party->address }}"></label>
-  <label>Email<input type="email" name="email" maxlength="180" value="{{ $party->email }}"></label>
-  <label>Code<input name="code" maxlength="40" value="{{ $party->code }}"></label>
+  <label>Name <span aria-hidden="true">*</span><input name="name" required maxlength="180" value="{{ $party->name }}"></label>
+  <label>Phone (optional)<input name="phone" maxlength="80" value="{{ $party->phone }}"></label>
   <div class="sp-dialog-footer"><button type="button" class="sp-action" data-close-dialog>Cancel</button><button class="btn" type="submit">Save Changes</button></div>
  </form>
 </dialog>
