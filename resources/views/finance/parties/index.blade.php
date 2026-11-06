@@ -1,137 +1,120 @@
 @extends('layouts.kanozay')
 @section('content')
-<style>.party-tabs{display:flex;gap:9px;margin:15px 0 20px}.party-tabs a{padding:10px 17px;border:1px solid #dbe7f5;border-radius:9px;text-decoration:none;color:#365475;font-weight:700;background:#fff}.party-tabs a.active{background:#125eac;color:#fff}.party-form{display:grid;gap:14px}.party-form label{display:grid;gap:6px;font-size:12px;font-weight:700;color:#315174}.party-form input,.party-form textarea,.party-form select{width:100%;min-height:43px;padding:10px;border:1px solid #d8e4f1;border-radius:9px}.party-form textarea{min-height:75px}.party-form .party-note{color:#6d8299;font-size:12px}.party-list{width:100%}.party-list .panel{width:100%}.party-openings{grid-column:1/-1;border:1px solid #dbe7f4;background:#f7faff;border-radius:12px;padding:16px}.party-openings h3{font-size:14px;margin:0 0 6px;color:#173b63}.party-openings p{font-size:12px;color:#637e9a;margin:0 0 12px}.party-currency-row{display:flex;align-items:center;gap:12px;padding:7px 0;border-top:1px solid #e6eef7}.party-currency-row span{min-width:68px;font-weight:700}.party-currency-row input{max-width:230px}.party-opening-existing{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.party-opening-existing input,.party-opening-existing select{min-height:36px;max-width:155px;border:1px solid #dbe7f4;border-radius:7px;padding:6px}.party-form>button{grid-column:1/-1;justify-self:end}.party-opening-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.party-opening-head h3{margin:0}.party-opening-head .btn{white-space:nowrap;padding:8px 12px}.party-optional{font-size:11px;font-weight:500;color:#72869b}.party-currency-row{display:grid;grid-template-columns:70px minmax(135px,1fr) minmax(115px,1fr) 30px;gap:8px;align-items:center}.party-currency-row select,.party-currency-row input{width:100%;min-width:0;max-width:none;min-height:38px}.party-remove-opening{border:0;background:transparent;color:#8a9eb1;font-size:23px;cursor:pointer}.party-opening-hint{margin:10px 0 0!important}.balance-direction{display:inline-flex;gap:5px;align-items:center}.direction-choice{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border:2px solid transparent;border-radius:10px;cursor:pointer;opacity:.43;transition:opacity .15s,transform .15s,border-color .15s}.direction-choice.incoming,.balance-indicator.incoming{background:#dcfce7;color:#166534}.direction-choice.outgoing,.balance-indicator.outgoing{background:#fee2e2;color:#b91c1c}.direction-choice[aria-pressed="true"]{opacity:1;border-color:currentColor;box-shadow:0 0 0 2px #ffffff inset}.direction-choice:focus-visible{outline:3px solid #2563eb;outline-offset:2px}.balance-indicator{display:inline-flex;width:23px;height:23px;border-radius:7px;align-items:center;justify-content:center;margin-left:5px}.party-currency-row{grid-template-columns:65px 88px minmax(115px,1fr) 28px}.party-currency-row[hidden]{display:none!important}@media(max-width:679px){.party-currency-row{grid-template-columns:48px 88px minmax(85px,1fr) 22px}.party-opening-head{align-items:flex-start}.party-opening-existing{flex-direction:column;align-items:stretch}}
-/* Compact institutional trade-party editor */
-.party-form{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 16px;align-items:end}
-.party-form>label{min-width:0}.party-form>label input,.party-form>label select{height:40px;min-height:40px;background:#fff;box-shadow:0 1px 2px rgba(16,47,81,.03)}
-.party-form>label input:focus,.party-form>label select:focus{outline:2px solid #bfdbfe;outline-offset:0;border-color:#397fca}
-.party-openings{padding:12px 14px;background:#f8fbff;border-color:#e2ebf6}
-.party-opening-head{min-height:34px}.party-opening-head h3{font-size:13px}.party-opening-head .btn{font-size:12px;padding:7px 12px;min-height:34px}
-.party-opening-head .btn i{margin-right:4px}.party-openings #party-opening-date{max-width:220px;margin:8px 0}
-.party-openings #party-opening-date label{font-size:11px}.party-openings #party-opening-date input{min-height:36px}
-.party-currency-row{padding:7px 0;grid-template-columns:55px 88px minmax(120px,1fr) 26px;gap:9px}
-.party-currency-row .party-currency-code{min-width:0;font-size:12px;color:#24486f}
-.party-currency-row input{height:36px;min-height:36px}.direction-choice{width:36px;height:36px;border-radius:9px}
-.party-remove-opening:hover{color:#b91c1c;background:#fee2e2;border-radius:6px}
-.party-opening-hint{font-size:11px!important;margin:7px 0 0!important}
-.party-opening-existing{gap:6px}.party-opening-existing .balance-direction{flex:none}.party-opening-existing input,.party-opening-existing select{max-width:130px}
-.party-form>button{margin-top:4px}.party-list .panel h2{font-size:16px}
-@media(max-width:640px){.party-form{grid-template-columns:1fr}.party-currency-row{grid-template-columns:45px 82px minmax(76px,1fr) 24px;gap:5px}.direction-choice{width:34px;height:34px}}
-
-/* Screenshot-matched opening balances */
-.party-openings{border:1px solid #e1e1e1!important;border-radius:15px!important;background:#fff!important;padding:20px 20px 16px!important;box-shadow:none!important}
-.party-opening-head h3{font-size:18px!important;font-weight:750!important;color:#141414!important;margin:0!important}
-.party-opening-head .party-optional{float:right;font-size:12px;color:#777;font-weight:400}
-.party-debit-credit-help{padding:13px 0 16px!important;margin:0 0 12px!important;border:0!important;border-bottom:1px solid #e9e9e9!important;border-radius:0!important;background:transparent!important;font-size:13px!important;gap:16px!important}
-.party-currency-row{grid-template-columns:46px 132px minmax(120px,1fr)!important;gap:10px!important;padding:10px 0!important;border:0!important}
-.party-currency-row .party-currency-code{font-size:15px!important;color:#171717!important;font-weight:650!important}
-.party-currency-row .money-input{height:40px!important;min-height:40px!important;border:1px solid #d5d5d5!important;border-radius:22px!important;padding:8px 15px!important;text-align:left!important;font-weight:500!important;font-size:14px!important}
-.party-currency-row .money-input:focus{border-color:#4a90df!important;outline:2px solid #dbeafe!important}
-.party-currency-row .direction-choice{border-radius:20px!important;width:63px!important;height:36px!important;font-size:12px!important;border:1px solid #d5d5d5!important;opacity:1!important;background:#fff;color:#606060}
-.party-currency-row .direction-choice.incoming[aria-pressed="true"]{background:#00a63e!important;color:#fff!important;border-color:#00a63e!important;box-shadow:none!important}
-.party-currency-row .direction-choice.outgoing[aria-pressed="true"]{background:#dc2626!important;color:#fff!important;border-color:#dc2626!important;box-shadow:none!important}
-#party-opening-date{margin:12px 0 0!important;max-width:none!important}
-#party-opening-date label{font-size:13px!important;font-weight:500!important;color:#666!important;gap:9px!important}
-#party-opening-date input{height:40px!important;width:100%!important;border:1px solid #d5d5d5!important;border-radius:22px!important;padding:8px 15px!important;background:#fff!important}
-@media(max-width:640px){.party-openings{padding:14px!important}.party-currency-row{grid-template-columns:40px 126px minmax(70px,1fr)!important;gap:6px!important}.party-currency-row .direction-choice{width:60px!important}}
-/* Clear debit/credit controls and deliberate field order */
-.party-currency-row{grid-template-columns:65px 120px minmax(110px,1fr)!important}
-.party-currency-row .money-input{font-variant-numeric:tabular-nums;text-align:right;font-weight:650}
-.party-openings .party-debit-credit-help{background:#fff;border:1px solid #e4ebf3;border-radius:8px;padding:9px 12px;margin:9px 0}
-@media(max-width:640px){.party-currency-row{grid-template-columns:42px 120px minmax(72px,1fr)!important}}
-.party-form>.party-account-row{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start;min-width:0}
-.party-account-row>label{min-width:0;display:grid;gap:6px;font-size:12px;font-weight:700;color:#315174}
-.party-account-row input,.party-account-row select{width:100%;min-width:0;min-height:40px;border:1px solid #d8e4f1;border-radius:9px;padding:9px 10px;background:#fff}
-.party-account-row .select2-container{width:100%!important;max-width:100%}
-.party-account-row .select2-selection{min-height:40px!important}
-@media(max-width:640px){.party-form>.party-account-row{grid-template-columns:1fr;gap:12px}}
-.party-form>.party-code-field{grid-column:1;grid-row:auto}.party-form>.party-currencies-field{grid-column:2;grid-row:auto}
-.party-debit-credit-help{display:flex;flex-wrap:wrap;gap:8px 18px;padding:8px 0 4px;font-size:11px;line-height:1.4}
-.party-help-debit{color:#166534}.party-help-credit{color:#b91c1c}
-.balance-direction{gap:5px}.direction-choice{width:56px!important;height:35px!important;border-radius:7px!important;font-size:11px;font-weight:800;letter-spacing:.1px;opacity:.55}
-.direction-choice[aria-pressed="true"]{opacity:1;box-shadow:0 0 0 1px currentColor inset}.party-currency-row{grid-template-columns:65px 120px minmax(110px,1fr)}
-.party-existing-help{flex-basis:100%;display:flex;gap:15px;font-size:11px}
-.party-opening-existing .direction-choice{width:56px!important}.party-opening-existing{max-width:520px}
-@media(max-width:640px){.party-form>.party-code-field,.party-form>.party-currencies-field{grid-column:1}.party-currency-row{grid-template-columns:42px 120px minmax(72px,1fr);gap:4px}.direction-choice{width:56px!important}}
-
-/* Register: color the amount and directional arrow only, not the currency */
-.party-register-balance{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:3px 0;white-space:nowrap}
-.party-register-currency{color:#1c3d67;font-weight:750}
-.party-register-amount{display:inline-flex;align-items:center;gap:5px;font-weight:750;font-variant-numeric:tabular-nums;background:none!important;border:0!important;padding:0!important}
-.party-register-amount.incoming{color:#15803d!important}.party-register-amount.outgoing{color:#dc2626!important}
-.party-register-amount i{font-size:11px}
-
-/* Keep party register compact: opening balances are edited in a separate dialog. */
-.party-list .table-wrap table tbody td{vertical-align:middle}
-.party-register-empty{font-size:12px;color:#8b9aab}
-.party-opening-trigger{display:inline-flex;gap:6px;align-items:center;white-space:nowrap;border:1px solid #c9dff5;background:#edf6ff;color:#175d9d;padding:7px 11px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;margin-top:5px}
-.party-opening-trigger:hover{background:#e0efff}
-.party-opening-dialog{width:min(520px,calc(100vw - 30px));max-height:85vh;overflow:auto;padding:0;border:1px solid #dbe6f2;border-radius:15px;background:#fff;box-shadow:0 26px 70px #183b6550}
-.party-opening-dialog::backdrop{background:rgba(8,25,48,.6)}
-.party-opening-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:18px 20px;border-bottom:1px solid #e5ecf4}
-.party-opening-modal-head h3{font-size:18px;margin:0;color:#183f67}
-.party-opening-modal-head p{font-size:12px;color:#768ba0;margin:4px 0 0}
-.party-opening-close{border:0;background:transparent;font-size:24px;color:#6f8197;cursor:pointer}
-.party-opening-modal-form{display:grid;gap:13px;padding:19px 20px}
-.party-opening-modal-form .party-existing-help{display:flex;gap:15px;flex-wrap:wrap}
-.party-opening-modal-form>select,.party-opening-modal-form>input{width:100%;min-height:42px;max-width:none;border:1px solid #d9e5f1;border-radius:9px;padding:9px 12px;background:#fff}
-.party-opening-modal-form .balance-direction{display:flex;gap:10px}
-.party-opening-modal-form .btn{justify-self:end;min-width:110px}
-@media(max-width:600px){.party-opening-modal-head{padding:14px}.party-opening-modal-form{padding:14px}}
-.party-openings-summary{cursor:pointer;font-size:12px;font-weight:700;color:#285b88;list-style-position:inside}.party-openings-summary .party-optional{font-weight:400}.party-openings-body{margin-top:14px}.party-openings:not([open]){padding:13px 16px!important}.party-openings-summary:focus-visible{outline:2px solid #4386c6;outline-offset:4px;border-radius:5px}
+<style>
+.sp-wrap{max-width:100%;}.sp-register{padding:19px!important}
+.sp-filter{display:flex;gap:9px;align-items:center;margin:15px 0}.sp-filter input{flex:1;min-width:150px;min-height:40px;border:1px solid #dce5f0;border-radius:9px;padding:9px 12px}.sp-filter .btn{white-space:nowrap}
+.sp-table{width:100%;border-collapse:collapse;font-size:12px}.sp-table th{padding:12px 10px;background:#f2f6fb;text-align:left;color:#526d8a;font-size:11px;white-space:nowrap}.sp-table td{padding:13px 10px;border-bottom:1px solid #e8edf4;vertical-align:middle}.sp-table td strong{color:#1a4169}.sp-table td small{display:block;color:#7890a6;margin-top:3px}
+.sp-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.sp-action{border:1px solid #d6e3f1;background:#fff;color:#235a8a;border-radius:8px;padding:7px 10px;font-size:11px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}.sp-action:hover{background:#eaf4ff}.sp-action.danger{border-color:#f0cbcb;color:#ad3232}.sp-action.whatsapp{color:#19834b;border-color:#b9e6cb}.sp-action[disabled]{opacity:.45;cursor:not-allowed}
+.sp-actions form{margin:0}.sp-balance{display:block;white-space:nowrap;font-size:11px;margin:3px 0;font-variant-numeric:tabular-nums}.sp-balance small{display:inline;color:#6f8194}.sp-muted{color:#8a9bae;font-size:11px}
+.sp-create-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}.sp-create-form label,.sp-edit-form label{display:grid;gap:6px;color:#355473;font-size:12px;font-weight:700}.sp-create-form input,.sp-create-form select,.sp-edit-form input{min-height:42px;width:100%;box-sizing:border-box;border:1px solid #d5e1ed;border-radius:8px;padding:9px 11px}.sp-create-form button{justify-self:end;grid-column:1/-1}.sp-create-form .sp-wide{grid-column:1/-1}
+.sp-dialog{width:min(520px,calc(100vw - 24px));max-height:87vh;border:1px solid #d9e5f2;border-radius:14px;padding:0;box-shadow:0 22px 70px #143c6555}.sp-dialog::backdrop{background:rgba(10,27,48,.55)}.sp-dialog-head{display:flex;justify-content:space-between;align-items:center;padding:17px 20px;border-bottom:1px solid #e5ebf3}.sp-dialog-head h2{margin:0;font-size:18px}.sp-dialog-head button{border:none;background:transparent;font-size:22px;cursor:pointer;color:#6b7f93}.sp-edit-form{padding:18px 20px;display:grid;grid-template-columns:1fr 1fr;gap:12px}.sp-dialog-footer{grid-column:1/-1;display:flex;gap:9px;justify-content:flex-end;margin-top:7px}.sp-dialog-footer button{min-height:38px}
+@media(max-width:720px){.sp-create-form,.sp-edit-form{grid-template-columns:1fr}.sp-create-form .sp-wide,.sp-create-form button{grid-column:1}.sp-table{min-width:820px}.sp-filter{flex-wrap:wrap}}
 </style>
-<div class="heading"><div><h1><i class="fa-solid {{ $type==='customer'?'fa-users':'fa-truck-field' }}"></i> {{ $type==='customer'?'Customers':'Suppliers' }}</h1><p>{{ $type==='customer'?'Manage customer profiles, currencies and opening receivables.':'Manage supplier profiles, currencies and opening payables.' }}</p></div></div>
-@if($errors->any())<div class="panel" data-form-errors style="color:#b42318">{{ $errors->first() }}</div>@endif
-<div style="margin:8px 0 14px"><a href="{{ route('finance.directory.index') }}" class="btn"><i class="fa-solid fa-list"></i> View All Accounts</a></div>
-<div class="party-list"><section class="panel"><h2>Add {{ ucfirst($type) }}</h2><p class="party-note">Contact information and account setup</p>
-@can('administration.update')<form class="party-form" data-new-entry-form="1" method="POST" action="{{ route('finance.parties.store') }}">@csrf<input type="hidden" name="type" value="{{ $type }}"><label>Name<input name="name" maxlength="180" value="{{ old('name') }}" required></label>
-<label>Phone<input name="phone" maxlength="80" value="{{ old('phone') }}"></label>
-<label>Address<input name="address" maxlength="2000" value="{{ old('address') }}"></label>
-<label>Email (optional)<input type="email" name="email" maxlength="180" value="{{ old('email') }}"></label>
-<div class="party-account-row"><label class="party-code-field">Code<input name="code" maxlength="40" value="{{ old('code') }}" placeholder="Optional reference"></label>
-<label class="party-currencies-field">Currencies<select name="currency_ids[]" multiple required>@foreach($currencies as $currency)<option value="{{ $currency->id }}" @selected(in_array($currency->id,old('currency_ids',[])))>{{ $currency->code }} — {{ $currency->name }}</option>@endforeach</select></label></div>
-<details class="party-openings" id="party-optional-opening" @if(old('opening_balances')) open @endif><summary class="party-openings-summary"><i class="fa-solid fa-plus-circle" aria-hidden="true"></i> Add opening balance <span class="party-optional">(optional)</span></summary><div class="party-openings-body"><div class="party-debit-credit-help"><span class="party-help-debit"><strong>Debit</strong> — They owe us</span><span class="party-help-credit"><strong>Credit</strong> — We owe them</span></div><div id="party-opening-rows">@foreach($currencies as $currency)<div class="party-currency-row" data-currency="{{ $currency->id }}" hidden><span class="party-currency-code">{{ $currency->code }}</span><div class="balance-direction" role="group" aria-label="{{ $currency->code }} balance direction"><button type="button" class="direction-choice incoming" data-direction="they_owe_us" title="Debit — They owe us" aria-label="Debit — They owe us" aria-pressed="false"><span>Debit</span></button><button type="button" class="direction-choice outgoing" data-direction="we_owe_them" title="Credit — We owe them" aria-label="Credit — We owe them" aria-pressed="false"><span>Credit</span></button><input type="hidden" name="opening_directions[{{ $currency->id }}]" value="{{ old('opening_directions.'.$currency->id, $type==='customer'?'they_owe_us':'we_owe_them') }}" disabled></div><input type="text" inputmode="decimal" autocomplete="off" class="money-input" name="opening_balances[{{ $currency->id }}]" value="{{ old('opening_balances.'.$currency->id) }}" placeholder="Amount" disabled aria-label="{{ $currency->code }} amount"></div>@endforeach</div><div id="party-opening-date" hidden><label>Balance date<input type="date" name="opening_date" value="{{ old('opening_date',date('Y-m-d')) }}"></label></div><p class="party-opening-hint" id="party-opening-hint">Leave amounts blank to start with a zero balance.</p></div></details>
-<button class="btn" type="submit">Create {{ ucfirst($type) }}</button></form>@endcan</section>
-<section class="panel"><h2>{{ ucfirst($type) }} Register</h2><form method="GET" action="{{ $type==='customer'?route('finance.customers.index'):route('finance.suppliers.index') }}" class="party-search" style="display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin:12px 0 18px"><label for="party-search-input" class="sr-only">Search {{ $type }} records</label><input id="party-search-input" type="search" name="search" value="{{ request('search') }}" placeholder="Search by name, code, phone or email" maxlength="180" style="flex:1;min-width:200px;min-height:40px;padding:9px 13px;border:1px solid #d8e4f1;border-radius:9px"><button class="btn" type="submit">Search</button>@if(request()->filled('search'))<a class="btn" href="{{ $type==='customer'?route('finance.customers.index'):route('finance.suppliers.index') }}" style="background:#eef3f9;color:#365475">Clear</a>@endif</form><div class="table-wrap"><table><thead><tr><th>Code</th><th>Name</th><th>Phone</th><th>Address</th><th>Email</th><th>Currencies</th><th>Opening Balance</th></thead><tbody>@forelse($parties as $party)<tr><td>{{ $party->code ?: '—' }}</td><td><a href="{{ route($type==='customer'?'finance.customers.show':'finance.suppliers.show',$party) }}"><strong>{{ $party->name }}</strong></a></td><td>{{ $party->phone ?: '—' }}</td><td>{{ $party->address ?: '—' }}</td><td>{{ $party->email ?: '—' }}</td><td>{{ $party->currencies->pluck('code')->join(', ') }}</td><td>@foreach($openingBalances->get($party->id,collect()) as $balance)<div class="party-register-balance"><strong class="party-register-currency">{{ $party->currencies->firstWhere('id',$balance->currency_id)?->code }}</strong> <span class="party-register-amount {{ ($party->type==='customer') === (\Brick\Math\BigDecimal::of((string)$balance->amount)->compareTo(\Brick\Math\BigDecimal::zero())>0) ? 'incoming' : 'outgoing' }}" title="{{ ($party->type==='customer') === (\Brick\Math\BigDecimal::of((string)$balance->amount)->compareTo(\Brick\Math\BigDecimal::zero())>0) ? 'Debit — They owe us' : 'Credit — We owe them' }}"><i class="fa-solid {{ ($party->type==='customer') === (\Brick\Math\BigDecimal::of((string)$balance->amount)->compareTo(\Brick\Math\BigDecimal::zero())>0) ? 'fa-arrow-down' : 'fa-arrow-up' }}" aria-hidden="true"></i> <x-finance-amount :amount="\Brick\Math\BigDecimal::of((string)$balance->amount)->abs()" /></span></div>@endforeach
-@if($openingBalances->get($party->id,collect())->isEmpty())<span class="party-register-empty">No opening balance</span>@endif
-@can('administration.update')
-@if($party->currencies->count()>$openingBalances->get($party->id,collect())->count())
-<button type="button" class="party-opening-trigger" data-open-party="{{ $party->id }}"><i class="fa-solid fa-plus"></i> Set opening balance</button>
-@endif
-@endcan</td></tr>@empty<tr><td colspan="7"><div class="k-empty-state"><strong>No {{ $type }} records yet</strong><p>Add a {{ $type }} to create its linked ledger accounts.</p></div></td></tr>@endforelse</tbody></table></div>{{ $parties->links() }}</section></div>
-
-@can('administration.update')
+<div class="heading">
+ <div><h1><i class="fa-solid {{ $type==='customer'?'fa-users':'fa-truck-field' }}"></i> {{ ucfirst($type) }}s</h1><p>Manage {{ $type }} details and view account balances.</p></div>
+</div>
+@if($errors->any())<div class="error" data-form-errors role="alert">{{ $errors->first() }}</div>@endif
+<div class="sp-wrap">
+<div class="party-list">
+<section class="panel">
+ <h2>Add {{ ucfirst($type) }}</h2>
+ @canany(['administration.update','finance.update'])
+ <form class="sp-create-form" data-new-entry-form="1" method="POST" action="{{ route('finance.parties.store') }}">
+  @csrf<input type="hidden" name="type" value="{{ $type }}">
+  <label>Name<input name="name" maxlength="180" required value="{{ old('name') }}"></label>
+  <label>Phone<input name="phone" maxlength="80" value="{{ old('phone') }}" placeholder="Phone or WhatsApp number"></label>
+  <label>Address<input name="address" maxlength="2000" value="{{ old('address') }}"></label>
+  <label>Email (optional)<input type="email" name="email" maxlength="180" value="{{ old('email') }}"></label>
+  <label>Code (optional)<input name="code" maxlength="40" value="{{ old('code') }}"></label>
+  <label>Currencies<select name="currency_ids[]" multiple required>@foreach($currencies as $currency)
+   <option value="{{ $currency->id }}" @selected(in_array($currency->id,old('currency_ids',[])))>{{ $currency->code }}</option>
+  @endforeach</select></label>
+  <button class="btn" type="submit">Save {{ ucfirst($type) }}</button>
+ </form>
+ @endcanany
+</section>
+<section class="panel sp-register">
+ <h2>{{ ucfirst($type) }} Register</h2>
+ <form class="sp-filter" method="GET" action="{{ $type==='customer'?route('finance.customers.index'):route('finance.suppliers.index') }}">
+  <input type="search" name="search" maxlength="180" value="{{ request('search') }}" placeholder="Search by name, code, phone or email" aria-label="Search {{ $type }}s">
+  <button type="submit" class="btn">Search</button>
+  @if(request()->filled('search'))<a class="sp-action" href="{{ $type==='customer'?route('finance.customers.index'):route('finance.suppliers.index') }}">Clear</a>@endif
+ </form>
+ <div class="table-wrap"><table class="sp-table">
+ <thead><tr><th>Code</th><th>Name</th><th>Phone</th><th>Address</th><th>Currencies</th><th>Posted Balance</th><th>Actions</th></tr></thead>
+ <tbody>
+ @forelse($parties as $party)
+  @php
+    $lines=[];
+    foreach($party->currencies as $cur){
+      $balance=$partyBalances[$party->id][$cur->id]??\Brick\Math\BigDecimal::zero();
+      $direction=$balance->isPositive()?($type==='customer'?'They owe us':'We owe them'):($balance->isNegative()?($type==='customer'?'We owe them':'They owe us'):'Settled');
+      $lines[]=$cur->code.' '.(string)$balance->abs()->toScale(2,\Brick\Math\RoundingMode::HalfUp).' — '.$direction;
+    }
+    $message="Hello ".$party->name.",\nYour current ".$type." account balance:\n".implode("\n",$lines)."\nPlease contact our accounts department if you have any questions.";
+  @endphp
+  <tr>
+   <td>{{ $party->code ?: '—' }}</td>
+   <td><a href="{{ route($type==='customer'?'finance.customers.show':'finance.suppliers.show',$party) }}"><strong>{{ $party->name }}</strong></a><small>{{ $party->email }}</small></td>
+   <td>{{ $party->phone ?: '—' }}</td><td>{{ $party->address ?: '—' }}</td>
+   <td>{{ $party->currencies->pluck('code')->join(', ') }}</td>
+   <td>@foreach($lines as $line)<span class="sp-balance">{{ $line }}</span>@endforeach</td>
+   <td><div class="sp-actions">
+    @canany(['administration.update','finance.update'])
+     <button class="sp-action" type="button" data-edit-party="{{ $party->id }}"><i class="fa-solid fa-pen"></i> Edit</button>
+     <form method="POST" class="sp-delete-form" action="{{ route('finance.parties.destroy',$party) }}" data-name="{{ $party->name }}">@csrf @method('DELETE')
+      <button class="sp-action danger" type="submit"><i class="fa-solid fa-trash"></i> Delete</button>
+     </form>
+    @endcanany
+    <a class="sp-action" href="{{ route('finance.parties.statement',$party) }}"><i class="fa-solid fa-file-lines"></i> Statement</a>
+    <button type="button" class="sp-action whatsapp" data-whatsapp-phone="{{ $party->phone }}" data-whatsapp-message="{{ $message }}" @if(!$party->phone) disabled title="Add a phone number first" @endif><i class="fa-brands fa-whatsapp"></i> WhatsApp</button>
+   </div></td>
+  </tr>
+ @empty
+ <tr><td colspan="7" style="padding:28px;text-align:center;color:#8394a9">No {{ $type }}s found.</td></tr>
+ @endforelse
+ </tbody></table></div>
+ {{ $parties->links() }}
+</section>
+</div>
+</div>
+@canany(['administration.update','finance.update'])
 @foreach($parties as $party)
-@if($party->currencies->count()>$openingBalances->get($party->id,collect())->count())
-<dialog id="party-opening-dialog-{{ $party->id }}" class="party-opening-dialog" aria-labelledby="party-opening-title-{{ $party->id }}">
- <div class="party-opening-modal-head">
-  <div><h3 id="party-opening-title-{{ $party->id }}">Opening Balance</h3><p>{{ $party->name }} · {{ ucfirst($party->type) }}</p></div>
-  <button type="button" class="party-opening-close" data-close-party aria-label="Close">×</button>
- </div>
- <form class="party-opening-modal-form" method="POST" action="{{ route('finance.parties.opening.store',$party) }}">@csrf<div class="party-existing-help"><span class="party-help-debit">Debit = They owe us</span><span class="party-help-credit">Credit = We owe them</span></div><select name="currency_id" required><option value="">Currency</option>@foreach($party->currencies as $currency)@unless($openingBalances->get($party->id,collect())->contains('currency_id',$currency->id))<option value="{{ $currency->id }}">{{ $currency->code }}</option>@endunless
-@endforeach</select><div class="balance-direction" role="group" aria-label="Debit or credit"><button type="button" class="direction-choice incoming" data-direction="they_owe_us" title="Debit — They owe us" aria-label="Debit — They owe us" aria-pressed="false"><span>Debit</span></button><button type="button" class="direction-choice outgoing" data-direction="we_owe_them" title="Credit — We owe them" aria-label="Credit — We owe them" aria-pressed="false"><span>Credit</span></button><input type="hidden" name="direction" value="{{ $party->type==='customer'?'they_owe_us':'we_owe_them' }}"></div><input type="text" inputmode="decimal" autocomplete="off" class="money-input" name="amount" placeholder="Amount" required><input type="date" name="balance_date" value="{{ date('Y-m-d') }}" required><button type="submit" class="btn">Post</button></form>
+<dialog class="sp-dialog" id="sp-edit-{{ $party->id }}">
+ <div class="sp-dialog-head"><h2>Edit {{ ucfirst($type) }} — {{ $party->name }}</h2><button type="button" data-close-dialog aria-label="Close">×</button></div>
+ <form class="sp-edit-form" method="POST" action="{{ route($type==='customer'?'finance.customers.update':'finance.suppliers.update',$party) }}">
+  @csrf @method('PATCH')
+  <label>Name<input name="name" required maxlength="180" value="{{ $party->name }}"></label>
+  <label>Phone<input name="phone" maxlength="80" value="{{ $party->phone }}"></label>
+  <label>Address<input name="address" maxlength="2000" value="{{ $party->address }}"></label>
+  <label>Email<input type="email" name="email" maxlength="180" value="{{ $party->email }}"></label>
+  <label>Code<input name="code" maxlength="40" value="{{ $party->code }}"></label>
+  <div class="sp-dialog-footer"><button type="button" class="sp-action" data-close-dialog>Cancel</button><button class="btn" type="submit">Save Changes</button></div>
+ </form>
 </dialog>
-@endif
 @endforeach
-@endcan
+@endcanany
 <script>
-document.addEventListener('DOMContentLoaded',function(){
- document.querySelectorAll('[data-open-party]').forEach(button=>button.addEventListener('click',()=>{
-  document.getElementById('party-opening-dialog-'+button.dataset.openParty)?.showModal();
+document.addEventListener('DOMContentLoaded',()=>{
+ document.querySelectorAll('[data-edit-party]').forEach(button=>button.addEventListener('click',()=>document.getElementById('sp-edit-'+button.dataset.editParty)?.showModal()));
+ document.querySelectorAll('[data-close-dialog]').forEach(button=>button.addEventListener('click',()=>button.closest('dialog')?.close()));
+ document.querySelectorAll('.sp-delete-form').forEach(form=>form.addEventListener('submit',async event=>{
+  event.preventDefault();
+  const name=form.dataset.name;
+  const confirmed=window.Swal
+   ? (await window.Swal.fire({title:'Delete '+name+'?',text:'Only unused accounts without transactions can be deleted.',icon:'warning',showCancelButton:true,confirmButtonText:'Delete',confirmButtonColor:'#be3434',focusCancel:true})).isConfirmed
+   : window.confirm('Delete unused account '+name+'?');
+  if(confirmed)HTMLFormElement.prototype.submit.call(form);
  }));
- document.querySelectorAll('[data-close-party]').forEach(button=>button.addEventListener('click',()=>button.closest('dialog')?.close()));
-
- const form=document.querySelector('form.party-form');
- const normalizeDigits=value=>String(value).replace(/[٠-٩]/g,c=>String(c.charCodeAt(0)-0x660)).replace(/[۰-۹]/g,c=>String(c.charCodeAt(0)-0x6f0)).replace(/[٫]/g,'.').replace(/[٬،]/g,',');
- const canonical=value=>normalizeDigits(value).replace(/,/g,'').replace(/[^0-9.]/g,'').replace(/(\..*)\./g,'$1').replace(/^(\d*\.\d{0,4}).*$/,'$1');
- const format=value=>{const v=canonical(value);const parts=v.split('.');return parts[0].replace(/\B(?=(\d{3})+(?!\d))/g,',')+(parts.length>1?'.'+parts[1]:'');};
- document.querySelectorAll('.money-input').forEach(input=>{input.value=format(input.value);input.addEventListener('input',()=>{const old=input.value;const pos=input.selectionStart??old.length;const left=format(old.slice(0,pos));input.value=format(old);input.setSelectionRange(left.length,left.length);});input.addEventListener('blur',()=>{input.value=format(input.value);});});
- document.querySelectorAll('.balance-direction').forEach(group=>{const input=group.querySelector('input[type="hidden"]');const paint=()=>group.querySelectorAll('[data-direction]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.direction===input.value)));group.querySelectorAll('[data-direction]').forEach(button=>button.addEventListener('click',()=>{input.value=button.dataset.direction;paint();}));paint();});
- document.querySelectorAll('form').forEach(f=>f.addEventListener('submit',()=>{f.querySelectorAll('.money-input').forEach(input=>{input.value=canonical(input.value);});}));
- if(!form)return;
- const currency=form.querySelector('select[name="currency_ids[]"]');const rows=Array.from(form.querySelectorAll('[data-currency]'));const date=form.querySelector('#party-opening-date');const hint=form.querySelector('#party-opening-hint');const optional=form.querySelector('#party-optional-opening');
- function sync(){const selected=new Set(Array.from(currency.selectedOptions).map(o=>o.value));const enabled=!!optional?.open;rows.forEach(row=>{const active=enabled&&selected.has(row.dataset.currency);row.hidden=!active;row.querySelectorAll('input').forEach(input=>{input.disabled=!active;if(!active&&input.classList.contains('money-input')&&!selected.has(row.dataset.currency))input.value='';});});date.hidden=!enabled||!selected.size;date.querySelectorAll('input').forEach(input=>{input.disabled=!enabled||!selected.size;});hint.hidden=!enabled||!selected.size;}
- currency.addEventListener('change',sync);if(window.jQuery)window.jQuery(currency).on('change',sync);optional?.addEventListener('toggle',sync);sync();
+ document.querySelectorAll('[data-whatsapp-phone]').forEach(button=>button.addEventListener('click',()=>{
+  let number=(button.dataset.whatsappPhone||'').replace(/[^0-9]/g,'');
+  if(!number){return;}
+  if(number.startsWith('00'))number=number.slice(2);
+  // Afghanistan mobile numbers usually start with 0; convert to WhatsApp international format.
+  else if(/^0[0-9]{9}$/.test(number))number='93'+number.slice(1);
+  const message=button.dataset.whatsappMessage||'';
+  window.open('https://wa.me/'+number+'?text='+encodeURIComponent(message),'_blank','noopener,noreferrer');
+ }));
 });
 </script>
 @endsection
