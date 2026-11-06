@@ -9,7 +9,29 @@
 .sp-create-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}.sp-create-form label,.sp-edit-form label{display:grid;gap:6px;color:#355473;font-size:12px;font-weight:700}.sp-create-form input,.sp-create-form select,.sp-edit-form input{min-height:42px;width:100%;box-sizing:border-box;border:1px solid #d5e1ed;border-radius:8px;padding:9px 11px}.sp-create-form button{justify-self:end;grid-column:1/-1}.sp-create-form .sp-wide{grid-column:1/-1}
 .sp-dialog{width:min(520px,calc(100vw - 24px));max-height:87vh;border:1px solid #d9e5f2;border-radius:14px;padding:0;box-shadow:0 22px 70px #143c6555}.sp-dialog::backdrop{background:rgba(10,27,48,.55)}.sp-dialog-head{display:flex;justify-content:space-between;align-items:center;padding:17px 20px;border-bottom:1px solid #e5ebf3}.sp-dialog-head h2{margin:0;font-size:18px}.sp-dialog-head button{border:none;background:transparent;font-size:22px;cursor:pointer;color:#6b7f93}.sp-edit-form{padding:18px 20px;display:grid;grid-template-columns:1fr 1fr;gap:12px}.sp-dialog-footer{grid-column:1/-1;display:flex;gap:9px;justify-content:flex-end;margin-top:7px}.sp-dialog-footer button{min-height:38px}
 @media(max-width:720px){.sp-create-form,.sp-edit-form{grid-template-columns:1fr}.sp-create-form .sp-wide,.sp-create-form button{grid-column:1}.sp-table{min-width:820px}.sp-filter{flex-wrap:wrap}}
-.sp-status{display:inline-flex;padding:5px 9px;border-radius:30px;font-size:11px;font-weight:700}.sp-status.active{background:#e9f8ef;color:#167548}.sp-status.inactive{background:#f2f4f7;color:#67788d}.sp-table .sp-actions{flex-wrap:nowrap}@media(max-width:1050px){.sp-table .sp-actions{flex-wrap:wrap}}</style>
+.sp-status{display:inline-flex;padding:5px 9px;border-radius:30px;font-size:11px;font-weight:700}.sp-status.active{background:#e9f8ef;color:#167548}.sp-status.inactive{background:#f2f4f7;color:#67788d}.sp-table .sp-actions{flex-wrap:nowrap}@media(max-width:1050px){.sp-table .sp-actions{flex-wrap:wrap}}
+/* Consistent compact action buttons with accessible contrast and focus rings. */
+.sp-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.sp-actions .sp-action{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:9px 12px;min-height:36px;border:1px solid transparent;border-radius:10px;font-size:12px;line-height:1.2;font-weight:700;white-space:nowrap;text-decoration:none;transition:background .15s ease,transform .15s ease,border-color .15s ease,box-shadow .15s ease;box-sizing:border-box}
+.sp-actions .sp-action i{font-size:12px}
+.sp-actions .sp-action:hover:not(:disabled){transform:translateY(-1px)}
+.sp-actions .sp-action:focus-visible{outline:2px solid #397fd1;outline-offset:2px}
+.sp-action-edit{background:#eaf3ff!important;color:#1d5f9e!important;border-color:#c9dff6!important}
+.sp-action-edit:hover{background:#dcecff!important}
+.sp-action-statement{background:#eef2ff!important;color:#474b9c!important;border-color:#d9dcff!important}
+.sp-action-statement:hover{background:#e3e8ff!important}
+.sp-action-whatsapp{background:#e8f8ef!important;color:#177346!important;border-color:#bce8cf!important}
+.sp-action-whatsapp:hover:not(:disabled){background:#d9f3e6!important}
+.sp-action-delete{background:#fff1f1!important;color:#ad3540!important;border-color:#f2cdd1!important}
+.sp-action-delete:hover{background:#ffe2e4!important}
+.sp-actions .sp-action:disabled{opacity:.48;transform:none;cursor:not-allowed}
+.sp-edit-form textarea{width:100%;min-height:70px;box-sizing:border-box;border:1px solid #d5e1ed;border-radius:8px;padding:9px 11px;font:inherit}
+.sp-edit-form .sp-wide{grid-column:1/-1}
+.sp-create-form select[multiple]{min-height:43px}
+.sp-dialog{width:min(670px,calc(100vw - 24px))}
+.sp-create-form>button{min-height:42px;padding-inline:22px;border-radius:10px}
+@media(max-width:720px){.sp-table .sp-actions{flex-wrap:wrap}}
+</style>
 <div class="heading">
  <div><h1><i class="fa-solid {{ $type==='customer'?'fa-users':'fa-truck-field' }}"></i> {{ ucfirst($type) }}s</h1><p>Manage {{ $type }} details and view account balances.</p></div>
 </div>
@@ -22,7 +44,13 @@
  <form class="sp-create-form" data-new-entry-form="1" method="POST" action="{{ route('finance.parties.store') }}">
   @csrf<input type="hidden" name="type" value="{{ $type }}">
   <label>Name <span aria-hidden="true">*</span><input name="name" maxlength="180" required value="{{ old('name') }}" placeholder="{{ ucfirst($type) }} name"></label>
-  <label>Phone (optional)<input name="phone" maxlength="80" value="{{ old('phone') }}" placeholder="Phone / WhatsApp"></label>
+  <label>Code (optional)<input name="code" maxlength="40" value="{{ old('code') }}" placeholder="Account reference"></label>
+  <label>Contact person<input name="contact_person" maxlength="150" value="{{ old('contact_person') }}"></label>
+  <label>Phone / WhatsApp<input name="phone" maxlength="80" value="{{ old('phone') }}" placeholder="+93..."></label>
+  <label>Email<input type="email" name="email" maxlength="180" value="{{ old('email') }}"></label>
+  <label>Address<input name="address" maxlength="2000" value="{{ old('address') }}"></label>
+  <label>Currencies<select name="currency_ids[]" multiple>@foreach($currencies as $currency)<option value="{{ $currency->id }}" @selected(in_array($currency->id,old('currency_ids',[])))>{{ $currency->code }} — {{ $currency->name }}</option>@endforeach</select></label>
+  <label>Notes<input name="notes" maxlength="2000" value="{{ old('notes') }}"></label>
   <button class="btn" type="submit">Create {{ ucfirst($type) }}</button>
  </form>
  @endcanany
@@ -54,13 +82,13 @@
    <td>@forelse($lines as $line)<span class="sp-balance">{{ $line }}</span>@empty<span class="sp-muted">0.00</span>@endforelse</td>
    <td><div class="sp-actions">
     @canany(['administration.update','finance.update'])
-     <button class="sp-action" type="button" data-edit-party="{{ $party->id }}"><i class="fa-solid fa-pen"></i> Edit</button>
+     <button class="sp-action sp-action-edit" type="button" data-edit-party="{{ $party->id }}"><i class="fa-solid fa-pen"></i> Edit</button>
      <form method="POST" class="sp-delete-form" action="{{ route('finance.parties.destroy',$party) }}" data-name="{{ $party->name }}">@csrf @method('DELETE')
-      <button class="sp-action danger" type="submit"><i class="fa-solid fa-trash"></i> Delete</button>
+      <button class="sp-action sp-action-delete danger" type="submit"><i class="fa-solid fa-trash"></i> Delete</button>
      </form>
     @endcanany
-    <a class="sp-action" href="{{ route('finance.parties.statement',$party) }}"><i class="fa-solid fa-file-lines"></i> View Statement</a>
-    <button type="button" class="sp-action whatsapp" data-whatsapp-phone="{{ $party->phone }}" data-whatsapp-message="{{ $message }}" @if(!$party->phone) disabled title="Add a phone number first" @endif><i class="fa-brands fa-whatsapp"></i> WhatsApp</button>
+    <a class="sp-action sp-action-statement" href="{{ route('finance.parties.statement',$party) }}"><i class="fa-solid fa-file-lines"></i> View Statement</a>
+    <button type="button" class="sp-action sp-action-whatsapp whatsapp" data-whatsapp-phone="{{ $party->phone }}" data-whatsapp-message="{{ $message }}" @if(!$party->phone) disabled title="Add a phone number first" @endif><i class="fa-brands fa-whatsapp"></i> WhatsApp</button>
    </div></td>
   </tr>
  @empty
@@ -78,7 +106,12 @@
  <form class="sp-edit-form" method="POST" action="{{ route($type==='customer'?'finance.customers.update':'finance.suppliers.update',$party) }}">
   @csrf @method('PATCH')
   <label>Name <span aria-hidden="true">*</span><input name="name" required maxlength="180" value="{{ $party->name }}"></label>
-  <label>Phone (optional)<input name="phone" maxlength="80" value="{{ $party->phone }}"></label>
+  <label>Code<input name="code" maxlength="40" value="{{ $party->code }}"></label>
+  <label>Contact person<input name="contact_person" maxlength="150" value="{{ $party->contact_person }}"></label>
+  <label>Phone / WhatsApp<input name="phone" maxlength="80" value="{{ $party->phone }}"></label>
+  <label>Email<input name="email" type="email" maxlength="180" value="{{ $party->email }}"></label>
+  <label>Address<input name="address" maxlength="2000" value="{{ $party->address }}"></label>
+  <label class="sp-wide">Notes<textarea name="notes" maxlength="2000" rows="2">{{ $party->notes }}</textarea></label>
   <div class="sp-dialog-footer"><button type="button" class="sp-action" data-close-dialog>Cancel</button><button class="btn" type="submit">Save Changes</button></div>
  </form>
 </dialog>
