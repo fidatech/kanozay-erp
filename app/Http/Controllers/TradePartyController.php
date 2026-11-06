@@ -120,7 +120,7 @@ class TradePartyController extends Controller {
     fputcsv($out,['Currency','Opening Balance','Closing Balance']);
     foreach($currencies as $currency){
      if(!empty($filters['currency_id']) && (int)$filters['currency_id']!==$currency->id)continue;
-     fputcsv($out,[$currency->code,(string)($opening[$currency->id]??BigDecimal::zero()),(string)($running[$currency->id]??BigDecimal::zero())]);
+     fputcsv($out,[$currency->code,(string)($opening[$currency->id]??BigDecimal::zero())->toScale(4),(string)($running[$currency->id]??BigDecimal::zero())->toScale(4)]);
     }
     fclose($out);
    },$filename,['Content-Type'=>'text/csv; charset=UTF-8']);
