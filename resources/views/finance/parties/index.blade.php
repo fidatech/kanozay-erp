@@ -60,6 +60,24 @@
 .party-register-amount{display:inline-flex;align-items:center;gap:5px;font-weight:750;font-variant-numeric:tabular-nums;background:none!important;border:0!important;padding:0!important}
 .party-register-amount.incoming{color:#15803d!important}.party-register-amount.outgoing{color:#dc2626!important}
 .party-register-amount i{font-size:11px}
+
+/* Keep party register compact: opening balances are edited in a separate dialog. */
+.party-list .table-wrap table tbody td{vertical-align:middle}
+.party-register-empty{font-size:12px;color:#8b9aab}
+.party-opening-trigger{display:inline-flex;gap:6px;align-items:center;white-space:nowrap;border:1px solid #c9dff5;background:#edf6ff;color:#175d9d;padding:7px 11px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;margin-top:5px}
+.party-opening-trigger:hover{background:#e0efff}
+.party-opening-dialog{width:min(520px,calc(100vw - 30px));max-height:85vh;overflow:auto;padding:0;border:1px solid #dbe6f2;border-radius:15px;background:#fff;box-shadow:0 26px 70px #183b6550}
+.party-opening-dialog::backdrop{background:rgba(8,25,48,.6)}
+.party-opening-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:18px 20px;border-bottom:1px solid #e5ecf4}
+.party-opening-modal-head h3{font-size:18px;margin:0;color:#183f67}
+.party-opening-modal-head p{font-size:12px;color:#768ba0;margin:4px 0 0}
+.party-opening-close{border:0;background:transparent;font-size:24px;color:#6f8197;cursor:pointer}
+.party-opening-modal-form{display:grid;gap:13px;padding:19px 20px}
+.party-opening-modal-form .party-existing-help{display:flex;gap:15px;flex-wrap:wrap}
+.party-opening-modal-form>select,.party-opening-modal-form>input{width:100%;min-height:42px;max-width:none;border:1px solid #d9e5f1;border-radius:9px;padding:9px 12px;background:#fff}
+.party-opening-modal-form .balance-direction{display:flex;gap:10px}
+.party-opening-modal-form .btn{justify-self:end;min-width:110px}
+@media(max-width:600px){.party-opening-modal-head{padding:14px}.party-opening-modal-form{padding:14px}}
 </style>
 <div class="heading"><div><h1><i class="fa-solid {{ $type==='customer'?'fa-users':'fa-truck-field' }}"></i> {{ $type==='customer'?'Customers':'Suppliers' }}</h1><p>{{ $type==='customer'?'Manage customer profiles, currencies and opening receivables.':'Manage supplier profiles, currencies and opening payables.' }}</p></div></div>
 @if($errors->any())<div class="panel" data-form-errors style="color:#b42318">{{ $errors->first() }}</div>@endif
@@ -75,11 +93,34 @@
 <button class="btn" type="submit">Create {{ ucfirst($type) }}</button></form>@endcan</section>
 <section class="panel"><h2>{{ ucfirst($type) }} Register</h2><form method="GET" action="{{ $type==='customer'?route('finance.customers.index'):route('finance.suppliers.index') }}" class="party-search" style="display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin:12px 0 18px"><label for="party-search-input" class="sr-only">Search {{ $type }} records</label><input id="party-search-input" type="search" name="search" value="{{ request('search') }}" placeholder="Search by name, code, phone or email" maxlength="180" style="flex:1;min-width:200px;min-height:40px;padding:9px 13px;border:1px solid #d8e4f1;border-radius:9px"><button class="btn" type="submit">Search</button>@if(request()->filled('search'))<a class="btn" href="{{ $type==='customer'?route('finance.customers.index'):route('finance.suppliers.index') }}" style="background:#eef3f9;color:#365475">Clear</a>@endif</form><div class="table-wrap"><table><thead><tr><th>Code</th><th>Name</th><th>Phone</th><th>Address</th><th>Email</th><th>Currencies</th><th>Opening Balance</th></thead><tbody>@forelse($parties as $party)<tr><td>{{ $party->code ?: '—' }}</td><td><a href="{{ route($type==='customer'?'finance.customers.show':'finance.suppliers.show',$party) }}"><strong>{{ $party->name }}</strong></a></td><td>{{ $party->phone ?: '—' }}</td><td>{{ $party->address ?: '—' }}</td><td>{{ $party->email ?: '—' }}</td><td>{{ $party->currencies->pluck('code')->join(', ') }}</td><td>@foreach($openingBalances->get($party->id,collect()) as $balance)<div class="party-register-balance"><strong class="party-register-currency">{{ $party->currencies->firstWhere('id',$balance->currency_id)?->code }}</strong> <span class="party-register-amount {{ ($party->type==='customer') === (\Brick\Math\BigDecimal::of((string)$balance->amount)->compareTo(\Brick\Math\BigDecimal::zero())>0) ? 'incoming' : 'outgoing' }}" title="{{ ($party->type==='customer') === (\Brick\Math\BigDecimal::of((string)$balance->amount)->compareTo(\Brick\Math\BigDecimal::zero())>0) ? 'Debit — They owe us' : 'Credit — We owe them' }}"><i class="fa-solid {{ ($party->type==='customer') === (\Brick\Math\BigDecimal::of((string)$balance->amount)->compareTo(\Brick\Math\BigDecimal::zero())>0) ? 'fa-arrow-down' : 'fa-arrow-up' }}" aria-hidden="true"></i> <x-finance-amount :amount="\Brick\Math\BigDecimal::of((string)$balance->amount)->abs()" /></span></div>@endforeach
 @can('administration.update')
-@if($party->currencies->count()>$openingBalances->get($party->id,collect())->count())<form class="party-opening-existing" method="POST" action="{{ route('finance.parties.opening.store',$party) }}">@csrf<div class="party-existing-help"><span class="party-help-debit">Debit = They owe us</span><span class="party-help-credit">Credit = We owe them</span></div><select name="currency_id" required><option value="">Currency</option>@foreach($party->currencies as $currency)@unless($openingBalances->get($party->id,collect())->contains('currency_id',$currency->id))<option value="{{ $currency->id }}">{{ $currency->code }}</option>@endunless
-@endforeach</select><div class="balance-direction" role="group" aria-label="Debit or credit"><button type="button" class="direction-choice incoming" data-direction="they_owe_us" title="Debit — They owe us" aria-label="Debit — They owe us" aria-pressed="false"><span>Debit</span></button><button type="button" class="direction-choice outgoing" data-direction="we_owe_them" title="Credit — We owe them" aria-label="Credit — We owe them" aria-pressed="false"><span>Credit</span></button><input type="hidden" name="direction" value="{{ $party->type==='customer'?'they_owe_us':'we_owe_them' }}"></div><input type="text" inputmode="decimal" autocomplete="off" class="money-input" name="amount" placeholder="Amount" required><input type="date" name="balance_date" value="{{ date('Y-m-d') }}" required><button type="submit" class="btn">Post</button></form>@endif
+@if($party->currencies->count()>$openingBalances->get($party->id,collect())->count())
+<button type="button" class="party-opening-trigger" data-open-party="{{ $party->id }}"><i class="fa-solid fa-plus"></i> Set opening balance</button>
+@elseif($openingBalances->get($party->id,collect())->isEmpty())
+<span class="party-register-empty">No opening balance</span>
+@endif
 @endcan</td></tr>@empty<tr><td colspan="7"><div class="k-empty-state"><strong>No {{ $type }} records yet</strong><p>Add a {{ $type }} to create its linked ledger accounts.</p></div></td></tr>@endforelse</tbody></table></div>{{ $parties->links() }}</section></div>
+
+@can('administration.update')
+@foreach($parties as $party)
+@if($party->currencies->count()>$openingBalances->get($party->id,collect())->count())
+<dialog id="party-opening-dialog-{{ $party->id }}" class="party-opening-dialog" aria-labelledby="party-opening-title-{{ $party->id }}">
+ <div class="party-opening-modal-head">
+  <div><h3 id="party-opening-title-{{ $party->id }}">Opening Balance</h3><p>{{ $party->name }} · {{ ucfirst($party->type) }}</p></div>
+  <button type="button" class="party-opening-close" data-close-party aria-label="Close">×</button>
+ </div>
+ <form class="party-opening-modal-form" method="POST" action="{{ route('finance.parties.opening.store',$party) }}">@csrf<div class="party-existing-help"><span class="party-help-debit">Debit = They owe us</span><span class="party-help-credit">Credit = We owe them</span></div><select name="currency_id" required><option value="">Currency</option>@foreach($party->currencies as $currency)@unless($openingBalances->get($party->id,collect())->contains('currency_id',$currency->id))<option value="{{ $currency->id }}">{{ $currency->code }}</option>@endunless
+@endforeach</select><div class="balance-direction" role="group" aria-label="Debit or credit"><button type="button" class="direction-choice incoming" data-direction="they_owe_us" title="Debit — They owe us" aria-label="Debit — They owe us" aria-pressed="false"><span>Debit</span></button><button type="button" class="direction-choice outgoing" data-direction="we_owe_them" title="Credit — We owe them" aria-label="Credit — We owe them" aria-pressed="false"><span>Credit</span></button><input type="hidden" name="direction" value="{{ $party->type==='customer'?'they_owe_us':'we_owe_them' }}"></div><input type="text" inputmode="decimal" autocomplete="off" class="money-input" name="amount" placeholder="Amount" required><input type="date" name="balance_date" value="{{ date('Y-m-d') }}" required><button type="submit" class="btn">Post</button></form>
+</dialog>
+@endif
+@endforeach
+@endcan
 <script>
 document.addEventListener('DOMContentLoaded',function(){
+ document.querySelectorAll('[data-open-party]').forEach(button=>button.addEventListener('click',()=>{
+  document.getElementById('party-opening-dialog-'+button.dataset.openParty)?.showModal();
+ }));
+ document.querySelectorAll('[data-close-party]').forEach(button=>button.addEventListener('click',()=>button.closest('dialog')?.close()));
+
  const form=document.querySelector('form.party-form');
  const normalizeDigits=value=>String(value).replace(/[٠-٩]/g,c=>String(c.charCodeAt(0)-0x660)).replace(/[۰-۹]/g,c=>String(c.charCodeAt(0)-0x6f0)).replace(/[٫]/g,'.').replace(/[٬،]/g,',');
  const canonical=value=>normalizeDigits(value).replace(/,/g,'').replace(/[^0-9.]/g,'').replace(/(\..*)\./g,'$1').replace(/^(\d*\.\d{0,4}).*$/,'$1');
