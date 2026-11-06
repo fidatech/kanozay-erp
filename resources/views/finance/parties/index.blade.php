@@ -31,6 +31,15 @@
 .sp-dialog{width:min(670px,calc(100vw - 24px))}
 .sp-create-form>button{min-height:42px;padding-inline:22px;border-radius:10px}
 @media(max-width:720px){.sp-table .sp-actions{flex-wrap:wrap}}
+
+.sp-add-currency-form{padding:14px 20px 20px;border-top:1px solid #edf1f6;background:#f9fbff}
+.sp-add-currency-form label{font-size:12px;color:#355473;font-weight:700;display:block;margin-bottom:8px}
+.sp-currency-controls{display:flex;align-items:center;gap:9px}
+.sp-currency-controls select{flex:1;min-width:0;min-height:40px;border:1px solid #d5e1ed;border-radius:8px;padding:8px 11px;background:#fff}
+.sp-add-currency-btn{min-height:40px;border-radius:9px;border:1px solid #bfdbfe;background:#e8f2ff;color:#215e99;font-size:12px;font-weight:750;padding:8px 13px;cursor:pointer;white-space:nowrap}
+.sp-add-currency-btn:hover{background:#dcecff}
+.sp-add-currency-btn:focus-visible{outline:2px solid #397fd1;outline-offset:2px}
+@media(max-width:480px){.sp-currency-controls{flex-direction:column;align-items:stretch}}
 </style>
 <div class="heading">
  <div><h1><i class="fa-solid {{ $type==='customer'?'fa-users':'fa-truck-field' }}"></i> {{ ucfirst($type) }}s</h1><p>Manage {{ $type }} details and view account balances.</p></div>
@@ -114,6 +123,17 @@
   <label class="sp-wide">Notes<textarea name="notes" maxlength="2000" rows="2">{{ $party->notes }}</textarea></label>
   <div class="sp-dialog-footer"><button type="button" class="sp-action" data-close-dialog>Cancel</button><button class="btn" type="submit">Save Changes</button></div>
  </form>
+ @php($availableCurrencies=$currencies->reject(fn($currency)=>$party->currencies->contains('id',$currency->id)))
+ @if($availableCurrencies->isNotEmpty())
+ <form class="sp-add-currency-form" method="POST" action="{{ route('finance.parties.currencies.store',$party) }}">
+  @csrf
+  <label for="sp-add-currency-{{ $party->id }}">Add another currency</label>
+  <div class="sp-currency-controls"><select id="sp-add-currency-{{ $party->id }}" name="currency_id" required>
+   <option value="">Choose currency</option>
+   @foreach($availableCurrencies as $currency)<option value="{{ $currency->id }}">{{ $currency->code }} — {{ $currency->name }}</option>@endforeach
+  </select><button class="sp-add-currency-btn" type="submit"><i class="fa-solid fa-plus"></i> Enable</button></div>
+ </form>
+ @endif
 </dialog>
 @endforeach
 @endcanany
