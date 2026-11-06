@@ -118,6 +118,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/finance/customers/{party}', [\App\Http\Controllers\TradePartyController::class,'showCustomer'])->name('finance.customers.show');
     Route::get('/finance/suppliers/{party}', [\App\Http\Controllers\TradePartyController::class,'showSupplier'])->name('finance.suppliers.show');
     Route::get('/finance/parties/{party}/statement', [\App\Http\Controllers\TradePartyController::class,'statement'])->name('finance.parties.statement');
+    Route::get('/finance/parties/{party}/statement.csv', [\App\Http\Controllers\TradePartyController::class,'statement'])->name('finance.parties.statement.export');
     Route::delete('/finance/parties/{party}', [\App\Http\Controllers\TradePartyController::class,'destroy'])->name('finance.parties.destroy');
     Route::patch('/finance/customers/{party}', [\App\Http\Controllers\TradePartyController::class,'updateCustomer'])->name('finance.customers.update');
     Route::patch('/finance/suppliers/{party}', [\App\Http\Controllers\TradePartyController::class,'updateSupplier'])->name('finance.suppliers.update');
