@@ -54,17 +54,37 @@ class TradePartyController extends Controller {
  }
  public function statement(Request $request,TradeParty $party){
   abort_unless($request->user()->canAny(['administration.view','finance.view','reports.view']),403);
-  $filters=$request->validate(['currency_id'=>['nullable','integer','exists:currencies,id']]);
+  $filters=$request->validate([
+   'currency_id'=>['nullable','integer','exists:currencies,id'],
+   'from'=>['nullable','date'],
+   'to'=>['nullable','date','after_or_equal:from'],
+  ]);
   $party->load('currencies');
+  if(!empty($filters['currency_id']) && !$party->currencies->contains('id',(int)$filters['currency_id'])){
+   throw ValidationException::withMessages(['currency_id'=>'Choose a currency enabled for this account.']);
+  }
   $links=DB::table('entity_ledger_accounts')->where('entity_type',$party->type)->where('entity_id',$party->id)
    ->whereIn('purpose',['receivable','payable','advance'])->get();
   $query=DB::table('journal_lines as l')->join('journal_entries as j','j.id','=','l.journal_entry_id')
    ->where('j.status','posted')->whereIn('l.ledger_account_id',$links->pluck('ledger_account_id')->all());
   if(!empty($filters['currency_id']))$query->where('j.currency_id',$filters['currency_id']);
+  $opening=[];$running=[];$rows=[];
+  if(!empty($filters['from'])){
+   $prior=(clone $query)->where('j.entry_date','<',$filters['from'])
+    ->select('j.currency_id')->selectRaw('SUM(l.debit) as debit_total,SUM(l.credit) as credit_total')
+    ->groupBy('j.currency_id')->get();
+   foreach($prior as $item){
+    $amount=BigDecimal::of((string)$item->debit_total)->minus((string)$item->credit_total);
+    if($party->type==='supplier')$amount=$amount->negated();
+    $opening[$item->currency_id]=$amount;
+    $running[$item->currency_id]=$amount;
+   }
+   $query->where('j.entry_date','>=',$filters['from']);
+  }
+  if(!empty($filters['to']))$query->where('j.entry_date','<=',$filters['to']);
   $entries=$query->select('l.id','l.ledger_account_id','l.debit','l.credit','j.number','j.entry_date','j.description','j.currency_id')
    ->orderBy('j.entry_date')->orderBy('j.id')->orderBy('l.id')->get();
   $currencies=Currency::whereIn('id',$party->currencies->pluck('id'))->get()->keyBy('id');
-  $running=[];$rows=[];
   foreach($entries as $entry){
    $id=(int)$entry->currency_id;
    $delta=BigDecimal::of((string)$entry->debit)->minus((string)$entry->credit);
@@ -72,7 +92,40 @@ class TradePartyController extends Controller {
    $running[$id]=($running[$id]??BigDecimal::zero())->plus($delta);
    $rows[]=['entry'=>$entry,'movement'=>$delta,'balance'=>$running[$id]];
   }
-  return view('finance.parties.statement',compact('party','currencies','rows','running','filters'));
+  if($request->routeIs('finance.parties.statement.export')){
+   $safeName=preg_replace('/[^A-Za-z0-9_-]+/','-',strtolower($party->name)) ?: 'account';
+   $filename=$party->type.'-'.$safeName.'-statement.csv';
+   return response()->streamDownload(function()use($party,$filters,$currencies,$opening,$running,$rows){
+    $out=fopen('php://output','w');
+    // Prefix dynamic text fields with a quote to prevent spreadsheet formula execution.
+    $safe=static function($value):string{
+     $value=(string)$value;
+     return preg_match('/^[\s]*[=+\-@]/u',$value)?"'".$value:$value;
+    };
+    fputcsv($out,['Account',$safe($party->name)]);
+    fputcsv($out,['Type',ucfirst($party->type)]);
+    fputcsv($out,['From',$filters['from']??'Beginning']);
+    fputcsv($out,['To',$filters['to']??'Latest']);
+    fputcsv($out,[]);
+    fputcsv($out,['Date','Journal','Description','Currency','Debit','Credit','Running Balance']);
+    foreach($rows as $row){
+     $entry=$row['entry'];
+     fputcsv($out,[
+      $entry->entry_date,$safe($entry->number),$safe($entry->description),
+      $currencies[$entry->currency_id]->code??'',
+      (string)$entry->debit,(string)$entry->credit,(string)$row['balance'],
+     ]);
+    }
+    fputcsv($out,[]);
+    fputcsv($out,['Currency','Opening Balance','Closing Balance']);
+    foreach($currencies as $currency){
+     if(!empty($filters['currency_id']) && (int)$filters['currency_id']!==$currency->id)continue;
+     fputcsv($out,[$currency->code,(string)($opening[$currency->id]??BigDecimal::zero()),(string)($running[$currency->id]??BigDecimal::zero())]);
+    }
+    fclose($out);
+   },$filename,['Content-Type'=>'text/csv; charset=UTF-8']);
+  }
+  return view('finance.parties.statement',compact('party','currencies','rows','running','opening','filters'));
  }
  public function destroy(Request $request,TradeParty $party){
   abort_unless($request->user()->canAny(['administration.update','finance.update']),403);
