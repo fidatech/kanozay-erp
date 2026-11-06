@@ -82,7 +82,6 @@ class TradePartyController extends Controller {
    if(DB::table('trade_documents')->where('trade_party_id',$party->id)->exists()
     || DB::table('trade_opening_balances')->where('trade_party_id',$party->id)->exists()
     || DB::table('reconciliation_cases')->where('trade_party_id',$party->id)->exists()
-    || DB::table('trade_settlement_allocations')->where('trade_party_id',$party->id)->exists()
     || DB::table('journal_lines')->whereIn('ledger_account_id',$links->pluck('ledger_account_id'))->exists()
     || DB::table('money_transactions')->whereIn('counterpart_ledger_account_id',$links->pluck('ledger_account_id'))->exists()){
     throw ValidationException::withMessages(['party'=>'This account has financial history and cannot be deleted.']);
