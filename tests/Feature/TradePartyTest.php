@@ -216,4 +216,35 @@ class TradePartyTest extends TestCase {
   $this->assertDatabaseCount('journal_entries',0);
  }
 
+ public function test_customer_edit_dialog_can_enable_another_currency_without_opening_balance():void {
+  [$user,$afn,$usd]=$this->makeFixtures();
+  $this->actingAs($user)->post(route('finance.parties.store'),[
+   'type'=>'customer','name'=>'Currency Customer','currency_ids'=>[$afn->id]
+  ])->assertRedirect();
+  $party=TradeParty::sole();
+  $this->actingAs($user)->get(route('finance.customers.index'))->assertOk()
+   ->assertSee('Add another currency')
+   ->assertSee(route('finance.parties.currencies.store',$party),false)
+   ->assertSee('name="currency_id"',false);
+  $this->actingAs($user)->post(route('finance.parties.currencies.store',$party),[
+   'currency_id'=>$usd->id
+  ])->assertRedirect();
+  $this->assertCount(2,$party->fresh()->currencies);
+  $this->assertDatabaseCount('entity_ledger_accounts',4);
+  $this->assertDatabaseCount('journal_entries',0);
+  $this->assertDatabaseCount('trade_opening_balances',0);
+ }
+ public function test_cannot_enable_inactive_party_currency():void {
+  [$user,$afn,$usd]=$this->makeFixtures();
+  $this->actingAs($user)->post(route('finance.parties.store'),[
+   'type'=>'supplier','name'=>'Inactive Currency Supplier','currency_ids'=>[$afn->id]
+  ])->assertRedirect();
+  $party=TradeParty::sole();
+  $usd->update(['is_active'=>false]);
+  $this->actingAs($user)->post(route('finance.parties.currencies.store',$party),[
+   'currency_id'=>$usd->id
+  ])->assertSessionHasErrors('currency_id');
+  $this->assertCount(1,$party->fresh()->currencies);
+ }
+
 }
