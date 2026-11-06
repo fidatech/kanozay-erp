@@ -43,4 +43,30 @@ class TradePartyTest extends TestCase {
  public function test_blank_opening_amount_creates_no_journal():void {[$user,$afn]=$this->makeFixtures();$before=\Illuminate\Support\Facades\DB::table('journal_entries')->count();$this->actingAs($user)->post(route('finance.parties.store'),['type'=>'customer','name'=>'No Opening Balance Customer','currency_ids'=>[$afn->id],'opening_balances'=>[$afn->id=>''],'opening_directions'=>[$afn->id=>'they_owe_us'],'opening_date'=>'2026-10-25'])->assertRedirect();$this->assertSame($before,\Illuminate\Support\Facades\DB::table('journal_entries')->count());$this->assertDatabaseCount('trade_opening_balances',0);}
  public function test_unselected_opening_currency_rolls_back_creation():void {[$user,$afn,$usd]=$this->makeFixtures();$this->actingAs($user)->post(route('finance.parties.store'),['type'=>'customer','name'=>'Invalid Opening','currency_ids'=>[$afn->id],'opening_date'=>'2026-10-25','opening_balances'=>[$usd->id=>'100']])->assertSessionHasErrors('opening_balances');$this->assertDatabaseCount('trade_parties',0);}
  public function test_invalid_currency_does_not_create_party():void {[$user]=$this->makeFixtures();$this->actingAs($user)->post(route('finance.parties.store'),['type'=>'customer','name'=>'Test','currency_ids'=>[999]])->assertSessionHasErrors('currency_ids.0');$this->assertDatabaseCount('trade_parties',0);}
+ public function test_new_customer_register_has_compact_row_and_opening_balance_modal():void {
+  [$user,$afn,$usd]=$this->makeFixtures();
+  $this->actingAs($user)->post(route('finance.parties.store'),[
+   'type'=>'customer','name'=>'Jamil','currency_ids'=>[$afn->id,$usd->id],
+  ])->assertRedirect();
+  $party=TradeParty::sole();
+  $this->actingAs($user)->get(route('finance.customers.index'))->assertOk()
+   ->assertSee('Customer Register')
+   ->assertSee('Jamil')
+   ->assertSee('data-open-party="'.$party->id.'"',false)
+   ->assertSee('id="party-opening-dialog-'.$party->id.'"',false)
+   ->assertSee('class="party-opening-modal-form"',false)
+   ->assertDontSee('class="party-opening-existing"',false);
+  $this->assertDatabaseCount('trade_opening_balances',0);
+ }
+ public function test_supplier_register_has_compact_opening_balance_editor():void {
+  [$user,$afn]=$this->makeFixtures();
+  $this->actingAs($user)->post(route('finance.parties.store'),[
+   'type'=>'supplier','name'=>'Supplier A','currency_ids'=>[$afn->id],
+  ])->assertRedirect();
+  $this->actingAs($user)->get(route('finance.suppliers.index'))->assertOk()
+   ->assertSee('Supplier Register')
+   ->assertSee('party-opening-trigger')
+   ->assertSee('party-opening-modal-form');
+ }
+
 }
