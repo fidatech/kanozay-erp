@@ -64,6 +64,10 @@ class ModulePageController extends Controller
             return app(PurchaseOrderController::class)->index($request);
         }
 
+        if ($module === 'reports' && $page !== 'overview') {
+            return app(ReportCenterController::class)->show($request, $page);
+        }
+
         if ($page === 'overview') {
             $snapshot = function (string $partyType, string $documentType): array {
                 $baseQuery = \App\Models\TradeDocument::query()->where('type', $documentType);

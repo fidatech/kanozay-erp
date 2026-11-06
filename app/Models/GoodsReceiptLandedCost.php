@@ -15,6 +15,11 @@ class GoodsReceiptLandedCost extends Model
         static::deleting(fn () => throw new LogicException('Landed-cost snapshots cannot be deleted.'));
     }
 
+    public function receipt()
+    {
+        return $this->belongsTo(GoodsReceipt::class, 'goods_receipt_id');
+    }
+
     public function allocations()
     {
         return $this->hasMany(GoodsReceiptLandedCostAllocation::class);

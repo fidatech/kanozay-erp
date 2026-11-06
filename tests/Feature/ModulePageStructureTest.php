@@ -34,10 +34,16 @@ class ModulePageStructureTest extends TestCase
                     $module === 'manufacturing' && $page === 'recipes' => 'Production Recipes',
                     $module === 'manufacturing' && $page === 'orders' => 'Production Orders',
                     $module === 'shareholders' && in_array($page, ['register', 'capital', 'statements'], true) => 'Shareholder Register',
+                    $module === 'reports' && $page === 'profit-loss' => 'Profit and Loss',
+                    $module === 'reports' && $page === 'balance-sheet' => 'Balance Sheet',
+                    $module === 'reports' && $page === 'cash-flow' => 'Cash, Bank and Sarafi Movements',
+                    $module === 'reports' => 'Report register',
                     default => 'Workflow pending',
                 };
                 $this->actingAs($user)->get(route('workspace.page',[$module,$page]))
-                    ->assertOk()->assertSee($page === 'overview' ? $data['label'] : $label)
+                    ->assertOk()
+                    ->assertSee($module === 'reports' && in_array($page, ['profit-loss', 'cash-flow'], true)
+                        ? $expectedContent : ($page === 'overview' ? $data['label'] : $label))
                     ->assertSee($expectedContent);
             }
         }
