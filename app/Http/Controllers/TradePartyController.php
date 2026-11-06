@@ -5,6 +5,8 @@ use App\Services\Accounting\TradeOpeningBalanceService;
 use App\Services\Accounting\JournalPostingService;
 use App\Models\Currency;
 use App\Models\TradeParty;
+use Brick\Math\BigDecimal;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -24,7 +26,82 @@ class TradePartyController extends Controller {
  private function show(Request $request,TradeParty $party,string $type){abort_unless($request->user()->canAny(['administration.view', 'finance.view', 'reports.view']),403);abort_unless($party->type===$type,404);$party->load('currencies');$documents=\App\Models\TradeDocument::with('credits')->where('trade_party_id',$party->id)->where('type',$type==='customer'?'receivable':'payable')->orderByDesc('id')->limit(20)->get();$documents->each(function($document){$credit=\Brick\Math\BigDecimal::zero();foreach($document->credits as $item)$credit=$credit->plus((string)$item->amount);$document->setAttribute('net_amount',(string)\Brick\Math\BigDecimal::of((string)$document->amount)->minus($credit));});return view('finance.parties.show',['party'=>$party,'type'=>$type,'openingBalances'=>DB::table('trade_opening_balances')->where('trade_party_id',$party->id)->get(),'documents'=>$documents]);}
  public function customers(Request $request){$request->merge(['type'=>'customer']);return $this->index($request);}
  public function suppliers(Request $request){$request->merge(['type'=>'supplier']);return $this->index($request);}
- public function index(Request $request){abort_unless($request->user()->canAny(['administration.view', 'finance.view', 'reports.view']),403);$type=$request->validate(['type'=>['nullable',Rule::in(['customer','supplier'])]])['type']??'customer';return view('finance.parties.index',['type'=>$type,'parties'=>TradeParty::with('currencies')->where('type',$type)->when($request->filled('search'),function($query)use($request){$search=trim((string)$request->input('search'));$query->where(function($q)use($search){$q->where('name','like','%'.$search.'%')->orWhere('code','like','%'.$search.'%')->orWhere('phone','like','%'.$search.'%')->orWhere('email','like','%'.$search.'%');});})->latest()->paginate(25)->withQueryString(),'currencies'=>Currency::where('is_active',true)->orderBy('code')->get(),'openingBalances'=>DB::table('trade_opening_balances')->get()->groupBy('trade_party_id')]);}
+ public function index(Request $request){
+  abort_unless($request->user()->canAny(['administration.view','finance.view','reports.view']),403);
+  $type=$request->validate(['type'=>['nullable',Rule::in(['customer','supplier'])]])['type']??'customer';
+  $parties=TradeParty::with('currencies')->where('type',$type)->when($request->filled('search'),function($query)use($request){
+   $term=trim((string)$request->input('search'));
+   $query->where(fn($q)=>$q->where('name','like','%'.$term.'%')->orWhere('code','like','%'.$term.'%')->orWhere('phone','like','%'.$term.'%')->orWhere('email','like','%'.$term.'%'));
+  })->latest()->paginate(25)->withQueryString();
+  $ids=$parties->getCollection()->pluck('id')->all();
+  $links=DB::table('entity_ledger_accounts')->where('entity_type',$type)->whereIn('entity_id',$ids)
+   ->whereIn('purpose',['receivable','payable','advance'])->get(['entity_id','currency_id','ledger_account_id']);
+  $posted=DB::table('journal_lines as l')->join('journal_entries as j','j.id','=','l.journal_entry_id')
+   ->where('j.status','posted')->whereIn('l.ledger_account_id',$links->pluck('ledger_account_id')->all())
+   ->select('l.ledger_account_id','j.currency_id')->selectRaw('SUM(l.debit) as debit_total, SUM(l.credit) as credit_total')
+   ->groupBy('l.ledger_account_id','j.currency_id')->get()->keyBy(fn($r)=>$r->ledger_account_id.':'.$r->currency_id);
+  $partyBalances=[];
+  foreach($links as $link){
+   $row=$posted->get($link->ledger_account_id.':'.$link->currency_id);
+   $movement=BigDecimal::of((string)($row->debit_total??'0'))->minus((string)($row->credit_total??'0'));
+   if($type==='supplier')$movement=$movement->negated();
+   $partyBalances[$link->entity_id][$link->currency_id]=($partyBalances[$link->entity_id][$link->currency_id]??BigDecimal::zero())->plus($movement);
+  }
+  return view('finance.parties.index',[
+   'type'=>$type,'parties'=>$parties,'currencies'=>Currency::where('is_active',true)->orderBy('code')->get(),
+   'partyBalances'=>$partyBalances,
+  ]);
+ }
+ public function statement(Request $request,TradeParty $party){
+  abort_unless($request->user()->canAny(['administration.view','finance.view','reports.view']),403);
+  $filters=$request->validate(['currency_id'=>['nullable','integer','exists:currencies,id']]);
+  $party->load('currencies');
+  $links=DB::table('entity_ledger_accounts')->where('entity_type',$party->type)->where('entity_id',$party->id)
+   ->whereIn('purpose',['receivable','payable','advance'])->get();
+  $query=DB::table('journal_lines as l')->join('journal_entries as j','j.id','=','l.journal_entry_id')
+   ->where('j.status','posted')->whereIn('l.ledger_account_id',$links->pluck('ledger_account_id')->all());
+  if(!empty($filters['currency_id']))$query->where('j.currency_id',$filters['currency_id']);
+  $entries=$query->select('l.id','l.ledger_account_id','l.debit','l.credit','j.number','j.entry_date','j.description','j.currency_id')
+   ->orderBy('j.entry_date')->orderBy('j.id')->orderBy('l.id')->get();
+  $currencies=Currency::whereIn('id',$party->currencies->pluck('id'))->get()->keyBy('id');
+  $running=[];$rows=[];
+  foreach($entries as $entry){
+   $id=(int)$entry->currency_id;
+   $delta=BigDecimal::of((string)$entry->debit)->minus((string)$entry->credit);
+   if($party->type==='supplier')$delta=$delta->negated();
+   $running[$id]=($running[$id]??BigDecimal::zero())->plus($delta);
+   $rows[]=['entry'=>$entry,'movement'=>$delta,'balance'=>$running[$id]];
+  }
+  return view('finance.parties.statement',compact('party','currencies','rows','running','filters'));
+ }
+ public function destroy(Request $request,TradeParty $party){
+  abort_unless($request->user()->canAny(['administration.update','finance.update']),403);
+  DB::transaction(function()use($party){
+   $party=TradeParty::whereKey($party->id)->lockForUpdate()->firstOrFail();
+   $links=DB::table('entity_ledger_accounts')->where('entity_type',$party->type)->where('entity_id',$party->id)->get();
+   if(DB::table('trade_documents')->where('trade_party_id',$party->id)->exists()
+    || DB::table('trade_opening_balances')->where('trade_party_id',$party->id)->exists()
+    || DB::table('reconciliation_cases')->where('trade_party_id',$party->id)->exists()
+    || DB::table('trade_settlement_allocations')->where('trade_party_id',$party->id)->exists()
+    || DB::table('journal_lines')->whereIn('ledger_account_id',$links->pluck('ledger_account_id'))->exists()
+    || DB::table('money_transactions')->whereIn('counterpart_ledger_account_id',$links->pluck('ledger_account_id'))->exists()){
+    throw ValidationException::withMessages(['party'=>'This account has financial history and cannot be deleted.']);
+   }
+   try{
+    foreach($links as $link){
+     DB::table('entity_ledger_accounts')->where('entity_type',$party->type)->where('entity_id',$party->id)
+      ->where('currency_id',$link->currency_id)->where('purpose',$link->purpose)->delete();
+     \App\Models\LedgerAccount::whereKey($link->ledger_account_id)->firstOrFail()->delete();
+    }
+    $party->currencies()->detach();
+    $party->delete();
+   }catch(QueryException $e){
+    throw ValidationException::withMessages(['party'=>'This account is referenced elsewhere and cannot be deleted.']);
+   }
+   ActivityLog::record('trade_party.deleted','trade_party',$party->id,'Unused '.$party->type.' deleted: '.$party->name);
+  });
+  return redirect()->route($party->type==='customer'?'finance.customers.index':'finance.suppliers.index')->with('status','Unused account deleted.');
+ }
  public function store(Request $request,TradeOpeningBalanceService $opening,JournalPostingService $posting){abort_unless($request->user()->canAny(['administration.update', 'finance.update']),403);if($request->has('opening_balances')){$request->merge(['opening_balances'=>array_map(fn($v)=>$this->normalizeMoney($v),$request->input('opening_balances',[]))]);}$data=$request->validate(['type'=>['required',Rule::in(['customer','supplier'])],'name'=>['required','string','max:180'],'code'=>['nullable','string','max:40',Rule::unique('trade_parties','code')->where('type',$request->input('type'))],'contact_person'=>['nullable','string','max:150'],'phone'=>['nullable','string','max:80'],'email'=>['nullable','email','max:180'],'address'=>['nullable','string','max:2000'],'notes'=>['nullable','string','max:2000'],'currency_ids'=>['sometimes','array','min:1'],'currency_ids.*'=>['required','integer','distinct',Rule::exists('currencies','id')->where('is_active',true)],'opening_date'=>['nullable','required_with:opening_balances','date'],'opening_balances'=>['nullable','array'],'opening_balances.*'=>['nullable','numeric','decimal:0,4','between:0,999999999999.9999'],'opening_directions'=>['nullable','array'],'opening_directions.*'=>['nullable',Rule::in(['they_owe_us','we_owe_them'])]]);DB::transaction(function()use($data,$request,$opening,$posting){$openingAmounts=$data['opening_balances']??[];$openingDirections=$data['opening_directions']??[];$openingDate=$data['opening_date']??now()->toDateString();unset($data['opening_balances'],$data['opening_directions'],$data['opening_date']);$currencyIds=$data['currency_ids']??Currency::where('is_active',true)->pluck('id')->all();unset($data['currency_ids']);if(!$currencyIds)throw ValidationException::withMessages(['name'=>'Configure an active currency before adding a customer or supplier.']);$party=TradeParty::create($data+['is_active'=>true,'created_by'=>$request->user()->id]);$party->currencies()->sync($currencyIds);foreach($currencyIds as $id)$party->provisionLedgerAccountsForCurrency((int)$id);foreach($openingAmounts as $currencyId=>$amount){if($amount===null||$amount==='')continue;if(!in_array((int)$currencyId,array_map('intval',$currencyIds),true))throw ValidationException::withMessages(['opening_balances'=>'Opening balance currency must be selected.']);$direction=$openingDirections[$currencyId]??($party->type==='customer'?'they_owe_us':'we_owe_them');$signed=$direction===($party->type==='customer'?'they_owe_us':'we_owe_them')?(string)$amount:'-'.(string)$amount;$opening->post($party,(int)$currencyId,$signed,$openingDate,$request->user()->id,$posting);}ActivityLog::record('trade_party.created','trade_party',$party->id,ucfirst($party->type).' created: '.$party->name);});return redirect()->route($data['type']==='customer'?'finance.customers.index':'finance.suppliers.index')->with('status','Trade party and currency-specific ledger accounts created.');}
  public function addCurrency(Request $request,TradeParty $party){abort_unless($request->user()->canAny(['administration.update', 'finance.update']),403);$data=$request->validate(['currency_id'=>['required',Rule::exists('currencies','id')->where('is_active',true)]]);DB::transaction(function()use($party,$data){if($party->currencies()->whereKey($data['currency_id'])->exists())throw ValidationException::withMessages(['currency_id'=>'Currency already enabled.']);$party->provisionLedgerAccountsForCurrency((int)$data['currency_id']);$party->currencies()->attach($data['currency_id']);ActivityLog::record('trade_party.currency_added','trade_party',$party->id,'Currency enabled for '.$party->name);});return back()->with('status','Currency and ledger accounts enabled.');}
  public function openingBalance(Request $request,TradeParty $party,TradeOpeningBalanceService $opening,JournalPostingService $posting){abort_unless($request->user()->canAny(['administration.update', 'finance.update']),403);$request->merge(['amount'=>$this->normalizeMoney($request->input('amount'))]);$data=$request->validate(['currency_id'=>['required','integer','exists:currencies,id'],'amount'=>['required','numeric','gt:0','decimal:0,4','max:999999999999.9999'],'direction'=>['required',Rule::in(['they_owe_us','we_owe_them'])],'balance_date'=>['required','date']]);DB::transaction(function()use($party,$data,$opening,$posting,$request){$signed=$data['direction']===($party->type==='customer'?'they_owe_us':'we_owe_them')?(string)$data['amount']:'-'.(string)$data['amount'];$opening->post($party,(int)$data['currency_id'],$signed,$data['balance_date'],$request->user()->id,$posting);ActivityLog::record('trade_party.opening_balance','trade_party',$party->id,'Opening balance posted for '.$party->name);});return back()->with('status','Opening balance posted successfully.');}
