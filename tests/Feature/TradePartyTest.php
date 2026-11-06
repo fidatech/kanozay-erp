@@ -114,10 +114,10 @@ class TradePartyTest extends TestCase {
    'type'=>'customer','name'=>'Used Customer','currency_ids'=>[$afn->id],
   ])->assertRedirect();
   $party=TradeParty::sole();
-  $ledger=\\Illuminate\\Support\\Facades\\DB::table('entity_ledger_accounts')->where([
+  $ledger=\Illuminate\\Support\\Facades\\DB::table('entity_ledger_accounts')->where([
    'entity_type'=>'customer','entity_id'=>$party->id,'currency_id'=>$afn->id,'purpose'=>'receivable'
   ])->value('ledger_account_id');
-  $journal=\\App\\Models\\JournalEntry::create([
+  $journal=\App\\Models\\JournalEntry::create([
    'number'=>'JE-T-001','entry_date'=>'2026-11-04','description'=>'Test',
    'status'=>'posted','currency_id'=>$afn->id,'created_by'=>$user->id
   ]);
@@ -132,15 +132,15 @@ class TradePartyTest extends TestCase {
   $party=TradeParty::create(['type'=>'customer','name'=>'Statement Customer','phone'=>'0700123456','is_active'=>true,'created_by'=>$user->id]);
   $party->currencies()->attach($afn->id);
   $party->provisionLedgerAccountsForCurrency($afn->id);
-  $id=\\Illuminate\\Support\\Facades\\DB::table('entity_ledger_accounts')->where([
+  $id=\Illuminate\\Support\\Facades\\DB::table('entity_ledger_accounts')->where([
    'entity_type'=>'customer','entity_id'=>$party->id,'purpose'=>'receivable'
   ])->value('ledger_account_id');
-  $journal=\\App\\Models\\JournalEntry::create([
+  $journal=\App\\Models\\JournalEntry::create([
    'number'=>'JE-W-01','entry_date'=>'2026-11-04','description'=>'Paid',
    'status'=>'posted','currency_id'=>$afn->id,'created_by'=>$user->id
   ]);
   $journal->lines()->create(['ledger_account_id'=>$id,'debit'=>'500','credit'=>'0']);
-  $draft=\\App\\Models\\JournalEntry::create([
+  $draft=\App\\Models\\JournalEntry::create([
    'number'=>'JE-W-02','entry_date'=>'2026-11-04','description'=>'Draft',
    'status'=>'draft','currency_id'=>$afn->id,'created_by'=>$user->id
   ]);
