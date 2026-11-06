@@ -4,14 +4,14 @@
 .ps-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .ps-card{background:#fff;border:1px solid #dbe7f3;border-radius:13px;padding:19px;margin-top:17px}
 .ps-filters{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
-.ps-filters select{min-width:140px;min-height:40px;padding:9px 12px;border:1px solid #d8e4ef;border-radius:9px}
+.ps-filters select,.ps-filters input{min-width:140px;min-height:40px;padding:9px 12px;border:1px solid #d8e4ef;border-radius:9px;box-sizing:border-box}.ps-filters label{font-size:12px;color:#526d8a;font-weight:700}
 .ps-table{width:100%;border-collapse:collapse;font-size:12px}
 .ps-table th{background:#f3f7fc;text-align:left;padding:12px;color:#55708d;white-space:nowrap}
 .ps-table td{padding:12px;border-bottom:1px solid #e9eef5;vertical-align:middle}
 .ps-num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .ps-summary{display:flex;gap:11px;flex-wrap:wrap;margin-top:15px}
 .ps-balance{border:1px solid #dce7f2;border-radius:10px;padding:12px 16px;min-width:190px}
-.ps-balance small{display:block;color:#71849b;margin-bottom:5px}
+.ps-balance small{display:block;color:#71849b;margin-bottom:5px}.ps-opening{font-size:12px;color:#67809b;margin:0 0 8px}
 .ps-empty{text-align:center;color:#8795a7;padding:30px}
 @media(max-width:680px){.ps-table{min-width:700px}}
 </style>
@@ -23,13 +23,19 @@
  <form class="ps-filters" method="GET" action="{{ route('finance.parties.statement',$party) }}">
   <label for="ps-currency">Currency</label><select name="currency_id" id="ps-currency"><option value="">All currencies</option>
   @foreach($currencies as $currency)<option value="{{ $currency->id }}" @selected((int)($filters['currency_id']??0)===$currency->id)>{{ $currency->code }}</option>@endforeach
-  </select><button class="btn" type="submit">Filter</button>
+  </select>
+  <label for="ps-from">From</label><input id="ps-from" type="date" name="from" value="{{ $filters['from']??'' }}">
+  <label for="ps-to">To</label><input id="ps-to" type="date" name="to" value="{{ $filters['to']??'' }}">
+  <button class="btn" type="submit">Filter</button>
+  <a class="btn btn-light" href="{{ route('finance.parties.statement',$party) }}">Reset</a>
+  <a class="btn btn-light" href="{{ route('finance.parties.statement.export',array_merge(['party'=>$party],array_filter($filters,fn($value)=>$value!==null&&$value!==''))) }}"><i class="fa-solid fa-file-csv"></i> Export CSV</a>
  </form>
  <div class="ps-summary">
  @foreach($currencies as $currency)
   @if(empty($filters['currency_id']) || (int)$filters['currency_id']===$currency->id)
    @php($value=$running[$currency->id]??\Brick\Math\BigDecimal::zero())
    <div class="ps-balance"><small>{{ $currency->code }} balance</small>
+    @if(!empty($filters['from']))<div class="ps-opening">Opening: {{ ($opening[$currency->id]??\Brick\Math\BigDecimal::zero())->toScale(2,\Brick\Math\RoundingMode::HalfUp) }}</div>@endif
     <strong>{{ $value->abs()->toScale(2,\Brick\Math\RoundingMode::HalfUp) }}</strong>
     <span>{{ $value->isZero()?'Settled':($value->isPositive()?($party->type==='customer'?'They owe us':'We owe them'):($party->type==='customer'?'We owe them':'They owe us')) }}</span>
    </div>
