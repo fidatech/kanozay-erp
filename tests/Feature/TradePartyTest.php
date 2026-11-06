@@ -151,4 +151,49 @@ class TradePartyTest extends TestCase {
    ->assertSee('data-whatsapp-phone="0700123456"',false);
  }
 
+ public function test_simple_party_forms_show_only_name_and_optional_phone():void {
+  [$user,$afn,$usd]=$this->makeFixtures();
+  foreach(['customer'=>'finance.customers.index','supplier'=>'finance.suppliers.index'] as $type=>$route){
+   $response=$this->actingAs($user)->get(route($route))->assertOk();
+   $body=$response->getContent();
+   $this->assertStringContainsString('class="sp-create-form"',$body);
+   $form=substr($body,strpos($body,'class="sp-create-form"'));
+   $form=substr($form,0,strpos($form,'</form>'));
+   $this->assertStringContainsString('name="name"',$form);
+   $this->assertStringContainsString('name="phone"',$form);
+   foreach(['currency_ids[]','opening_balances','name="address"','name="email"','name="code"'] as $hidden){
+    $this->assertStringNotContainsString($hidden,$form);
+   }
+  }
+ }
+ public function test_simple_customer_register_has_status_balance_and_all_four_actions():void {
+  [$user,$afn]=$this->makeFixtures();
+  $this->actingAs($user)->post(route('finance.parties.store'),[
+   'type'=>'customer','name'=>'Jamil','phone'=>'0700123456',
+  ])->assertRedirect();
+  $party=TradeParty::sole();
+  $res=$this->actingAs($user)->get(route('finance.customers.index'))->assertOk();
+  $res->assertSee('<th>Name</th><th>Phone</th><th>Status</th><th>Balance</th><th>Actions</th>',false)
+   ->assertSee('data-edit-party="'.$party->id.'"',false)
+   ->assertSee(route('finance.parties.destroy',$party),false)
+   ->assertSee(route('finance.parties.statement',$party),false)
+   ->assertSee('data-whatsapp-phone="0700123456"',false)
+   ->assertSee('Active')->assertDontSee('Opening Balance');
+  $this->assertDatabaseCount('trade_opening_balances',0);
+  $this->assertDatabaseCount('journal_entries',0);
+ }
+ public function test_simple_edit_changes_name_and_phone_without_changing_financial_mappings():void {
+  [$user,$afn]=$this->makeFixtures();
+  $this->actingAs($user)->post(route('finance.parties.store'),[
+   'type'=>'supplier','name'=>'Original','phone'=>'0700111222',
+  ])->assertRedirect();
+  $party=TradeParty::sole();
+  $before=\Illuminate\Support\Facades\DB::table('entity_ledger_accounts')->where('entity_type','supplier')->where('entity_id',$party->id)->count();
+  $this->actingAs($user)->patch(route('finance.suppliers.update',$party),[
+   'name'=>'Renamed','phone'=>'0700999888',
+  ])->assertRedirect();
+  $this->assertDatabaseHas('trade_parties',['id'=>$party->id,'name'=>'Renamed','phone'=>'0700999888']);
+  $this->assertSame($before,\Illuminate\Support\Facades\DB::table('entity_ledger_accounts')->where('entity_type','supplier')->where('entity_id',$party->id)->count());
+ }
+
 }
