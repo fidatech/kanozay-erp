@@ -9,6 +9,10 @@ class ModulePageController extends Controller
 {
     public function show(Request $request, string $module, string $page)
     {
+        if ($module === 'inventory' && $page === 'counts') {
+            return app(InventoryStockCountController::class)->index($request);
+        }
+
         if ($module === 'hr' && $page === 'employees') {
             return app(EmployeeProfileController::class)->index($request);
         }

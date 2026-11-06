@@ -18,6 +18,10 @@ Route::post('/language', function (\Illuminate\Http\Request $request) {
 Route::middleware('auth')->post('/production/recipes/kanozay-confirm', [\App\Http\Controllers\KanozayWorkbookPreviewController::class, 'confirm'])->name('production.recipes.kanozay-confirm');
 Route::middleware('auth')->post('/production/recipes/kanozay-preview', [\App\Http\Controllers\KanozayWorkbookPreviewController::class, '__invoke'])->name('production.recipes.kanozay-preview');
 Route::middleware('auth')->post('/production/recipes/import-preview', [\App\Http\Controllers\ProductionRecipeImportController::class, 'preview'])->name('production.recipes.import-preview');
+Route::middleware('auth')->get('/inventory/stock-counts', [\App\Http\Controllers\InventoryStockCountController::class, 'index'])->name('inventory.counts.index');
+Route::middleware('auth')->post('/inventory/stock-counts', [\App\Http\Controllers\InventoryStockCountController::class, 'store'])->name('inventory.counts.store');
+Route::middleware('auth')->get('/inventory/stock-counts/{count}', [\App\Http\Controllers\InventoryStockCountController::class, 'show'])->name('inventory.counts.show');
+Route::middleware('auth')->post('/inventory/stock-counts/{count}/approve', [\App\Http\Controllers\InventoryStockCountController::class, 'approve'])->name('inventory.counts.approve');
 Route::middleware('auth')->get('/inventory/materials', [\App\Http\Controllers\InventoryMaterialController::class, 'index'])->name('inventory.materials.index');
 Route::middleware('auth')->get('/inventory/valuation', [\App\Http\Controllers\InventoryMaterialController::class, 'valuation'])->name('inventory.valuation');
 Route::middleware('auth')->get('/inventory/materials/{material}', [\App\Http\Controllers\InventoryMaterialController::class, 'show'])->name('inventory.materials.show');
