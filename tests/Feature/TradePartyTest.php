@@ -69,4 +69,31 @@ class TradePartyTest extends TestCase {
    ->assertSee('party-opening-modal-form');
  }
 
+ public function test_customer_creation_without_opening_balance_starts_with_zero_and_no_journal():void {
+  [$user,$afn,$usd]=$this->makeFixtures();
+  $this->actingAs($user)->get(route('finance.customers.index'))->assertOk()
+   ->assertSee('id="party-optional-opening"',false)
+   ->assertSee('Add opening balance')
+   ->assertSee('Leave amounts blank to start with a zero balance.');
+  $this->actingAs($user)->post(route('finance.parties.store'),[
+   'type'=>'customer','name'=>'Zero Customer','currency_ids'=>[$afn->id,$usd->id],
+  ])->assertRedirect(route('finance.customers.index'));
+  $party=TradeParty::where('name','Zero Customer')->firstOrFail();
+  $this->assertCount(2,$party->currencies);
+  $this->assertDatabaseCount('trade_opening_balances',0);
+  $this->assertDatabaseCount('journal_entries',0);
+ }
+ public function test_supplier_creation_without_opening_balance_has_no_financial_posting():void {
+  [$user,$afn]=$this->makeFixtures();
+  $this->actingAs($user)->get(route('finance.suppliers.index'))->assertOk()
+   ->assertSee('id="party-optional-opening"',false);
+  $this->actingAs($user)->post(route('finance.parties.store'),[
+   'type'=>'supplier','name'=>'Zero Supplier','currency_ids'=>[$afn->id],
+  ])->assertRedirect(route('finance.suppliers.index'));
+  $party=TradeParty::where('name','Zero Supplier')->firstOrFail();
+  $this->assertCount(1,$party->currencies);
+  $this->assertDatabaseCount('trade_opening_balances',0);
+  $this->assertDatabaseCount('journal_entries',0);
+ }
+
 }
