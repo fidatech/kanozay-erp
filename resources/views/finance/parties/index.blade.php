@@ -66,7 +66,7 @@
       <button class="sp-action danger" type="submit"><i class="fa-solid fa-trash"></i> Delete</button>
      </form>
     @endcanany
-    <a class="sp-action" href="{{ route('finance.parties.statement',$party) }}"><i class="fa-solid fa-file-lines"></i> Statement</a>
+    <a class="sp-action" href="{{ route('finance.parties.statement',$party) }}"><i class="fa-solid fa-file-lines"></i> View Statement</a>
     <button type="button" class="sp-action whatsapp" data-whatsapp-phone="{{ $party->phone }}" data-whatsapp-message="{{ $message }}" @if(!$party->phone) disabled title="Add a phone number first" @endif><i class="fa-brands fa-whatsapp"></i> WhatsApp</button>
    </div></td>
   </tr>
