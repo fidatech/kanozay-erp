@@ -151,7 +151,7 @@ class TradePartyTest extends TestCase {
    ->assertSee('data-whatsapp-phone="0700123456"',false);
  }
 
- public function test_simple_party_forms_show_only_name_and_optional_phone():void {
+ public function test_party_forms_restore_original_fields_while_opening_balance_remains_optional():void {
   [$user,$afn,$usd]=$this->makeFixtures();
   foreach(['customer'=>'finance.customers.index','supplier'=>'finance.suppliers.index'] as $type=>$route){
    $response=$this->actingAs($user)->get(route($route))->assertOk();
@@ -159,11 +159,14 @@ class TradePartyTest extends TestCase {
    $this->assertStringContainsString('class="sp-create-form"',$body);
    $form=substr($body,strpos($body,'class="sp-create-form"'));
    $form=substr($form,0,strpos($form,'</form>'));
-   $this->assertStringContainsString('name="name"',$form);
-   $this->assertStringContainsString('name="phone"',$form);
-   foreach(['currency_ids[]','opening_balances','name="address"','name="email"','name="code"'] as $hidden){
-    $this->assertStringNotContainsString($hidden,$form);
+   foreach(['name="name"','name="phone"','name="code"','name="contact_person"','name="email"','name="address"','name="notes"','name="currency_ids[]"'] as $field){
+    $this->assertStringContainsString($field,$form);
    }
+   $this->assertStringNotContainsString('opening_balances',$form);
+   $this->assertStringContainsString('sp-action-edit',$body);
+   $this->assertStringContainsString('sp-action-delete',$body);
+   $this->assertStringContainsString('sp-action-statement',$body);
+   $this->assertStringContainsString('sp-action-whatsapp',$body);
   }
  }
  public function test_simple_customer_register_has_status_balance_and_all_four_actions():void {
@@ -194,6 +197,23 @@ class TradePartyTest extends TestCase {
   ])->assertRedirect();
   $this->assertDatabaseHas('trade_parties',['id'=>$party->id,'name'=>'Renamed','phone'=>'0700999888']);
   $this->assertSame($before,\Illuminate\Support\Facades\DB::table('entity_ledger_accounts')->where('entity_type','supplier')->where('entity_id',$party->id)->count());
+ }
+
+ public function test_restored_party_form_stores_extended_details_without_opening_balance():void {
+  [$user,$afn,$usd]=$this->makeFixtures();
+  $this->actingAs($user)->post(route('finance.parties.store'),[
+   'type'=>'customer','name'=>'Expanded Customer','code'=>'C-504','phone'=>'0700999000',
+   'contact_person'=>'Manager','email'=>'contact@example.com','address'=>'Kabul',
+   'notes'=>'Preferred contact','currency_ids'=>[$afn->id,$usd->id]
+  ])->assertRedirect();
+  $party=TradeParty::sole();
+  $this->assertDatabaseHas('trade_parties',[
+   'id'=>$party->id,'code'=>'C-504','contact_person'=>'Manager',
+   'email'=>'contact@example.com','address'=>'Kabul','notes'=>'Preferred contact'
+  ]);
+  $this->assertCount(2,$party->currencies);
+  $this->assertDatabaseCount('trade_opening_balances',0);
+  $this->assertDatabaseCount('journal_entries',0);
  }
 
 }
