@@ -29,7 +29,7 @@
   <label>Currencies<select name="currency_ids[]" multiple required>@foreach($currencies as $currency)
    <option value="{{ $currency->id }}" @selected(in_array($currency->id,old('currency_ids',[])))>{{ $currency->code }}</option>
   @endforeach</select></label>
-  <button class="btn" type="submit">Save {{ ucfirst($type) }}</button>
+  <button class="btn" type="submit">Create {{ ucfirst($type) }}</button>
  </form>
  @endcanany
 </section>
