@@ -91,7 +91,7 @@ class PhysicalStockCountTest extends TestCase
         $user=$this->operator();
         $a=$this->material('COUNT-SAFE',10,$user);
         $b=$this->material('COUNT-RESERVED',10,$user);
-        $b->update(['reserved_quantity'=>'6.000000']);
+        $b->forceFill(['reserved_quantity'=>'6.000000'])->save();
         $this->actingAs($user)->post(route('inventory.counts.store'),$this->submission([
             $a->id=>'11',$b->id=>'5',
         ]))->assertRedirect();
