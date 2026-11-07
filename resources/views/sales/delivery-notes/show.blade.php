@@ -21,7 +21,10 @@
 @if($note->status==='issued')
 @canany(['sales.update','administration.update'])
 <form method="POST" action="{{ route('sales.delivery-notes.delivered',$note) }}">@csrf
+<input type="hidden" name="submission_token" value="{{ (string)\Illuminate\Support\Str::uuid() }}">
 <input type="text" name="received_by" placeholder="Received by" required maxlength="150">
+<input type="text" name="delivery_location" placeholder="Delivery checkpoint" maxlength="180" required>
+<input type="text" name="proof_reference" placeholder="Proof of delivery reference" maxlength="180" required>
 <input type="datetime-local" name="delivered_at" value="{{ now()->format('Y-m-d\TH:i') }}" required>
 <button class="btn">Confirm delivery</button></form>
 <form method="POST" action="{{ route('sales.delivery-notes.cancel',$note) }}" onsubmit="return confirm('Cancel this logistics note? Invoiced inventory dispatch will remain posted.')">@csrf

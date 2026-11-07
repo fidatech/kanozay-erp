@@ -26,7 +26,9 @@ class SalesDeliveryTrackingService
     if((int)$token->sales_delivery_note_id===(int)$locked->id &&
         $token->status===$data['status'] && $token->location===$data['location'] &&
         $token->occurred_at->format('Y-m-d H:i:s')===
-          CarbonImmutable::parse($data['occurred_at'])->format('Y-m-d H:i:s'))
+          CarbonImmutable::parse($data['occurred_at'])->format('Y-m-d H:i:s') &&
+        (string)($token->proof_reference??'')===(string)($data['proof_reference']??'') &&
+        (string)($token->receiver_name??'')===(string)($data['receiver_name']??''))
        return $token;
     throw ValidationException::withMessages(['submission_token'=>'This tracking token belongs to a different event.']);
    }
