@@ -39,6 +39,12 @@ Implemented on the development branch after the tracker was created:
 - Existing customer and supplier edit forms now support active/inactive status, retaining historical account records.
 - Manual trade documents cannot use an automatically mapped third-party ledger as their posting offset.
 
+- Existing unallocated receipts or payments can be applied to outstanding invoices from the account profile without creating new journals, using the existing capped settlement allocation service.
+- Active/inactive status is editable on customer and supplier profiles, with new-payment entry suppressed for inactive accounts.
+- Manual receivable/payable charges now require UUID submission tokens; a nullable, unique column maintains compatibility with historical and source-generated trade documents.
+- Manual trade document offset selection excludes other entities' protected mapped ledgers, and finance editors may access the form.
+- Manual charges and settlement allocations accept grouped and localized numeric inputs before decimal validation.
+
 **Development status:** these are committed implementation changes, not acceptance results. Historical legacy import, customer-approved finance policies, automated full cross-module reconciliation and final accounting UAT remain open.
 
 ## Acceptance and release gates
