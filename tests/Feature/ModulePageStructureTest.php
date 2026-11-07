@@ -39,6 +39,8 @@ class ModulePageStructureTest extends TestCase
                     $module === 'assets' && in_array($page,['maintenance','schedules','service-history','transfers','disposals'],true) => 'Asset lifecycle',
                     $module === 'purchases' && $page === 'orders' => 'New Purchase Order',
                     $module === 'purchases' && $page === 'purchase-returns' => 'Purchase Returns',
+                    $module === 'purchases' && $page === 'requisitions' => 'Procurement request',
+                    $module === 'inventory' && in_array($page,['reorder','material-requests'],true) => 'Procurement request',
                     $module === 'manufacturing' && $page === 'recipes' => 'Production Recipes',
                     $module === 'manufacturing' && $page === 'orders' => 'Production Orders',
                     $module === 'shareholders' && in_array($page, ['register', 'capital', 'statements'], true) => 'Shareholder Register',

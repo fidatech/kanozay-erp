@@ -20,6 +20,10 @@ Route::middleware('auth')->post('/production/recipes/kanozay-preview', [\App\Htt
 Route::middleware('auth')->post('/production/recipes/import-preview', [\App\Http\Controllers\ProductionRecipeImportController::class, 'preview'])->name('production.recipes.import-preview');
 Route::middleware('auth')->get('/inventory/warehouse-stock', [\App\Http\Controllers\WarehouseStockController::class,'index'])->name('inventory.warehouse-stock.index');
 Route::middleware('auth')->post('/inventory/warehouse-stock', [\App\Http\Controllers\WarehouseStockController::class,'store'])->name('inventory.warehouse-stock.store');
+Route::middleware('auth')->post('/procurement/reorder-rules', [\App\Http\Controllers\ProcurementRequestController::class,'saveRule'])->name('procurement.rules.store');
+Route::middleware('auth')->post('/procurement/requests', [\App\Http\Controllers\ProcurementRequestController::class,'submit'])->name('procurement.requests.store');
+Route::middleware('auth')->post('/procurement/requests/{requisition}/decide', [\App\Http\Controllers\ProcurementRequestController::class,'decide'])->name('procurement.requests.decide');
+Route::middleware('auth')->post('/procurement/requests/{requisition}/convert', [\App\Http\Controllers\ProcurementRequestController::class,'convert'])->name('procurement.requests.convert');
 Route::middleware('auth')->post('/purchases/returns', [\App\Http\Controllers\PurchaseReturnController::class,'store'])->name('purchases.returns.store');
 Route::middleware('auth')->get('/purchases/returns/{return}', [\App\Http\Controllers\PurchaseReturnController::class,'show'])->name('purchases.returns.show');
 Route::middleware('auth')->post('/assets/maintenance-orders', [\App\Http\Controllers\FixedAssetLifecycleController::class,'requestService'])->name('assets.lifecycle.maintenance.store');
