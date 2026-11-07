@@ -1,0 +1,76 @@
+<?php
+namespace App\Services;
+
+use Brick\Math\BigDecimal;
+use Brick\Math\RoundingMode;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+
+class ProductionCostReadinessService {
+ /**
+  * Advisory manufacturing cost completeness, source-currency only.
+  * This is NOT a GL capitalization, inventory valuation posting or COGS.
+  */
+ public function rows(Collection $batches):Collection {
+  $ids=$batches->pluck('id')->all();
+  if(!$ids)return collect();
+  $overhead=DB::table('production_overhead_allocations as o')
+   ->join('currencies as c','c.id','=','o.currency_id')
+   ->whereIn('o.production_batch_id',$ids)
+   ->select('o.production_batch_id','o.status','o.amount','c.code as currency_code')
+   ->get()->groupBy('production_batch_id');
+  $result=collect();
+  foreach($batches as $batch){
+   $costs=$batch->costs;
+   $overheadRows=$overhead->get($batch->id,collect());
+   $pending=$overheadRows->where('status','submitted')->count();
+   $hasUnvalued=$costs->isEmpty() || $costs->contains(function($c){
+     return $c->material_cost===null ||
+       BigDecimal::of((string)$c->unvalued_quantity)->isGreaterThan(0);
+   });
+   $currencyCodes=$costs->pluck('currency_code')->filter()
+    ->merge($overheadRows->where('status','approved')->pluck('currency_code'))
+    ->unique()->values();
+   if($currencyCodes->isEmpty())$currencyCodes=collect([null]);
+   $mixedCurrency=$currencyCodes->count()>1;
+   foreach($currencyCodes as $code){
+    $material=BigDecimal::zero();$overheadTotal=BigDecimal::zero();
+    $hasMaterialCurrency=false;
+    foreach($costs->where('currency_code',$code) as $cost){
+     if($cost->material_cost!==null){
+       $material=$material->plus((string)$cost->material_cost);
+       $hasMaterialCurrency=true;
+     }
+    }
+    foreach($overheadRows as $allocation){
+     if($allocation->status==='approved'&&$allocation->currency_code===$code)
+      $overheadTotal=$overheadTotal->plus((string)$allocation->amount);
+    }
+    $complete=$batch->status==='released' &&
+      $batch->accepted_packages>0 && $hasMaterialCurrency &&
+      !$hasUnvalued && !$mixedCurrency && $pending===0;
+    $costPerPackage=$complete?
+      (string)$material->plus($overheadTotal)
+       ->dividedBy((string)$batch->accepted_packages,8,RoundingMode::HalfUp):null;
+    $result->push([
+     'batch_id'=>$batch->id,'batch'=>$batch->batch_number,
+     'product'=>$batch->finishedGood?->name??'Unknown',
+     'status'=>$batch->status,'packages'=>$batch->accepted_packages??0,
+     'currency'=>$code??'Unvalued',
+     'material_cost'=>$hasMaterialCurrency?(string)$material->toScale(4,RoundingMode::HalfUp):null,
+     'approved_overhead'=>(string)$overheadTotal->toScale(4,RoundingMode::HalfUp),
+     'pending_overheads'=>$pending,'has_unvalued'=>$hasUnvalued,
+     'mixed_currency'=>$mixedCurrency,'ready'=>$complete,
+     'cost_per_package'=>$costPerPackage,
+     'warning'=>$complete?'Cost sources reconciled for management review; GL capitalization not posted':
+       ($hasUnvalued?'Missing or unvalued material source costs':
+        ($mixedCurrency?'Multiple source currencies; no combined cost':
+         ($pending>0?'Unapproved overhead remains':
+          ($batch->status!=='released'?'Batch not released':
+           ($batch->accepted_packages<1?'No accepted packages':'Material cost unavailable in source currency'))))),
+    ]);
+   }
+  }
+  return $result;
+ }
+}
