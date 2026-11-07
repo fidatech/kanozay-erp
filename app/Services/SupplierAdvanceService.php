@@ -119,7 +119,7 @@ class SupplierAdvanceService
      (int)$doc->currency_id!==(int)$advance->currency_id)
     throw ValidationException::withMessages(['trade_document_id'=>'Select an open payable for the same supplier and currency.']);
    if($data['applied_on']<$advance->paid_on ||
-      $data['applied_on']<$doc->document_date->toDateString())
+      $data['applied_on']<(string)$doc->document_date)
     throw ValidationException::withMessages(['applied_on'=>'Application date cannot precede the advance payment or invoice date.']);
    $amount=BigDecimal::of((string)$data['amount'])->toScale(4);
    if(!$amount->isPositive() || $amount->isGreaterThan($this->remaining($advanceId)))

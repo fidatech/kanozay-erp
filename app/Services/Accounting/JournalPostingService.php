@@ -48,7 +48,9 @@ class JournalPostingService {
   });
  }
  public function reverse(JournalEntry $journal,int $userId):JournalEntry {
-  return DB::transaction(function()use($journal,$userId){$original=JournalEntry::whereKey($journal->id)->lockForUpdate()->firstOrFail();if(DB::table('shareholder_profit_distributions')->where('journal_entry_id',$original->id)->exists())
+  return DB::transaction(function()use($journal,$userId){$original=JournalEntry::whereKey($journal->id)->lockForUpdate()->firstOrFail();if(DB::table('supplier_advance_applications')->where('journal_entry_id',$original->id)->exists())
+    throw ValidationException::withMessages(['status'=>'Settled supplier advances require a dedicated correction workflow.']);
+   if(DB::table('shareholder_profit_distributions')->where('journal_entry_id',$original->id)->exists())
     throw ValidationException::withMessages(['status'=>'Posted shareholder profit distributions require a controlled resolution-linked correction.']);
    if(DB::table('fixed_asset_depreciation_entries')->where('journal_entry_id',$original->id)->exists()
    ||DB::table('fixed_asset_disposal_postings')->where('disposal_journal_id',$original->id)

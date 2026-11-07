@@ -9,6 +9,10 @@ class ModulePageController extends Controller
 {
     public function show(Request $request, string $module, string $page)
     {
+        if ($module==='purchases' && $page==='supplier-advances') {
+            return app(SupplierAdvanceController::class)->index($request,app(\App\Services\SupplierAdvanceService::class));
+        }
+
         if (isset((config('operational_data_hubs')??[])[$module.'.'.$page])) {
             return app(OperationalDataHubController::class)->show($request,$module,$page);
         }

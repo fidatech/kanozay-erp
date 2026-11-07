@@ -18,6 +18,8 @@ Route::post('/language', function (\Illuminate\Http\Request $request) {
 Route::middleware('auth')->post('/production/recipes/kanozay-confirm', [\App\Http\Controllers\KanozayWorkbookPreviewController::class, 'confirm'])->name('production.recipes.kanozay-confirm');
 Route::middleware('auth')->post('/production/recipes/kanozay-preview', [\App\Http\Controllers\KanozayWorkbookPreviewController::class, '__invoke'])->name('production.recipes.kanozay-preview');
 Route::middleware('auth')->post('/production/recipes/import-preview', [\App\Http\Controllers\ProductionRecipeImportController::class, 'preview'])->name('production.recipes.import-preview');
+Route::middleware('auth')->post('/supplier-advances/payments', [\App\Http\Controllers\SupplierAdvanceController::class,'pay'])->name('supplier-advances.pay');
+Route::middleware('auth')->post('/supplier-advances/{advance}/apply', [\App\Http\Controllers\SupplierAdvanceController::class,'apply'])->whereNumber('advance')->name('supplier-advances.apply');
 Route::middleware('auth')->post('/supplier-quotations/{record}/convert', [\App\Http\Controllers\SupplierQuotationConversionController::class,'store'])->name('supplier-quotations.convert');
 Route::middleware('auth')->get('/data-hubs/{module}/{page}/export', [\App\Http\Controllers\OperationalDataHubController::class,'export'])->name('data-hubs.export');
 Route::middleware('auth')->get('/operations/{module}/{page}/export', [\App\Http\Controllers\OperationalRegisterController::class,'export'])->name('operations.export');
