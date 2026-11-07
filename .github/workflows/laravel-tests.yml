@@ -48,3 +48,31 @@ jobs:
           php artisan db:seed --force
           php artisan db:seed --class=ChartOfAccountsSeeder --force
           php artisan route:list > /dev/null
+
+      - name: Package tested Kanozay ERP application
+        if: github.event_name == 'push'
+        run: |
+          test -f public/build/manifest.json
+          test -f vendor/autoload.php
+          zip -q -r "/tmp/kanozay-erp-tested-source.zip" . \
+            -x '.git/*' './.git/*' '.env' './.env' \
+               'node_modules/*' './node_modules/*' \
+               'database/*.sqlite' './database/*.sqlite' \
+               'storage/logs/*' './storage/logs/*' \
+               'storage/framework/cache/*' './storage/framework/cache/*' \
+               'storage/framework/sessions/*' './storage/framework/sessions/*' \
+               'storage/framework/views/*' './storage/framework/views/*' \
+               'storage/app/private/*' './storage/app/private/*' \
+               'storage/app/public/*' './storage/app/public/*' \
+               'tests/*' './tests/*' \
+               '.github/*' './.github/*'
+          unzip -tq "/tmp/kanozay-erp-tested-source.zip" | tail -n 1
+
+      - name: Upload tested ERP ZIP
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: kanozay-erp-tested-zip
+          path: /tmp/kanozay-erp-tested-source.zip
+          if-no-files-found: error
+          retention-days: 30
