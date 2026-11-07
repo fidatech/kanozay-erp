@@ -25,12 +25,17 @@
 @forelse($periods as $p)
 <tr><td>{{ $p->period_start }}</td><td>{{ ucfirst($p->status) }}</td><td>{{ $p->journal_count }}</td>
 <td>{{ $p->debit_snapshot }}</td><td>{{ $p->credit_snapshot }}</td><td>{{ $p->authorization_reference }}<br><small>{{ $p->closer_name }}</small></td>
-<td>@if($p->status==='closed')@canany(['finance.update','administration.update'])
+<td>
+@if($p->status==='closed')
+@canany(['finance.update','administration.update'])
 <form method="POST" action="{{ route('finance.periods.reopen',$p->id) }}" style="display:grid;gap:6px">@csrf
 <input name="reopening_reference" minlength="3" maxlength="160" required placeholder="New approval reference">
 <input name="reopening_note" minlength="10" maxlength="3000" required placeholder="Reason for reopening">
-<button class="btn btn-light">Request controlled reopen</button></form>@endcanany
-@elseif($p->status==='reopened')Reopened with independent approval@endif</td></tr>
+<button class="btn btn-light">Request controlled reopen</button></form>
+@endcanany
+@elseif($p->status==='reopened')
+Reopened with independent approval
+@endif</td></tr>
 @empty<tr><td colspan="7">No calendar month has been closed.</td></tr>@endforelse
 </tbody></table></div>{{ $periods->links() }}</section>
 @endsection
