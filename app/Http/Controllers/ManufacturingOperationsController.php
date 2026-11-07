@@ -68,6 +68,8 @@ class ManufacturingOperationsController extends Controller
    'starts_at'=>['required','date'],'ends_at'=>['required','date','after:starts_at'],
    'notes'=>['nullable','string','max:3000'],
   ]);
+  $data['starts_at']=\Carbon\CarbonImmutable::parse($data['starts_at'])->format('Y-m-d H:i:s');
+  $data['ends_at']=\Carbon\CarbonImmutable::parse($data['ends_at'])->format('Y-m-d H:i:s');
   DB::transaction(function()use($request,$data){
    $equipment=DB::table('manufacturing_equipment')->where('id',$data['manufacturing_equipment_id'])
     ->lockForUpdate()->first();
@@ -127,6 +129,8 @@ class ManufacturingOperationsController extends Controller
    'cause'=>['required',Rule::in(['mechanical','electrical','utilities','materials','quality','setup','other'])],
    'description'=>['required','string','min:5','max:3000'],
   ]);
+  $data['started_at']=\Carbon\CarbonImmutable::parse($data['started_at'])->format('Y-m-d H:i:s');
+  $data['ended_at']=\Carbon\CarbonImmutable::parse($data['ended_at'])->format('Y-m-d H:i:s');
   $start=strtotime($data['started_at']);$end=strtotime($data['ended_at']);
   $minutes=(int)floor(($end-$start)/60);
   if($minutes<1 || $minutes>129600)
