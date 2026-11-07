@@ -51,10 +51,27 @@ class MatchedSupplierInvoiceService
                 throw ValidationException::withMessages(['currency_id'=>'Supplier is not enabled for this purchase currency.']);
             $duplicate=MatchedSupplierInvoice::where('submission_token',$data['submission_token'])->first();
             if($duplicate){
+                // A retry may only return a previously posted invoice if its full
+                // financial payload is identical. A matching total alone does not
+                // prove that the same receipt lines were invoiced.
+                $submittedQuantities=collect($data['quantities'])
+                    ->filter(fn($quantity)=>$quantity!==null && $quantity!=='' &&
+                        BigDecimal::of((string)$quantity)->isPositive())
+                    ->mapWithKeys(fn($quantity,$id)=>[
+                        (string)(int)$id=>(string)BigDecimal::of((string)$quantity)->toScale(6),
+                    ])->sortKeys()->all();
+                $postedQuantities=$duplicate->lines()->get()
+                    ->mapWithKeys(fn($line)=>[
+                        (string)$line->goods_receipt_line_id=>
+                            (string)BigDecimal::of((string)$line->quantity)->toScale(6),
+                    ])->sortKeys()->all();
                 if((int)$duplicate->goods_receipt_id===(int)$locked->id &&
                     $duplicate->supplier_invoice_number===$data['supplier_invoice_number'] &&
                     $duplicate->invoice_date->toDateString()===$data['invoice_date'] &&
-                    BigDecimal::of((string)$duplicate->total)->isEqualTo((string)$data['invoice_total']))
+                    $duplicate->due_date->toDateString()===$data['due_date'] &&
+                    (int)$duplicate->inventory_ledger_id===(int)$data['inventory_ledger_id'] &&
+                    BigDecimal::of((string)$duplicate->total)->isEqualTo((string)$data['invoice_total']) &&
+                    $submittedQuantities===$postedQuantities)
                     return $duplicate;
                 throw ValidationException::withMessages(['submission_token'=>'Token already belongs to another supplier invoice.']);
             }
