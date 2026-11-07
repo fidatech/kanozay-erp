@@ -97,6 +97,9 @@ class ManufacturingOperationsController extends Controller
     ->where('manufacturing_equipment_id',$equipment->id)->whereIn('status',['planned','running'])
     ->where('starts_at','<',$data['ends_at'])->where('ends_at','>',$data['starts_at'])->exists())
     throw ValidationException::withMessages(['starts_at'=>'Equipment is already scheduled in this time window.']);
+   if(DB::table('manufacturing_downtime_entries')->where('manufacturing_equipment_id',$equipment->id)
+      ->where('started_at','<',$data['ends_at'])->where('ended_at','>',$data['starts_at'])->exists())
+    throw ValidationException::withMessages(['starts_at'=>'Recorded machine downtime conflicts with this planned schedule. Assign a different window or machine.']);
    $id=DB::table('manufacturing_schedules')->insertGetId([
     'production_order_id'=>$order->id,'manufacturing_equipment_id'=>$equipment->id,
     'starts_at'=>$data['starts_at'],'ends_at'=>$data['ends_at'],
@@ -157,6 +160,13 @@ class ManufacturingOperationsController extends Controller
       $exists->description===$data['description'])return;
     throw ValidationException::withMessages(['submission_token'=>'Token was previously used for another downtime entry.']);
    }
+   // Downtime is an actual historical event. Do not suppress a real incident even
+   // when its timeframe overlaps a pre-existing plan; flag impacted plans instead.
+   $affected=DB::table('manufacturing_schedules')
+    ->where('manufacturing_equipment_id',$data['manufacturing_equipment_id'])
+    ->whereIn('status',['planned','running'])
+    ->where('starts_at','<',$data['ended_at'])
+    ->where('ends_at','>',$data['started_at'])->count();
    $id=DB::table('manufacturing_downtime_entries')->insertGetId([
     'submission_token'=>$data['submission_token'],
     'manufacturing_equipment_id'=>$data['manufacturing_equipment_id'],
@@ -166,7 +176,8 @@ class ManufacturingOperationsController extends Controller
     'created_by'=>$request->user()->id,'created_at'=>now(),'updated_at'=>now(),
    ]);
    ActivityLog::record('manufacturing.downtime.recorded','manufacturing_downtime',$id,
-    'Actual equipment downtime recorded for production analysis.');
+    'Actual equipment downtime recorded; active schedule overlaps: '.$affected.'.',
+    ['affected_schedules'=>$affected,'equipment_id'=>$data['manufacturing_equipment_id']]);
   });
   return redirect()->route('workspace.page',['manufacturing','downtime'])->with('success','Equipment downtime recorded.');
  }

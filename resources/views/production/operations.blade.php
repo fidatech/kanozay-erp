@@ -69,6 +69,7 @@
 </tbody></table></div><p class="mo-warn">A schedule does not reserve raw materials or post production quantities; use the production-order workflow to reserve, issue, inspect and release finished goods.</p></section>
 @endif
 @if(in_array($page,['downtime','equipment','scheduling'],true))
+<p class="mo-warn">Downtime incidents that overlap scheduled production must be reviewed by the production supervisor. The system does not silently delete schedules or alter batch quantities. New schedules cannot be created over recorded downtime.</p>
 <section class="mo-panel"><h2>Actual equipment downtime history</h2><div class="mo-wrap"><table><thead><tr><th>Machine</th><th>Started</th><th>Ended</th><th>Duration (min)</th><th>Cause</th><th>Notes</th></tr></thead><tbody>
 @forelse($downtimes as $d)<tr><td>{{ $d->equipment_code }}</td><td>{{ $d->started_at }}</td><td>{{ $d->ended_at }}</td><td>{{ $d->duration_minutes }}</td><td>{{ ucfirst($d->cause) }}</td><td>{{ $d->description }}</td></tr>
 @empty<tr><td colspan="6">No downtime registered.</td></tr>@endforelse
