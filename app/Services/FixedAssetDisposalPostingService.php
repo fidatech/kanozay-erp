@@ -134,7 +134,7 @@ class FixedAssetDisposalPostingService {
    ActivityLog::record('asset.disposal.journal_posted','fixed_asset',$asset->id,
       'Finance reconciled acquisition and posted disposal journal '.$number,
       ['gain_or_loss'=>(string)$difference,'currency_id'=>$asset->currency_id]);
-   return $journal;
+   return $journal->fresh();
   });
  }
 }
