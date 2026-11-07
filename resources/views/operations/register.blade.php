@@ -21,6 +21,9 @@
 </style>
 <div class="heading">
  <div><h1>{{ $definition['label'] }}</h1><p>{{ config('erp_pages.'.$module.'.label') }} / {{ $definition['label'] }} operational register</p></div>
+ @if($module==='purchases' && $page==='supplier-performance')
+ <a href="{{ route('purchases.supplier-scorecards.index') }}" class="btn">View source-backed supplier scorecards</a>
+ @endif
  <a href="{{ route('operations.export',[$module,$page]) }}" class="btn btn-light">Export CSV</a>
 </div>
 @if(session('success'))<p class="notice">{{ session('success') }}</p>@endif
