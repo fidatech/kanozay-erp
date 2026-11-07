@@ -70,6 +70,12 @@ class ProductionBatchService
         DB::transaction(function () use ($batch, $decision, $rejected, $notes, $actor) {
             $batch = ProductionBatch::query()->lockForUpdate()->findOrFail($batch->id);
             $this->assertStatus($batch, 'pending_qc');
+            // A separately registered QC sample must be independently approved.
+            // Existing free-text batch checks still apply when no sample is registered.
+            if($decision==='approve' && DB::table('quality_samples')
+                ->where('production_batch_id',$batch->id)->where('status','!=','approved')->exists()){
+                $this->reject('One or more registered QC samples are pending or rejected.');
+            }
             $checks = $batch->checks()->get();
             if ($checks->isEmpty()) {
                 $this->reject('Record at least one laboratory test before making a QC decision.');

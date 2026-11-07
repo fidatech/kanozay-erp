@@ -20,6 +20,12 @@ Route::middleware('auth')->post('/production/recipes/kanozay-preview', [\App\Htt
 Route::middleware('auth')->post('/production/recipes/import-preview', [\App\Http\Controllers\ProductionRecipeImportController::class, 'preview'])->name('production.recipes.import-preview');
 Route::middleware('auth')->get('/inventory/warehouse-stock', [\App\Http\Controllers\WarehouseStockController::class,'index'])->name('inventory.warehouse-stock.index');
 Route::middleware('auth')->post('/inventory/warehouse-stock', [\App\Http\Controllers\WarehouseStockController::class,'store'])->name('inventory.warehouse-stock.store');
+Route::middleware('auth')->post('/laboratory/specifications', [\App\Http\Controllers\LaboratoryQualityController::class,'specification'])->name('laboratory.specifications.store');
+Route::middleware('auth')->post('/laboratory/samples', [\App\Http\Controllers\LaboratoryQualityController::class,'sample'])->name('laboratory.samples.store');
+Route::middleware('auth')->get('/laboratory/samples/{sample}', [\App\Http\Controllers\LaboratoryQualityController::class,'show'])->name('laboratory.samples.show');
+Route::middleware('auth')->post('/laboratory/samples/{sample}/result', [\App\Http\Controllers\LaboratoryQualityController::class,'result'])->name('laboratory.samples.result');
+Route::middleware('auth')->post('/laboratory/samples/{sample}/review', [\App\Http\Controllers\LaboratoryQualityController::class,'review'])->name('laboratory.samples.review');
+Route::middleware('auth')->get('/laboratory/samples/{sample}/certificate', [\App\Http\Controllers\LaboratoryQualityController::class,'certificate'])->name('laboratory.samples.certificate');
 Route::middleware('auth')->post('/sales/customer-credit-limits', [\App\Http\Controllers\CustomerCommercialPolicyController::class,'credit'])->name('sales.credit-limits.store');
 Route::middleware('auth')->post('/sales/customer-prices', [\App\Http\Controllers\CustomerCommercialPolicyController::class,'price'])->name('sales.prices.store');
 Route::middleware('auth')->post('/procurement/reorder-rules', [\App\Http\Controllers\ProcurementRequestController::class,'saveRule'])->name('procurement.rules.store');
