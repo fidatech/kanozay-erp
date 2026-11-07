@@ -7,7 +7,7 @@ use LogicException;
 
 class SalesCreditNoteLine extends Model
 {
-    protected $fillable = ['sales_credit_note_id', 'sales_invoice_line_id', 'finished_good_id', 'production_batch_id', 'quantity_packages', 'unit_price', 'line_total', 'restocked'];
+    protected $fillable = ['sales_credit_note_id', 'sales_invoice_line_id', 'finished_good_id', 'production_batch_id', 'quantity_packages', 'unit_price', 'line_total', 'restocked','company_warehouse_id'];
     protected $casts = ['unit_price' => 'decimal:4', 'line_total' => 'decimal:4', 'restocked' => 'boolean'];
     protected static function booted(): void
     {

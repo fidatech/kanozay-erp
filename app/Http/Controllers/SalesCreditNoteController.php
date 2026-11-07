@@ -19,7 +19,8 @@ class SalesCreditNoteController extends Controller
             $line->setAttribute('returned_packages', (int) $line->creditNotes()->sum('quantity_packages'));
             $line->setAttribute('returnable_packages', max(0, $line->quantity_packages - $line->returned_packages));
         }
-        return view('sales.credit-notes.create', compact('invoice'));
+        $warehouses=\App\Models\CompanyWarehouse::where('is_active',true)->orderBy('name')->get();
+        return view('sales.credit-notes.create', compact('invoice','warehouses'));
     }
 
     public function store(Request $request, SalesInvoice $invoice, SalesCreditNoteService $service)
@@ -31,6 +32,7 @@ class SalesCreditNoteController extends Controller
             'lines.*.sales_invoice_line_id' => ['required', 'integer', 'distinct', 'exists:sales_invoice_lines,id'],
             'lines.*.quantity_packages' => ['required', 'integer', 'min:0', 'max:2147483647'],
             'lines.*.restock' => ['nullable', 'boolean'],
+            'lines.*.company_warehouse_id'=>['nullable',\Illuminate\Validation\Rule::exists('company_warehouses','id')->where('is_active',true)],
         ]);
         $data['lines'] = array_values(array_filter($data['lines'], fn ($line) => (int) $line['quantity_packages'] > 0));
         if (! $data['lines']) throw ValidationException::withMessages(['lines' => 'Enter at least one returned package quantity.']);

@@ -33,7 +33,7 @@
   <div style="display:flex;justify-content:space-between;align-items:center;margin:26px 0 10px">
    <h3 style="margin:0">Invoice items</h3><button type="button" class="btn btn-light" id="add-invoice-line"><i class="fa-solid fa-plus"></i> Add item</button>
   </div>
-  <div class="table-wrap"><table><thead><tr><th>Sales order line (optional)</th><th>Released batch / product</th><th>Packages</th><th>Unit price</th><th></th></tr></thead>
+  <div class="table-wrap"><table><thead><tr><th>Sales order line (optional)</th><th>Released batch / product</th><th>Source warehouse</th><th>Packages</th><th>Unit price</th><th></th></tr></thead>
    <tbody id="invoice-lines">
     @foreach(old('lines', [['dispatch_token'=>(string) \Illuminate\Support\Str::uuid(),'production_batch_id'=>'','quantity_packages'=>'','unit_price'=>'']]) as $index=>$line)
      <tr class="journal-line">
@@ -41,6 +41,9 @@
       <td><select name="lines[{{ $index }}][production_batch_id]" required><option value="">Select released batch</option>
        @foreach($batches as $batch)<option value="{{ $batch->id }}" data-good="{{ $batch->finished_good_id }}" data-available="{{ $batch->available_packages }}" @selected(($line['production_batch_id']??'')==$batch->id)>{{ $batch->batch_number }} · {{ $batch->finishedGood->sku }} — {{ $batch->finishedGood->name }} · {{ $batch->available_packages }} available</option>@endforeach
       </select><input type="hidden" name="lines[{{ $index }}][dispatch_token]" value="{{ $line['dispatch_token'] ?? (string) \Illuminate\Support\Str::uuid() }}"></td>
+      <td><select name="lines[{{ $index }}][company_warehouse_id]"><option value="">Unassigned stock</option>
+       @foreach($warehouses as $warehouse)<option value="{{ $warehouse->id }}" @selected(($line['company_warehouse_id']??'')==$warehouse->id)>{{ $warehouse->code }} / {{ $warehouse->name }}</option>@endforeach
+      </select></td>
       <td><input name="lines[{{ $index }}][quantity_packages]" type="number" min="1" step="1" value="{{ $line['quantity_packages']??'' }}" required></td>
       <td><input name="lines[{{ $index }}][unit_price]" type="number" min="0.0001" step="0.0001" value="{{ $line['unit_price']??'' }}" required></td>
       <td><button type="button" class="btn btn-light remove-invoice-line" aria-label="Remove item">Remove</button></td>
@@ -57,6 +60,8 @@
  <tr class="journal-line">
   <td><select data-order-line><option value="">Direct invoice</option>@foreach($orderLines as $orderLine)<option value="{{ $orderLine->id }}" data-finished-good="{{ $orderLine->finished_good_id }}" data-customer="{{ $orderLine->order->customer_id }}" data-currency="{{ $orderLine->order->currency_id }}">{{ $orderLine->order->number }} · {{ $orderLine->description }} · {{ $orderLine->quantity - $orderLine->invoiceLines->sum('quantity_packages') }} remaining</option>@endforeach</select></td>
   <td><select data-batch-select required><option value="">Select released batch</option>@foreach($batches as $batch)<option value="{{ $batch->id }}" data-good="{{ $batch->finished_good_id }}" data-available="{{ $batch->available_packages }}">{{ $batch->batch_number }} · {{ $batch->finishedGood->sku }} — {{ $batch->finishedGood->name }} · {{ $batch->available_packages }} available</option>@endforeach</select><input data-dispatch-token type="hidden"></td>
+  <td><select data-warehouse><option value="">Unassigned stock</option>
+  @foreach($warehouses as $warehouse)<option value="{{ $warehouse->id }}">{{ $warehouse->code }} / {{ $warehouse->name }}</option>@endforeach</select></td>
   <td><input data-quantity type="number" min="1" step="1" required></td>
   <td><input data-unit-price type="number" min="0.0001" step="0.0001" required></td>
   <td><button type="button" class="btn btn-light remove-invoice-line" aria-label="Remove item">Remove</button></td>
@@ -75,6 +80,7 @@
   row.querySelector('[data-batch-select]').name=`lines[${next}][production_batch_id]`;
   row.querySelector('[data-dispatch-token]').name=`lines[${next}][dispatch_token]`;
   row.querySelector('[data-dispatch-token]').value=newToken();
+  row.querySelector('[data-warehouse]').name=`lines[${next}][company_warehouse_id]`;
   row.querySelector('[data-quantity]').name=`lines[${next}][quantity_packages]`;
   row.querySelector('[data-unit-price]').name=`lines[${next}][unit_price]`;
   next++;body.appendChild(row);

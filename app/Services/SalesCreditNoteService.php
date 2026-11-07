@@ -42,7 +42,8 @@ class SalesCreditNoteService
                 if ($quantity < 1 || $alreadyReturned + $quantity > $line->quantity_packages) $this->reject('Return quantity exceeds the uninvolved quantity on an invoice line.');
                 $amount = BigDecimal::of((string) $line->unit_price)->multipliedBy((string) $quantity)->toScale(4, RoundingMode::HalfUp);
                 $total = $total->plus($amount);
-                $prepared[] = [$line, $quantity, $amount, filter_var($input['restock'] ?? false, FILTER_VALIDATE_BOOLEAN)];
+                $prepared[] = [$line, $quantity, $amount, filter_var($input['restock'] ?? false, FILTER_VALIDATE_BOOLEAN),
+                    $input['company_warehouse_id']??null];
             }
             if (! $total->isGreaterThan(0) || $total->isGreaterThan($remainingBalance)) $this->reject('Credit note amount must be positive and cannot exceed the invoice receivable still outstanding. Paid amounts must be refunded through an approved refund workflow.');
 
@@ -73,15 +74,19 @@ class SalesCreditNoteService
                 'journal_entry_id' => $journal->id, 'credit_date' => $data['credit_date'], 'reason' => $data['reason'],
                 'currency_code' => $invoice->currency_code, 'total' => (string) $total->toScale(4, RoundingMode::HalfUp), 'created_by' => $actorId,
             ]);
-            foreach ($prepared as [$line, $quantity, $amount, $restock]) {
+            foreach ($prepared as [$line, $quantity, $amount, $restock, $returnWarehouse]) {
                 $note->lines()->create([
                     'sales_invoice_line_id' => $line->id, 'finished_good_id' => $line->finished_good_id,
                     'production_batch_id' => $line->production_batch_id, 'quantity_packages' => $quantity,
                     'unit_price' => $line->unit_price, 'line_total' => (string) $amount, 'restocked' => $restock,
+                    'company_warehouse_id'=>$returnWarehouse,
                 ]);
                 if ($restock) {
                     $batch = \App\Models\ProductionBatch::query()->lockForUpdate()->findOrFail($line->production_batch_id);
                     app(FinishedGoodLotControlService::class)->assertDispatchAllowed($batch,$data['credit_date']);
+                    app(FinishedGoodWarehouseService::class)->restock(
+                        $batch,$returnWarehouse,$quantity,$data['credit_date'],$number,$actorId
+                    );
                     $good = \App\Models\FinishedGood::query()->lockForUpdate()->findOrFail($line->finished_good_id);
                     $good->forceFill(['on_hand_packages' => $good->on_hand_packages + $quantity])->save();
                 }
