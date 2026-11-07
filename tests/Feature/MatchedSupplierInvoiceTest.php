@@ -91,10 +91,8 @@ class MatchedSupplierInvoiceTest extends TestCase
         $this->assertSame('60.0000', $invoice->payable->amount);
         $this->assertCount(1, $invoice->lines);
         $this->assertSame('2.000000', $service->remaining($receipt)[$line->id]);
-        $this->assertSame(
-            '60.0000',
-            $invoice->journal->lines->sum('debit') == 60 ? $invoice->total : 'unbalanced'
-        );
+        $this->assertEquals(60, $invoice->journal->lines->sum('debit'));
+        $this->assertEquals(60, $invoice->journal->lines->sum('credit'));
 
         $replayed = $service->post($receipt, $payload, $user->id);
         $this->assertSame($invoice->id, $replayed->id);
