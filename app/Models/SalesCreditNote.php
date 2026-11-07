@@ -17,5 +17,6 @@ class SalesCreditNote extends Model
     public function invoice() { return $this->belongsTo(SalesInvoice::class, 'sales_invoice_id'); }
     public function lines() { return $this->hasMany(SalesCreditNoteLine::class, 'sales_credit_note_id'); }
     public function journal() { return $this->belongsTo(JournalEntry::class, 'journal_entry_id'); }
+    public function refund(){return $this->hasOne(SalesCreditNoteRefund::class,'sales_credit_note_id');}
     public function tradeDocumentCredit() { return $this->hasOne(TradeDocumentCredit::class); }
 }

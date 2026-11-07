@@ -20,7 +20,10 @@ class SalesCreditNoteController extends Controller
             $line->setAttribute('returnable_packages', max(0, $line->quantity_packages - $line->returned_packages));
         }
         $warehouses=\App\Models\CompanyWarehouse::where('is_active',true)->orderBy('name')->get();
-        return view('sales.credit-notes.create', compact('invoice','warehouses'));
+        $invoice->load(['tradeDocument.allocations','tradeDocument.credits']);
+        $refundAccounts=\App\Models\FinancialAccount::with('currency')
+            ->where('currency_id',$invoice->currency_id)->where('is_active',true)->orderBy('name')->get();
+        return view('sales.credit-notes.create', compact('invoice','warehouses','refundAccounts'));
     }
 
     public function store(Request $request, SalesInvoice $invoice, SalesCreditNoteService $service)
@@ -28,7 +31,10 @@ class SalesCreditNoteController extends Controller
         abort_unless($request->user()->can('sales.create'), 403);
         $data = $request->validate([
             'submission_token' => ['required', 'uuid'], 'credit_date' => ['required', 'date', 'before_or_equal:today'],
-            'reason' => ['required', 'string', 'max:255'], 'lines' => ['required', 'array', 'min:1', 'max:100'],
+            'reason' => ['required', 'string', 'max:255'],
+            'refund_source_account_id'=>['nullable','integer','exists:financial_accounts,id'],
+            'refund_reference'=>['nullable','string','min:3','max:120'],
+            'lines' => ['required', 'array', 'min:1', 'max:100'],
             'lines.*.sales_invoice_line_id' => ['required', 'integer', 'distinct', 'exists:sales_invoice_lines,id'],
             'lines.*.quantity_packages' => ['required', 'integer', 'min:0', 'max:2147483647'],
             'lines.*.restock' => ['nullable', 'boolean'],
@@ -39,6 +45,8 @@ class SalesCreditNoteController extends Controller
         foreach ($data['lines'] as $line) {
             if (! empty($line['restock'])) abort_unless($request->user()->can('inventory.update'), 403);
         }
+        if(!empty($data['refund_source_account_id']) &&
+            !$request->user()->canAny(['finance.update','administration.update']))abort(403);
         $note = $service->post($invoice->id, $data, (int) $request->user()->id);
         return redirect()->route('sales.credit-notes.show', $note)->with('success', 'Credit note posted. Customer receivable and approved return quantities were updated.');
     }
@@ -46,7 +54,8 @@ class SalesCreditNoteController extends Controller
     public function show(Request $request, SalesCreditNote $creditNote)
     {
         abort_unless($request->user()->canAny(['sales.view', 'administration.view', 'finance.view', 'reports.view']), 403);
-        $creditNote->load(['invoice.customer', 'lines.invoiceLine', 'journal']);
+        $creditNote->load(['invoice.customer', 'lines.invoiceLine', 'journal',
+            'refund.source','refund.transaction.journal','tradeDocumentCredit']);
         return view('sales.credit-notes.show', compact('creditNote'));
     }
 }

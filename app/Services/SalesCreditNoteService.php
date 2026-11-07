@@ -45,7 +45,18 @@ class SalesCreditNoteService
                 $prepared[] = [$line, $quantity, $amount, filter_var($input['restock'] ?? false, FILTER_VALIDATE_BOOLEAN),
                     $input['company_warehouse_id']??null];
             }
-            if (! $total->isGreaterThan(0) || $total->isGreaterThan($remainingBalance)) $this->reject('Credit note amount must be positive and cannot exceed the invoice receivable still outstanding. Paid amounts must be refunded through an approved refund workflow.');
+            if(!$total->isGreaterThan(0))$this->reject('Return value must be positive.');
+            if($remainingBalance->isLessThan(0))$this->reject('Invoice settlement is inconsistent; reconcile payments and previous credits first.');
+            $refundAmount=$total->isGreaterThan($remainingBalance)
+                ?$total->minus($remainingBalance)->toScale(4):BigDecimal::zero();
+            if($refundAmount->isPositive()){
+                if(empty($data['refund_source_account_id'])||empty($data['refund_reference']))
+                    $this->reject('Paid return exceeds unpaid balance. Provide an authorized refund account and approval reference.');
+                if($refundAmount->isGreaterThan('999999999999.9999'))
+                    $this->reject('Refund exceeds supported cash payment limit.');
+            }elseif(!empty($data['refund_source_account_id'])||!empty($data['refund_reference'])){
+                $this->reject('Refund account or reference provided when only an outstanding receivable credit is needed.');
+            }
 
             $partyLedger = DB::table('entity_ledger_accounts')->where([
                 'entity_type' => 'customer', 'entity_id' => $invoice->customer_id,
@@ -91,10 +102,19 @@ class SalesCreditNoteService
                     $good->forceFill(['on_hand_packages' => $good->on_hand_packages + $quantity])->save();
                 }
             }
-            TradeDocumentCredit::create([
-                'trade_document_id' => $invoice->trade_document_id, 'sales_credit_note_id' => $note->id,
-                'credit_date' => $data['credit_date'], 'amount' => (string) $total->toScale(4, RoundingMode::HalfUp),
+            // The original invoice receivable is reduced only by its unpaid
+            // remainder; reimbursement of amounts already paid is recorded
+            // in a separate, linked and balanced cash payment journal.
+            $creditAgainstOutstanding=$total->minus($refundAmount);
+            if($creditAgainstOutstanding->isPositive())TradeDocumentCredit::create([
+                'trade_document_id'=>$invoice->trade_document_id,
+                'sales_credit_note_id'=>$note->id,'credit_date'=>$data['credit_date'],
+                'amount'=>(string)$creditAgainstOutstanding->toScale(4,RoundingMode::HalfUp),
             ]);
+            if($refundAmount->isPositive())app(SalesRefundService::class)->post(
+                $note,(string)$refundAmount,(int)$data['refund_source_account_id'],
+                (string)$data['refund_reference'],(int)$partyLedger,$actorId
+            );
             ActivityLog::record('sales_credit_note.posted', 'sales_credit_note', $note->id, $number.' posted for '.$invoice->number);
             return $note->load(['invoice', 'lines', 'journal']);
         });
