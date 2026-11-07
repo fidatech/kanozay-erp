@@ -38,6 +38,7 @@ class QuickPartyTransactionController extends Controller
             'amount'=>['required','numeric','gt:0','decimal:0,4','max:999999999999.9999'],
             'description'=>['nullable','string','max:2000'],
             'trade_document_id'=>['nullable','integer','exists:trade_documents,id'],
+            'return_to_party'=>['nullable','boolean'],
         ]);
         DB::transaction(function()use($data,$request,$posting){
             // A replay of the same submitted form must never post another payment.
@@ -100,7 +101,14 @@ class QuickPartyTransactionController extends Controller
                 'party_id'=>$party->id,'currency_id'=>$data['currency_id'],'type'=>$data['type'],'journal_id'=>$journal->id,
             ]);
         });
-        return redirect()->route('finance.journals.index')->with('status',
-            !empty($data['trade_document_id']) ? 'Payment posted and allocated to the selected invoice.' : 'Credit/debit transaction posted to the journal.');
+        $message=!empty($data['trade_document_id'])
+            ? 'Payment posted and allocated to the selected invoice.'
+            : 'Credit/debit transaction posted to the journal.';
+        if(!empty($data['return_to_party'])){
+            $party=TradeParty::findOrFail($data['trade_party_id']);
+            return redirect()->route($party->type==='customer'?'finance.customers.show':'finance.suppliers.show',$party)
+                ->with('status',$message);
+        }
+        return redirect()->route('finance.journals.index')->with('status',$message);
     }
 }
