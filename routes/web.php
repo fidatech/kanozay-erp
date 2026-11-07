@@ -18,6 +18,9 @@ Route::post('/language', function (\Illuminate\Http\Request $request) {
 Route::middleware('auth')->post('/production/recipes/kanozay-confirm', [\App\Http\Controllers\KanozayWorkbookPreviewController::class, 'confirm'])->name('production.recipes.kanozay-confirm');
 Route::middleware('auth')->post('/production/recipes/kanozay-preview', [\App\Http\Controllers\KanozayWorkbookPreviewController::class, '__invoke'])->name('production.recipes.kanozay-preview');
 Route::middleware('auth')->post('/production/recipes/import-preview', [\App\Http\Controllers\ProductionRecipeImportController::class, 'preview'])->name('production.recipes.import-preview');
+Route::middleware('auth')->post('/crm/{page}', [\App\Http\Controllers\CrmController::class,'store'])->name('crm.records.store');
+Route::middleware('auth')->patch('/crm/{page}/{record}', [\App\Http\Controllers\CrmController::class,'update'])->whereNumber('record')->name('crm.records.update');
+Route::middleware('auth')->delete('/crm/{page}/{record}', [\App\Http\Controllers\CrmController::class,'destroy'])->whereNumber('record')->name('crm.records.delete');
 Route::middleware('auth')->get('/inventory/stock-counts', [\App\Http\Controllers\InventoryStockCountController::class, 'index'])->name('inventory.counts.index');
 Route::middleware('auth')->post('/inventory/stock-counts', [\App\Http\Controllers\InventoryStockCountController::class, 'store'])->name('inventory.counts.store');
 Route::middleware('auth')->get('/inventory/stock-counts/{count}', [\App\Http\Controllers\InventoryStockCountController::class, 'show'])->name('inventory.counts.show');

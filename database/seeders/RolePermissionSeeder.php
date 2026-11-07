@@ -15,7 +15,7 @@ class RolePermissionSeeder extends Seeder
 
         $modules = [
             'dashboard', 'purchases', 'inventory', 'manufacturing', 'laboratory',
-            'sales', 'finance', 'shareholders', 'hr', 'maintenance', 'reports',
+            'sales', 'crm', 'finance', 'shareholders', 'hr', 'maintenance', 'reports',
             'administration', 'users', 'roles',
         ];
 
@@ -36,7 +36,7 @@ class RolePermissionSeeder extends Seeder
             'Production Manager' => ['dashboard.view', 'manufacturing.view', 'manufacturing.create', 'manufacturing.update', 'inventory.view', 'inventory.update', 'laboratory.view', 'laboratory.create', 'laboratory.update'],
             'Inventory Officer' => ['dashboard.view', 'inventory.view', 'inventory.create', 'inventory.update', 'purchases.view', 'purchases.create', 'purchases.update'],
             'Laboratory Officer' => ['dashboard.view', 'laboratory.view', 'laboratory.create', 'laboratory.update', 'manufacturing.view'],
-            'Sales Officer' => ['dashboard.view', 'sales.view', 'sales.create', 'sales.update'],
+            'Sales Officer' => ['dashboard.view', 'sales.view', 'sales.create', 'sales.update', 'crm.view', 'crm.create', 'crm.update'],
             'HR Officer' => ['dashboard.view', 'hr.view', 'hr.create', 'hr.update'],
             'Viewer' => ['dashboard.view', 'reports.view'],
         ];
