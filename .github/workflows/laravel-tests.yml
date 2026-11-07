@@ -50,6 +50,8 @@ jobs:
         run: |
           cp .env.example .env
           php artisan key:generate
+      - name: Verify supplier invoice accounting regression first
+        run: php artisan test tests/Feature/MatchedSupplierInvoiceTest.php --stop-on-failure
       - name: Run Laravel test suite
         run: php artisan test
       - name: Verify clean SQLite installation
