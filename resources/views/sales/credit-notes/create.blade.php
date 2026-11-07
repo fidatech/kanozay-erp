@@ -4,12 +4,24 @@
 <div class="card" style="padding:22px">@if($errors->any())<p role="alert" style="color:#b42318">{{ $errors->first() }}</p>@endif
 <form method="POST" action="{{ route('sales.credit-notes.store',$invoice) }}" data-credit-confirm>@csrf<input type="hidden" name="submission_token" value="{{ old('submission_token',(string)\Illuminate\Support\Str::uuid()) }}">
 <div class="form-grid"><label>Credit date<input type="date" name="credit_date" value="{{ old('credit_date',now()->toDateString()) }}" required></label><label style="grid-column:span 2">Reason<input name="reason" value="{{ old('reason') }}" maxlength="255" required></label></div>
+@canany(['finance.update','administration.update'])
+<div style="padding:17px;background:#f4f8fc;border:1px solid #dce8f3;border-radius:9px;margin:14px 0">
+<h3>Refund for previously paid return</h3>
+<p class="muted">When the return exceeds the unpaid invoice amount, choose a source account and record the finance approval reference. This creates a linked refund payment and journal for the excess only. Leave both fields empty for ordinary credit notes.</p>
+<div class="form-grid">
+<label>Refund payment account
+<select name="refund_source_account_id"><option value="">None — credit unpaid balance only</option>
+@foreach($refundAccounts as $account)<option value="{{ $account->id }}" @selected(old('refund_source_account_id')==$account->id)>{{ $account->name }} ({{ $account->currency?->code }})</option>@endforeach
+</select></label>
+<label>Approved refund reference<input name="refund_reference" value="{{ old('refund_reference') }}" minlength="3" maxlength="120" placeholder="Authorization / bank reference"></label>
+</div></div>
+@endcanany
 <div class="table-wrap" style="margin-top:18px"><table><thead><tr><th>Invoice item</th><th>Invoiced</th><th>Previously returned</th><th>Return quantity</th><th>Return warehouse</th><th>Condition</th></tr></thead><tbody>
 @foreach($invoice->lines as $i=>$line)<tr><td>{{ $line->finishedGood->name }} · {{ $line->batch->batch_number }}<div class="muted">{{ $line->finishedGood->sku }} · {{ $line->finishedGood->package_unit }} · {{ $invoice->currency_code }} {{ $line->unit_price }}</div></td><td>{{ $line->quantity_packages }}</td><td>{{ $line->returned_packages }}</td><td><input type="hidden" name="lines[{{ $i }}][sales_invoice_line_id]" value="{{ $line->id }}"><input type="number" name="lines[{{ $i }}][quantity_packages]" value="0" min="0" max="{{ $line->returnable_packages }}" step="1" @disabled($line->returnable_packages===0)></td><td><select name="lines[{{ $i }}][company_warehouse_id]"><option value="">Unassigned stock</option>
 @foreach($warehouses as $wh)<option value="{{ $wh->id }}">{{ $wh->code }} / {{ $wh->name }}</option>@endforeach</select>
 </td><td>@can('inventory.update')<label style="display:flex;align-items:center;gap:8px"><input type="checkbox" name="lines[{{ $i }}][restock]" value="1"> QC approved for saleable stock</label>@else<span class="muted">Quarantined / non-saleable</span>@endcan</td></tr>@endforeach
 </tbody></table></div>
-<p class="muted">Credit notes reduce the invoice balance and reverse its revenue. Return quantities are credited once only. Items return to saleable stock only when an inventory-authorized user confirms QC approval; other returns remain outside available stock. Credits are limited to unpaid invoice balances. Paid invoice refunds require a separate approved refund workflow.</p>
+<p class="muted">Credit notes reduce the invoice balance and reverse its revenue. Return quantities are credited once only. Items return to saleable stock only when an inventory-authorized user confirms QC approval; other returns remain outside available stock. Credits apply to the unpaid receivable. Paid portions require a finance-authorized refund to the same currency account, with a separate posted payment journal.</p>
 <div style="text-align:right;margin-top:18px"><button class="btn" type="submit">Post return and credit note</button></div></form></div>
 <script>document.querySelector('[data-credit-confirm]')?.addEventListener('submit',async event=>{const form=event.currentTarget;if(form.dataset.confirmed==='yes')return;event.preventDefault();const result=await Swal.fire({icon:'warning',title:'Post this credit note?',text:'This creates a posted accounting entry and adjusts the customer balance. QC-approved quantities return to saleable stock.',showCancelButton:true,confirmButtonText:'Post credit note',cancelButtonText:'Review',confirmButtonColor:'#b42318'});if(result.isConfirmed){form.dataset.confirmed='yes';form.requestSubmit()}})</script>
 @endsection
