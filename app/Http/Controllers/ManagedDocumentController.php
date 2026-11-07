@@ -198,6 +198,9 @@ class ManagedDocumentController extends Controller
                     'change_note'=>$data['change_note'],'uploaded_by'=>$request->user()->id,
                     'created_at'=>now(),'updated_at'=>now(),
                 ]);
+                DB::table('managed_document_approvals')
+                    ->where('managed_document_id',$doc->id)->where('status','pending')
+                    ->update(['status'=>'superseded','updated_at'=>now()]);
                 DB::table('managed_documents')->where('id',$doc->id)->update([
                     'current_version'=>$newVersion,'status'=>'draft',
                     'approved_by'=>null,'approved_at'=>null,'updated_at'=>now(),
@@ -292,6 +295,9 @@ class ManagedDocumentController extends Controller
             $doc=DB::table('managed_documents')->where('id',$document)
                 ->whereNull('deleted_at')->lockForUpdate()->first();
             abort_unless($doc,404);
+            DB::table('managed_document_approvals')
+                ->where('managed_document_id',$document)->where('status','pending')
+                ->update(['status'=>'superseded','updated_at'=>now()]);
             DB::table('managed_documents')->where('id',$document)->update([
                 'title'=>$data['title'],'document_category_id'=>$data['document_category_id']??null,
                 'expires_on'=>$data['expires_on']??null,

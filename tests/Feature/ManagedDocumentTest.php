@@ -84,6 +84,24 @@ class ManagedDocumentTest extends TestCase
         $this->assertDatabaseHas('managed_documents',['id'=>$doc,'status'=>'draft','current_version'=>2,'approved_by'=>null]);
     }
 
+    public function test_metadata_edits_invalidate_old_pending_approval_without_blocking_new_review():void
+    {
+        Storage::fake('local');
+        $uploader=$this->officer();
+        $doc=$this->upload($uploader);
+        $this->actingAs($uploader)->post(route('documents.approvals.request',$doc))->assertRedirect();
+        $this->actingAs($uploader)->patch(route('documents.metadata',$doc),[
+            'title'=>'Revised procedure',
+        ])->assertRedirect();
+        $this->assertDatabaseHas('managed_document_approvals',[
+            'managed_document_id'=>$doc,'status'=>'superseded',
+        ]);
+        $this->actingAs($uploader)->post(route('documents.approvals.request',$doc))->assertRedirect();
+        $this->assertDatabaseHas('managed_documents',['id'=>$doc,'status'=>'pending_approval']);
+        $this->assertSame(2,DB::table('managed_document_approvals')
+            ->where('managed_document_id',$doc)->count());
+    }
+
     public function test_retention_hold_blocks_archival_and_allows_metadata_update():void
     {
         Storage::fake('local');
