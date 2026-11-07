@@ -12,6 +12,7 @@
 <div class="heading"><div><h1>Production Costing</h1><p>Material valuation and independently reviewed overhead allocations by batch and currency</p></div><a class="btn btn-light" href="{{ route('production.orders.index') }}">Production orders</a></div>
 @if(session('success'))<p class="notice">{{ session('success') }}</p>@endif
 @if($errors->any())<p class="notice notice-warning">{{ implode(' ',$errors->all()) }}</p>@endif
+<p><a class="btn btn-light" href="{{ route('manufacturing.cost-readiness.index') }}">View batch cost readiness and indicative package costing</a></p>
 <div class="co-notice">Overhead allocation uses amounts already posted to an expense journal. It never posts a second expense or manufactures missing material values. Cost snapshots are separated by currency, and batches containing unvalued materials remain incomplete until purchase-source evidence is reconciled. Finance approval and source journal availability are required.</div>
 <section class="co-panel"><h2>Batch material-cost ledger</h2><div class="co-wrap"><table><thead><tr><th>Batch</th><th>Product</th><th>Currency</th><th>Valued material cost</th><th>Consumed quantity</th><th>Unvalued quantity</th></tr></thead><tbody>
 @forelse($materialCosts as $c)

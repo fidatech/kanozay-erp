@@ -16,7 +16,7 @@ class ProductionCostReadinessController extends Controller {
   $filter=$request->validate([
    'status'=>['nullable','in:pending_qc,qc_approved,released,qc_rejected'],
   ]);
-  $batches=ProductionBatch::query()->with('costs','finishedGood')
+  $batches=ProductionBatch::query()->with(['costs','finishedGood'])
     ->when($filter['status']??null,fn($q,$s)=>$q->where('status',$s))
     ->orderByDesc('id')->paginate(30)->withQueryString();
   return view('production.cost-readiness',[
@@ -32,7 +32,7 @@ class ProductionCostReadinessController extends Controller {
       'Currency','Material source amount','Approved expense overhead',
       'Unapproved overhead count','Cost complete','Indicative cost per package',
       'Reason/limitation']);
-    ProductionBatch::with('costs','finishedGood')
+    ProductionBatch::with(['costs','finishedGood'])
      ->when($filter['status']??null,fn($q,$s)=>$q->where('status',$s))
      ->orderBy('id')->chunkById(150,function($batches)use($service,$handle){
        foreach($service->rows($batches) as $row){

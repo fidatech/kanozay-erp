@@ -42,6 +42,8 @@ Route::middleware('auth')->get('/inventory/warehouse-stock', [\App\Http\Controll
 Route::middleware('auth')->post('/inventory/materials/{material}/catalog', [\App\Http\Controllers\InventoryMaterialController::class,'assignCatalog'])->name('inventory.materials.catalog');
 Route::middleware('auth')->post('/production/finished-goods/{good}/catalog', [\App\Http\Controllers\FinishedGoodController::class,'assignCatalog'])->name('production.finished-goods.catalog');
 Route::middleware('auth')->post('/inventory/warehouse-stock', [\App\Http\Controllers\WarehouseStockController::class,'store'])->name('inventory.warehouse-stock.store');
+Route::middleware('auth')->get('/manufacturing/cost-readiness', [\App\Http\Controllers\ProductionCostReadinessController::class,'index'])->name('manufacturing.cost-readiness.index');
+Route::middleware('auth')->get('/manufacturing/cost-readiness.csv', [\App\Http\Controllers\ProductionCostReadinessController::class,'export'])->name('manufacturing.cost-readiness.export');
 Route::middleware('auth')->post('/manufacturing/equipment', [\App\Http\Controllers\ManufacturingOperationsController::class,'equipment'])->name('manufacturing.equipment.store');
 Route::middleware('auth')->post('/manufacturing/schedules', [\App\Http\Controllers\ManufacturingOperationsController::class,'schedule'])->name('manufacturing.schedules.store');
 Route::middleware('auth')->post('/manufacturing/schedules/{schedule}/transition', [\App\Http\Controllers\ManufacturingOperationsController::class,'transition'])->name('manufacturing.schedules.transition');
