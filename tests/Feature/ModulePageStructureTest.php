@@ -16,7 +16,12 @@ class ModulePageStructureTest extends TestCase
         $user=User::factory()->create();
         Permission::findOrCreate('administration.view','web');
         Permission::findOrCreate('hr.view','web');
-        $user->givePermissionTo(['administration.view', 'hr.view']);
+        // Module-specific controllers require their own read permissions,
+        // even when a test user can see the administration shell.
+        $scopes=array_map(fn($module)=>$module.'.view',array_keys(config('erp_pages')));
+        $scopes[]='maintenance.view';
+        foreach($scopes as $scope)Permission::findOrCreate($scope,'web');
+        $user->givePermissionTo(array_unique(array_merge(['administration.view','hr.view'],$scopes)));
         foreach(config('erp_pages') as $module=>$data){
             $this->actingAs($user)->get(route('workspace.page',[$module,'overview']))
                 ->assertOk()->assertSee($data['label']);
