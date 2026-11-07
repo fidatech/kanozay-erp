@@ -58,7 +58,7 @@ class TradePartyController extends Controller {
   $recentPayments=\App\Models\MoneyTransaction::with('currency')
    ->whereIn('counterpart_ledger_account_id',$ledgerIds)
    ->whereIn('type',['receipt','payment'])->orderByDesc('id')->limit(15)->get();
-  $cashboxes=\App\Models\FinancialAccount::where('type','cashbox')->where('is_active',true)
+  $cashboxes=\App\Models\FinancialAccount::whereIn('type',['cashbox','bank','sarafi'])->where('is_active',true)
    ->whereIn('currency_id',$party->currencies->pluck('id'))->with('currency')->orderBy('name')->get();
   return view('finance.parties.show',[
    'party'=>$party,'type'=>$type,
