@@ -135,6 +135,7 @@ Route::middleware('auth')->post('/hr/departments', [\App\Http\Controllers\Employ
 Route::middleware('auth')->patch('/hr/departments/{department}', [\App\Http\Controllers\EmployeeDepartmentController::class, 'update'])->name('hr.departments.update');
 Route::middleware('auth')->post('/hr/employees/import-preview', [\App\Http\Controllers\EmployeeProfileController::class, 'importPreview'])->name('hr.employees.import-preview');
 Route::middleware('auth')->post('/hr/employees/import-confirm', [\App\Http\Controllers\EmployeeProfileController::class, 'importConfirm'])->name('hr.employees.import-confirm');
+Route::middleware('auth')->post('/hr/payroll/{period}/lines/{line}/components', [\App\Http\Controllers\PayrollComponentController::class,'store'])->name('hr.payroll.components.store');
 Route::middleware('auth')->get('/hr/payroll/{period}', [\App\Http\Controllers\PayrollPeriodController::class, 'show'])->name('hr.payroll.show');
 Route::middleware('auth')->post('/hr/payroll', [\App\Http\Controllers\PayrollPeriodController::class, 'store'])->name('hr.payroll.store');
 Route::middleware('auth')->patch('/hr/payroll/{period}/lines/{line}', [\App\Http\Controllers\PayrollPeriodController::class, 'updateLine'])->name('hr.payroll.lines.update');

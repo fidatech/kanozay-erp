@@ -16,4 +16,5 @@ class PayrollLine extends Model
     public function period() { return $this->belongsTo(PayrollPeriod::class, 'payroll_period_id'); }
     public function employee() { return $this->belongsTo(EmployeeProfile::class, 'employee_profile_id'); }
     public function payment() { return $this->belongsTo(MoneyTransaction::class, 'payment_transaction_id'); }
+    public function components() {return $this->hasMany(PayrollLineComponent::class,'payroll_line_id');}
 }

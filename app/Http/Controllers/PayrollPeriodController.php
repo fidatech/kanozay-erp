@@ -29,7 +29,7 @@ class PayrollPeriodController extends Controller
     public function show(Request $request, PayrollPeriod $period)
     {
         abort_unless($request->user()->can('hr.view'), 403);
-        $period->load(['currency', 'approvalJournal', 'lines.employee', 'lines.payment']);
+        $period->load(['currency', 'approvalJournal', 'lines.employee', 'lines.payment','lines.components.ledger']);
         $start = $period->period_start->toDateString();
         $end = $period->period_start->copy()->endOfMonth()->toDateString();
         $attendance = EmployeeAttendance::whereIn('employee_profile_id', $period->lines->pluck('employee_profile_id'))
@@ -106,7 +106,7 @@ class PayrollPeriodController extends Controller
 
         return view('hr.payroll.payslip', [
             'period' => $period->load('currency', 'approvalJournal'),
-            'line' => $line,
+            'line' => $line->load('components.ledger'),
             'company' => CompanySetting::first(),
         ]);
     }

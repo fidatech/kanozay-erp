@@ -59,6 +59,8 @@ class PayrollPeriodService
             if ($value->compareTo(BigDecimal::of((string) $item->salary_snapshot)) !== 0 && ! trim((string) $reason)) {
                 $this->reject('Explain every change from the salary snapshot.');
             }
+            if($item->components()->exists())
+                $this->reject('This employee has itemized components. Review components instead of overriding the net amount.');
             $item->update(['payable_amount' => (string) $value->toScale(4), 'adjustment_reason' => trim((string) $reason) ?: null]);
             ActivityLog::record('payroll.line.adjusted', 'payroll_line', $item->id, 'Draft payroll amount adjusted with reason');
         });
@@ -79,6 +81,30 @@ class PayrollPeriodService
             foreach ($lines as $line) $total = $total->plus((string) $line->payable_amount);
             if (! $total->isGreaterThan(0) || $total->isGreaterThan(BigDecimal::of('9999999999999999.9999'))) $this->reject('Approved payroll total must be positive and within the supported range.');
 
+            $components=DB::table('payroll_line_components')->whereIn('payroll_line_id',$lines->pluck('id'))->get();
+            $salaryBase=BigDecimal::zero();
+            $allowances=[];$deductions=[];
+            if($components->isNotEmpty()){
+                $grouped=$components->groupBy('payroll_line_id');
+                foreach($lines as $item){
+                    $salaryBase=$salaryBase->plus((string)$item->salary_snapshot);
+                    $expected=BigDecimal::of((string)$item->salary_snapshot);
+                    foreach($grouped->get($item->id,collect()) as $component){
+                        if($component->kind==='allowance'){
+                            $allowances[$component->ledger_account_id]=($allowances[$component->ledger_account_id]??BigDecimal::zero())->plus((string)$component->amount);
+                            $expected=$expected->plus((string)$component->amount);
+                        }else{
+                            if((int)$component->ledger_account_id===$payableId)
+                                $this->reject('Withholding ledger must differ from the net salary payable ledger.');
+                            $deductions[$component->ledger_account_id]=($deductions[$component->ledger_account_id]??BigDecimal::zero())->plus((string)$component->amount);
+                            $expected=$expected->minus((string)$component->amount);
+                        }
+                    }
+                    if(!$expected->isEqualTo((string)$item->payable_amount))
+                        $this->reject('Payroll line does not match the reviewed salary, allowance and deduction breakdown.');
+                }
+            }
+
             DocumentSequence::firstOrCreate(['document_type' => 'payroll'], ['prefix' => 'PAYR-', 'next_number' => 1, 'padding' => 6, 'is_active' => true]);
             $number = DocumentSequence::issue('payroll');
             $journalDate = $locked->period_start->copy()->endOfMonth();
@@ -88,8 +114,15 @@ class PayrollPeriodService
                 'reference' => $number, 'description' => 'Approved payroll '.$locked->period_start->format('Y-m'),
                 'currency_id' => $locked->currency_id, 'created_by' => $actorId, 'status' => 'draft',
             ]);
-            $journal->lines()->create(['ledger_account_id' => $expense->id, 'debit' => (string) $total->toScale(4), 'credit' => '0']);
+            $journal->lines()->create(['ledger_account_id' => $expense->id,
+                'debit'=>(string)($components->isNotEmpty()?$salaryBase:$total)->toScale(4),'credit'=>'0']);
+            foreach($allowances as $accountId=>$amount)
+                $journal->lines()->create(['ledger_account_id'=>$accountId,
+                    'debit'=>(string)$amount->toScale(4),'credit'=>'0']);
             $journal->lines()->create(['ledger_account_id' => $payable->id, 'debit' => '0', 'credit' => (string) $total->toScale(4)]);
+            foreach($deductions as $accountId=>$amount)
+                $journal->lines()->create(['ledger_account_id'=>$accountId,
+                    'debit'=>'0','credit'=>(string)$amount->toScale(4)]);
             $this->posting->post($journal, $actorId);
             $locked->update([
                 'status' => 'approved', 'expense_ledger_id' => $expense->id,

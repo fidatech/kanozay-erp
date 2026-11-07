@@ -67,6 +67,10 @@ class ModulePageController extends Controller
             return app(EmployeeProfileController::class)->index($request);
         }
 
+        if ($module === 'hr' && $page === 'benefits') {
+            return app(PayrollComponentController::class)->index($request);
+        }
+
         if ($module === 'hr' && $page === 'payroll') {
             return app(PayrollPeriodController::class)->index($request);
         }

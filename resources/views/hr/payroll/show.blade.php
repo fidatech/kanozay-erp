@@ -16,7 +16,29 @@ No records
 @foreach($leaves as $leave)
 <br>Approved leave: {{ $leave->starts_on->toDateString() }} to {{ $leave->ends_on->toDateString() }}
 @endforeach
-</td><td>{{ $line->salary_snapshot }}</td><td>@if($period->status === 'draft' && auth()->user()->can('hr.update'))<form method="POST" action="{{ route('hr.payroll.lines.update',[$period,$line]) }}" style="display:flex;gap:6px;flex-wrap:wrap">@csrf @method('PATCH')<input name="payable_amount" value="{{ $line->payable_amount }}" inputmode="decimal" required style="width:130px"><input name="adjustment_reason" value="{{ $line->adjustment_reason }}" maxlength="500" placeholder="Reason if changed" style="width:180px"><button class="btn btn-secondary" type="submit">Save</button></form>@else {{ $line->payable_amount }} @endif</td><td>{{ $line->adjustment_reason ?? '—' }}</td><td>
+</td><td>{{ $line->salary_snapshot }}</td><td>@if($period->status === 'draft' && auth()->user()->can('hr.update'))<form method="POST" action="{{ route('hr.payroll.lines.update',[$period,$line]) }}" style="display:flex;gap:6px;flex-wrap:wrap">@csrf @method('PATCH')<input name="payable_amount" value="{{ $line->payable_amount }}" inputmode="decimal" required style="width:130px"><input name="adjustment_reason" value="{{ $line->adjustment_reason }}" maxlength="500" placeholder="Reason if changed" style="width:180px"><button class="btn btn-secondary" type="submit">Save</button></form>@else {{ $line->payable_amount }} @endif</td><td>
+@foreach($line->components as $component)
+<div><strong>{{ ucfirst($component->kind) }}</strong> · {{ $component->label }}:
+{{ $component->kind==='deduction'?'-':'+' }}{{ $component->amount }}</div>
+@endforeach
+{{ $line->adjustment_reason??'—' }}
+@if($period->status==='draft' && auth()->user()->can('hr.update') && auth()->user()->can('finance.update'))
+<details style="margin:8px 0"><summary>Add reviewed payroll component</summary>
+<form method="POST" action="{{ route('hr.payroll.components.store',[$period,$line]) }}" style="display:grid;gap:7px">@csrf
+<input type="hidden" name="submission_token" value="{{ (string)\Illuminate\Support\Str::uuid() }}">
+<select name="kind"><option value="allowance">Allowance / earning</option><option value="deduction">Deduction / withholding</option></select>
+<input name="label" required minlength="2" maxlength="120" placeholder="Component description">
+<input name="amount" required inputmode="decimal" placeholder="Amount">
+<select name="ledger_account_id" required><option value="">Expense or liability GL account</option>
+@foreach($expenses as $account)<option value="{{ $account->id }}">{{ $account->code }} · {{ $account->name }}</option>@endforeach
+@foreach($payables as $account)<option value="{{ $account->id }}">{{ $account->code }} · {{ $account->name }}</option>@endforeach
+</select>
+<input name="approval_reference" required minlength="3" maxlength="180" placeholder="Approval/policy reference">
+<input name="reason" required minlength="8" maxlength="2500" placeholder="Reviewed reason">
+<button type="submit" class="btn btn-secondary">Add reviewed component</button>
+</form></details>
+@endif
+</td><td>
 @if($line->payment_transaction_id)Paid · {{ $line->payment?->journal?->number ?? 'Posted' }}
 <a href="{{ route('hr.payroll.lines.payslip',[$period,$line]) }}">Payslip</a>
 @elseif($period->status === 'approved' && $hasPayable && auth()->user()->can('hr.update') && auth()->user()->can('finance.update'))<form method="POST" action="{{ route('hr.payroll.lines.pay',[$period,$line]) }}" style="display:flex;gap:6px;flex-wrap:wrap">@csrf<input type="hidden" name="submission_token" value="{{ (string) \Illuminate\Support\Str::uuid() }}"><select name="source_account_id" required><option value="">Payment account</option>@foreach($accounts as $account)<option value="{{ $account->id }}">{{ $account->name }}</option>@endforeach</select><input type="date" name="payment_date" value="{{ now()->toDateString() }}" required><button class="btn" type="submit">Pay</button></form>
