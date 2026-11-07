@@ -30,6 +30,7 @@ class ProductionMaterialService
                 if (! $material || ! $material->is_active) {
                     $this->reject('A linked material is missing or inactive.');
                 }
+                app(QualityMaterialHoldService::class)->assertAvailable($material,$required);
                 $available = BigDecimal::of((string) $material->on_hand_quantity)
                     ->minus(BigDecimal::of((string) $material->reserved_quantity));
                 if ($available->isLessThan($required)) {

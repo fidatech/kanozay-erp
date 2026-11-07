@@ -36,6 +36,7 @@ class ModulePageStructureTest extends TestCase
                     $module === 'crm' => 'register',
                     $module === 'inventory' && in_array($page,['transfers','warehouses'],true) => 'Warehouse stock allocation',
                     $module === 'inventory' && $page === 'counts' => 'Physical Stock Counts',
+                    $module === 'inventory' && $page === 'batch-tracking' => 'Receipt-lot QC holds',
                     $module === 'assets' && $page === 'register' => 'Fixed asset register',
                     $module === 'assets' && $page === 'depreciation' => 'Fixed asset depreciation',
                     $module === 'assets' && in_array($page,['maintenance','schedules','service-history','transfers','disposals'],true) => 'Asset lifecycle',

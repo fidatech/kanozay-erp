@@ -57,6 +57,10 @@ class InventoryStockService
                 throw ValidationException::withMessages(['quantity' => 'Stock balance exceeds the supported range.']);
             }
 
+            if($type==='issue'){
+                app(QualityMaterialHoldService::class)->assertAvailable($locked,$quantity);
+            }
+
             // Allocated warehouse quantities must reconcile to the existing global ledger.
             // Stock with no warehouse is explicitly held in the unassigned pool.
             $warehouseId = !empty($data['company_warehouse_id']) ? (int)$data['company_warehouse_id'] : null;

@@ -59,6 +59,10 @@ class ModulePageController extends Controller
             return app(CrmController::class)->index($request, $page);
         }
 
+        if ($module === 'inventory' && $page === 'batch-tracking') {
+            return app(RawMaterialQualityHoldController::class)->index($request,app(\App\Services\QualityMaterialHoldService::class));
+        }
+
         if ($module === 'inventory' && $page === 'counts') {
             return app(InventoryStockCountController::class)->index($request);
         }

@@ -37,6 +37,6 @@ class ShareholderGovernanceTest extends TestCase {
   $this->actingAs($b)->post(route('shareholders.governance.decide',$id),['decision'=>'approved'])->assertRedirect();
   $this->assertDatabaseHas('shareholder_resolutions',['id'=>$id,'status'=>'approved']);
   $this->actingAs($a)->get(route('workspace.page',['shareholders','ownership']))
-    ->assertOk()->assertSee('60.0000');
+    ->assertOk()->assertSee('BOARD-APPROVED-1');
  }
 }

@@ -105,12 +105,40 @@ class InventoryCostService
     public function consume(InventoryStockMovement $movement): void
     {
         if (InventoryCostConsumption::where('inventory_stock_movement_id', $movement->id)->exists()) return;
+        if($movement->reference_type==='purchase_return_line'){
+            $line=\App\Models\PurchaseReturnRecordLine::findOrFail($movement->reference_id);
+            $origin=InventoryCostLayer::where('source_type','goods_receipt_line')
+                ->where('source_id',$line->goods_receipt_line_id)->lockForUpdate()->first();
+            if($origin){
+                $originalRemaining=BigDecimal::of((string)$origin->remaining_quantity);
+                $returnQty=BigDecimal::of((string)$movement->quantity);
+                if($originalRemaining->isLessThan($returnQty))
+                    throw ValidationException::withMessages(['quantity'=>'This receipt lot no longer contains sufficient stock to return to its supplier.']);
+                InventoryCostConsumption::create([
+                    'inventory_stock_movement_id'=>$movement->id,
+                    'inventory_cost_layer_id'=>$origin->id,
+                    'quantity'=>(string)$returnQty->toScale(6),
+                    'amount'=>$this->amountForConsumption($origin,$returnQty),
+                    'currency_id'=>$origin->currency_id,'currency_code'=>$origin->currency_code,
+                    'is_valued'=>$origin->original_cost!==null && $origin->currency_id!==null,
+                ]);
+                $origin->update(['remaining_quantity'=>(string)$originalRemaining->minus($returnQty)->toScale(6)]);
+            }else{
+                InventoryCostConsumption::create([
+                    'inventory_stock_movement_id'=>$movement->id,
+                    'inventory_cost_layer_id'=>null,'quantity'=>$movement->quantity,'amount'=>null,
+                    'currency_id'=>null,'currency_code'=>null,'is_valued'=>false,
+                ]);
+            }
+            return;
+        }
         $quantityToConsume = BigDecimal::of((string) $movement->quantity);
             $layers = InventoryCostLayer::query()->where('inventory_material_id', $movement->inventory_material_id)
                 ->where('remaining_quantity', '>', 0)->orderBy('received_on')->orderBy('id')->lockForUpdate()->get();
 
             foreach ($layers as $layer) {
-                if (! $quantityToConsume->isGreaterThan(0)) break;
+                if(! $quantityToConsume->isGreaterThan(0)) break;
+                if(app(QualityMaterialHoldService::class)->isLayerHeld($layer))continue;
                 $remaining = BigDecimal::of((string) $layer->remaining_quantity);
                 $quantity = $remaining->compareTo($quantityToConsume) <= 0 ? $remaining : $quantityToConsume;
                 $amount = $this->amountForConsumption($layer, $quantity);
