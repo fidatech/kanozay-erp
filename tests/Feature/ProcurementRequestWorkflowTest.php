@@ -17,7 +17,7 @@ class ProcurementRequestWorkflowTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function setup():array
+    private function records():array
     {
         foreach(['inventory.view','inventory.create','inventory.update','purchases.view',
             'purchases.create','purchases.update'] as $p)Permission::findOrCreate($p,'web');
@@ -34,7 +34,7 @@ class ProcurementRequestWorkflowTest extends TestCase
 
     public function test_reorder_rule_submission_independent_approval_and_po_conversion():void
     {
-        [$requester,$reviewer,$buyer,$material,$supplier,$currency]=$this->setup();
+        [$requester,$reviewer,$buyer,$material,$supplier,$currency]=$this->records();
         $this->actingAs($requester)->post(route('procurement.rules.store'),[
             'inventory_material_id'=>$material->id,'minimum_quantity'=>'5',
             'target_quantity'=>'20','lead_days'=>7,'supplier_id'=>$supplier->id,
@@ -66,7 +66,7 @@ class ProcurementRequestWorkflowTest extends TestCase
 
     public function test_duplicate_material_lines_and_unknown_access_are_rejected():void
     {
-        [$requester,,$buyer,$material]=$this->setup();
+        [$requester,,$buyer,$material]=$this->records();
         $payload=['submission_token'=>(string)Str::uuid(),'requested_on'=>today()->toDateString(),
             'lines'=>[
                 ['inventory_material_id'=>$material->id,'quantity'=>'1'],
