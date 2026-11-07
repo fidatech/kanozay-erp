@@ -85,9 +85,34 @@ class SalesPaidRefundWorkflowTest extends TestCase
   $this->assertSame('30.0000',$note->refund->amount);
   $this->assertSame('posted',$note->refund->transaction->journal->status);
   $this->assertDatabaseCount('sales_credit_note_refunds',1);
+  $this->assertDatabaseCount('sales_return_quarantines',1);
+  $this->assertDatabaseHas('sales_return_quarantines',[
+   'production_batch_id'=>$batch->id,'quantity_packages'=>4,'status'=>'quarantined',
+  ]);
   $this->assertDatabaseCount('trade_document_credits',1);
   $this->assertDatabaseCount('money_transactions',2);
   $this->assertSame(1,$good->fresh()->on_hand_packages);
+  $quality=User::factory()->create();
+  foreach(['laboratory.update','inventory.update','sales.view'] as $permission)
+   Permission::findOrCreate($permission,'web');
+  $quality->givePermissionTo(['laboratory.update','inventory.update','sales.view']);
+  $q=\App\Models\SalesReturnQuarantine::firstOrFail();
+  $this->actingAs($user)->post(route('sales.returns.quarantine.decision',$q),[
+   'action'=>'release','decided_on'=>today()->toDateString(),
+   'quality_reference'=>'QC-RETURN-01','decision_notes'=>'Source operator cannot approve own return release.',
+  ])->assertForbidden();
+  $this->actingAs($quality)->post(route('sales.returns.quarantine.decision',$q),[
+   'action'=>'release','decided_on'=>today()->toDateString(),
+   'quality_reference'=>'QC-RETURN-01','decision_notes'=>'Independent QC sample review passed return inspection.',
+  ])->assertRedirect();
+  $this->assertSame(5,$good->fresh()->on_hand_packages);
+  $this->assertSame(5,app(\App\Services\FinishedGoodDispatchService::class)->availablePackages($batch->fresh()));
+  $this->assertDatabaseHas('sales_return_quarantines',['id'=>$q->id,'status'=>'released']);
+  $this->actingAs($quality)->post(route('sales.returns.quarantine.decision',$q),[
+   'action'=>'release','decided_on'=>today()->toDateString(),
+   'quality_reference'=>'QC-RETURN-01','decision_notes'=>'Second release attempt must not double count.',
+  ])->assertSessionHasErrors('action');
+  $this->assertSame(5,$good->fresh()->on_hand_packages);
   $this->actingAs($user)->get(route('sales.credit-notes.show',$note))
    ->assertOk()->assertSee('REFUND-APPROVED-01');
   $this->assertSame('50.0000',\App\Models\JournalLine::where('journal_entry_id',$note->journal_entry_id)->sum('credit') == 50 ? '50.0000' : 'wrong');

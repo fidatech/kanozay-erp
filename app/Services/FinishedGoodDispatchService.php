@@ -15,9 +15,12 @@ class FinishedGoodDispatchService
     public function availablePackages(ProductionBatch $batch): int
     {
         $dispatched = (int) $batch->dispatchLines()->sum('quantity_packages');
+        $releasedQuarantines=(int)DB::table('sales_return_quarantines')
+            ->where('production_batch_id',$batch->id)->where('status','released')
+            ->sum('quantity_packages');
         $restockedReturns = (int) DB::table('sales_credit_note_lines')
             ->where('production_batch_id', $batch->id)->where('restocked', true)->sum('quantity_packages');
-        return max(0, (int) $batch->accepted_packages + $restockedReturns - $dispatched);
+        return max(0, (int) $batch->accepted_packages + $restockedReturns + $releasedQuarantines - $dispatched);
     }
 
     public function post(int $goodId, int $batchId, int $quantity, array $data, int $actorId): FinishedGoodDispatch

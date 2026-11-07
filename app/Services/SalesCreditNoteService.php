@@ -86,12 +86,21 @@ class SalesCreditNoteService
                 'currency_code' => $invoice->currency_code, 'total' => (string) $total->toScale(4, RoundingMode::HalfUp), 'created_by' => $actorId,
             ]);
             foreach ($prepared as [$line, $quantity, $amount, $restock, $returnWarehouse]) {
-                $note->lines()->create([
+                $returnLine=$note->lines()->create([
                     'sales_invoice_line_id' => $line->id, 'finished_good_id' => $line->finished_good_id,
                     'production_batch_id' => $line->production_batch_id, 'quantity_packages' => $quantity,
                     'unit_price' => $line->unit_price, 'line_total' => (string) $amount, 'restocked' => $restock,
                     'company_warehouse_id'=>$returnWarehouse,
                 ]);
+                if(!$restock){
+                    \App\Models\SalesReturnQuarantine::create([
+                        'sales_credit_note_line_id'=>$returnLine->id,
+                        'production_batch_id'=>$line->production_batch_id,
+                        'received_warehouse_id'=>$returnWarehouse,
+                        'quantity_packages'=>$quantity,'status'=>'quarantined',
+                        'registered_by'=>$actorId,
+                    ]);
+                }
                 if ($restock) {
                     $batch = \App\Models\ProductionBatch::query()->lockForUpdate()->findOrFail($line->production_batch_id);
                     app(FinishedGoodLotControlService::class)->assertDispatchAllowed($batch,$data['credit_date']);
