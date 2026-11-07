@@ -23,7 +23,28 @@ class TradePartyController extends Controller {
  private function updateParty(Request $request,TradeParty $party,string $type){abort_unless($request->user()->canAny(['administration.update', 'finance.update']),403);abort_unless($party->type===$type,404);$data=$request->validate(['name'=>['required','string','max:180'],'code'=>['nullable','string','max:40',Rule::unique('trade_parties','code')->where('type',$type)->ignore($party->id)],'contact_person'=>['nullable','string','max:150'],'phone'=>['nullable','string','max:80'],'email'=>['nullable','email','max:180'],'address'=>['nullable','string','max:2000'],'notes'=>['nullable','string','max:2000']]);$before=$party->only(array_keys($data));$party->fill($data);$changed=$party->getDirty();if($changed){DB::transaction(function()use($party,$type,$before,$changed){$party->save();ActivityLog::record('trade_party.updated','trade_party',$party->id,ucfirst($type).' profile updated: '.$party->name,['before'=>array_intersect_key($before,$changed),'after'=>$changed]);});}return redirect()->route($type==='customer'?'finance.customers.show':'finance.suppliers.show',$party)->with('status',$changed?'Profile updated successfully.':'No profile changes detected.');}
  public function showCustomer(Request $request,TradeParty $party){return $this->show($request,$party,'customer');}
  public function showSupplier(Request $request,TradeParty $party){return $this->show($request,$party,'supplier');}
- private function show(Request $request,TradeParty $party,string $type){abort_unless($request->user()->canAny(['administration.view', 'finance.view', 'reports.view']),403);abort_unless($party->type===$type,404);$party->load('currencies');$documents=\App\Models\TradeDocument::with('credits')->where('trade_party_id',$party->id)->where('type',$type==='customer'?'receivable':'payable')->orderByDesc('id')->limit(20)->get();$documents->each(function($document){$credit=\Brick\Math\BigDecimal::zero();foreach($document->credits as $item)$credit=$credit->plus((string)$item->amount);$document->setAttribute('net_amount',(string)\Brick\Math\BigDecimal::of((string)$document->amount)->minus($credit));});return view('finance.parties.show',['party'=>$party,'type'=>$type,'openingBalances'=>DB::table('trade_opening_balances')->where('trade_party_id',$party->id)->get(),'documents'=>$documents]);}
+ private function show(Request $request,TradeParty $party,string $type){
+  abort_unless($request->user()->canAny(['administration.view','finance.view','reports.view']),403);
+  abort_unless($party->type===$type,404);
+  $party->load('currencies');
+  $documents=\App\Models\TradeDocument::with(['credits','allocations'])
+   ->where('trade_party_id',$party->id)->where('type',$type==='customer'?'receivable':'payable')
+   ->orderByDesc('id')->limit(100)->get();
+  $documents->each(function($document){
+   $remaining=BigDecimal::of((string)$document->amount);
+   foreach($document->credits as $credit)$remaining=$remaining->minus((string)$credit->amount);
+   foreach($document->allocations as $allocation)$remaining=$remaining->minus((string)$allocation->amount);
+   if($remaining->isNegative())$remaining=BigDecimal::zero();
+   $document->setAttribute('outstanding_amount',(string)$remaining->toScale(4));
+  });
+  $cashboxes=\App\Models\FinancialAccount::where('type','cashbox')->where('is_active',true)
+   ->whereIn('currency_id',$party->currencies->pluck('id'))->with('currency')->orderBy('name')->get();
+  return view('finance.parties.show',[
+   'party'=>$party,'type'=>$type,
+   'openingBalances'=>DB::table('trade_opening_balances')->where('trade_party_id',$party->id)->get(),
+   'documents'=>$documents,'cashboxes'=>$cashboxes,
+  ]);
+ }
  public function customers(Request $request){$request->merge(['type'=>'customer']);return $this->index($request);}
  public function suppliers(Request $request){$request->merge(['type'=>'supplier']);return $this->index($request);}
  public function index(Request $request){
