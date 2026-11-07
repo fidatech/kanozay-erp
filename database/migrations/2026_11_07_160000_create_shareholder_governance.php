@@ -29,7 +29,7 @@ return new class extends Migration {
   });
   Schema::create('shareholder_profit_distributions',function(Blueprint $t){
    $t->id();$t->uuid('submission_token')->unique();
-   $t->foreignId('shareholder_resolution_id')->constrained('shareholder_resolutions')->restrictOnDelete();
+   $t->foreignId('shareholder_resolution_id');$t->foreign('shareholder_resolution_id','profit_distribution_resolution_fk')->references('id')->on('shareholder_resolutions')->restrictOnDelete();
    $t->foreignId('shareholder_id')->constrained('shareholders')->restrictOnDelete();
    $t->foreignId('currency_id')->constrained('currencies')->restrictOnDelete();
    $t->foreignId('financial_account_id')->constrained('financial_accounts')->restrictOnDelete();
