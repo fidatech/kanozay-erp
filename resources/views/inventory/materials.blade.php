@@ -36,6 +36,7 @@
        <label>Cost currency
         <select name="currency_id"><option value="">Unvalued opening stock</option>@foreach($currencies as $currency)<option value="{{ $currency->id }}">{{ $currency->code }} — {{ $currency->name }}</option>@endforeach</select>
        </label>
+       <label>Receiving warehouse<select name="company_warehouse_id"><option value="">Unassigned stock</option>@foreach($warehouses as $warehouse)<option value="{{ $warehouse->id }}">{{ $warehouse->code }} - {{ $warehouse->name }}</option>@endforeach</select></label>
        <label>Opening date <input name="occurred_on" type="date" value="{{ now()->toDateString() }}" required></label>
        <label>Notes <textarea name="notes" maxlength="2000" rows="3"></textarea></label>
       </div>

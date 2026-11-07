@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Currency;
 use App\Models\InventoryMaterial;
+use App\Models\CompanyWarehouse;
 use App\Services\InventoryAdjustmentService;
 use App\Services\InventoryCostService;
 use App\Services\InventoryStockService;
@@ -18,6 +19,7 @@ class InventoryMaterialController extends Controller
 
         return view('inventory.materials', [
             'currencies' => Currency::where('is_active', true)->orderBy('code')->get(),
+            'warehouses' => CompanyWarehouse::where('is_active',true)->orderBy('name')->get(),
             'materials' => InventoryMaterial::query()
                 ->withExists(['movements as has_opening' => fn ($query) => $query->where('type', 'opening')])
                 ->orderBy('name')->paginate(20),
@@ -30,6 +32,7 @@ class InventoryMaterialController extends Controller
 
         return view('inventory.material-show', [
             'material' => $material,
+            'warehouses' => CompanyWarehouse::where('is_active',true)->orderBy('name')->get(),
             'movements' => $material->movements()->orderByDesc('id')->paginate(25),
         ]);
     }
@@ -71,6 +74,7 @@ class InventoryMaterialController extends Controller
         $data = $request->validate([
             'quantity' => ['required', 'regex:/^(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,6})?$/', 'numeric', 'gt:0'],
             'occurred_on' => ['required', 'date', 'before_or_equal:today'],
+            'company_warehouse_id'=>['nullable',Rule::exists('company_warehouses','id')->where('is_active',true)],
             'notes' => ['nullable', 'string', 'max:2000'],
             'unit_cost' => ['nullable', 'required_with:currency_id', 'regex:/^(?:0|[1-9][0-9]{0,13})(?:\.[0-9]{1,6})?$/', 'numeric', 'gt:0'],
             'currency_id' => ['nullable', 'required_with:unit_cost', Rule::exists('currencies', 'id')->where('is_active', true)],
@@ -82,6 +86,7 @@ class InventoryMaterialController extends Controller
                 'unit_cost' => $data['unit_cost'] ?? null,
                 'currency_id' => $data['currency_id'] ?? null,
                 'reference_type' => 'opening', 'reference_id' => $material->id,
+                'company_warehouse_id'=>$data['company_warehouse_id']??null,
                 'occurred_on' => $data['occurred_on'],
                 'notes' => $data['notes'] ?? null,
                 'created_by' => $request->user()->id,
@@ -99,6 +104,7 @@ class InventoryMaterialController extends Controller
             'quantity' => ['required', 'regex:/^(?:0|[1-9][0-9]{0,13})(?:\.[0-9]{1,6})?$/', 'numeric', 'gt:0'],
             'occurred_on' => ['required', 'date', 'before_or_equal:today'],
             'reason' => ['required', 'string', 'min:5', 'max:1000'],
+            'company_warehouse_id'=>['nullable',Rule::exists('company_warehouses','id')->where('is_active',true)],
             'idempotency_key' => ['required', 'uuid'],
         ]);
 

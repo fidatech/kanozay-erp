@@ -22,7 +22,8 @@ class InventoryAdjustmentService
                     && $existing->direction === $data['direction']
                     && BigDecimal::of((string) $existing->quantity)->compareTo(BigDecimal::of((string) $data['quantity'])) === 0
                     && $existing->occurred_on->toDateString() === $data['occurred_on']
-                    && $existing->reason === trim($data['reason']);
+                    && $existing->reason === trim($data['reason'])
+                    && (int)($existing->company_warehouse_id??0) === (int)($data['company_warehouse_id']??0);
                 if (! $sameRequest) {
                     throw ValidationException::withMessages(['idempotency_key' => 'This submission key was already used for a different stock adjustment.']);
                 }
@@ -42,12 +43,14 @@ class InventoryAdjustmentService
                 'reason' => trim($data['reason']),
                 'idempotency_key' => $data['idempotency_key'],
                 'created_by' => $actor->id,
+                'company_warehouse_id'=>$data['company_warehouse_id']??null,
             ]);
 
             app(InventoryStockService::class)->post($lockedMaterial, [
                 'type' => $data['direction'],
                 'direction' => $data['direction'] === 'adjustment_in' ? 'in' : 'out',
                 'quantity' => $data['quantity'],
+                'company_warehouse_id'=>$data['company_warehouse_id']??null,
                 'reference_type' => 'inventory_adjustment',
                 'reference_id' => $adjustment->id,
                 'occurred_on' => $data['occurred_on'],

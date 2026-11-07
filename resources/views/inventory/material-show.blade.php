@@ -26,6 +26,7 @@
    <p>Current balance: <strong>{{ $material->on_hand_quantity }} {{ $material->unit }}</strong>. Enter the physical count difference. Decreases cannot use stock reserved for production.</p>
    <label>Adjustment type<select name="direction" required><option value="adjustment_in" @selected(old('direction')==='adjustment_in')>Increase stock</option><option value="adjustment_out" @selected(old('direction')==='adjustment_out')>Decrease stock</option></select></label>
    <label>Quantity <input name="quantity" type="text" inputmode="decimal" value="{{ old('quantity') }}" required></label>
+   <label>Physical warehouse<select name="company_warehouse_id"><option value="">Unassigned stock</option>@foreach($warehouses as $warehouse)<option value="{{ $warehouse->id }}">{{ $warehouse->code }} - {{ $warehouse->name }}</option>@endforeach</select></label>
    <label>Adjustment date <input name="occurred_on" type="date" value="{{ old('occurred_on', now()->toDateString()) }}" required></label>
    <label>Reason <textarea name="reason" minlength="5" maxlength="1000" rows="3" required>{{ old('reason') }}</textarea></label>
   </div>

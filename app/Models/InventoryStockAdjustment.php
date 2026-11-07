@@ -9,7 +9,7 @@ class InventoryStockAdjustment extends Model
 {
     protected $fillable = [
         'inventory_material_id', 'direction', 'quantity', 'occurred_on',
-        'reason', 'idempotency_key', 'created_by',
+        'reason', 'idempotency_key', 'created_by', 'company_warehouse_id',
     ];
 
     protected $casts = ['quantity' => 'decimal:6', 'occurred_on' => 'date'];
