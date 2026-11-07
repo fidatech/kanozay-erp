@@ -32,6 +32,9 @@
 <a href="{{ route('finance.balance-sheet.index') }}"><i class="fa-solid fa-building-columns"></i>Balance Sheet</a>
 <a href="{{ route('finance.cash-movements.index') }}"><i class="fa-solid fa-money-bill-transfer"></i>Cash, Bank and Sarafi Movements</a>
 <a href="{{ route('finance.reconciliation.index') }}"><i class="fa-solid fa-scale-balanced"></i>Settlement Reconciliation</a>
+@can('administration.view')
+<a href="{{ route('admin.integrity-audit.index') }}"><i class="fa-solid fa-clipboard-check"></i>ERP Integrity Review</a>
+@endcan
 </div>
 <p style="color:#7086a0;margin-top:18px">Counts represent actual registered records, not monetary balances. Multi-currency totals are intentionally not combined.</p>
 </div>

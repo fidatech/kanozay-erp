@@ -156,6 +156,8 @@ Route::middleware('auth')->get('/hr/shift-attendance/export', [\App\Http\Control
 Route::middleware('auth')->get('/hr/shift-attendance', [\App\Http\Controllers\HrShiftAttendanceReviewController::class,'index'])->name('hr.shift-attendance.index');
 Route::middleware('auth')->get('/purchases/supplier-scorecards/export', [\App\Http\Controllers\SupplierPerformanceScorecardController::class,'export'])->name('purchases.supplier-scorecards.export');
 Route::middleware('auth')->get('/purchases/supplier-scorecards', [\App\Http\Controllers\SupplierPerformanceScorecardController::class,'index'])->name('purchases.supplier-scorecards.index');
+Route::middleware('auth')->get('/admin/integrity-audit/export', [\App\Http\Controllers\ErpIntegrityAuditController::class,'export'])->name('admin.integrity-audit.export');
+Route::middleware('auth')->get('/admin/integrity-audit', [\App\Http\Controllers\ErpIntegrityAuditController::class,'index'])->name('admin.integrity-audit.index');
 Route::middleware('auth')->get('/workspace/{module}/{page}', [\App\Http\Controllers\ModulePageController::class, 'show'])->name('workspace.page');
 Route::middleware('auth')->get('/shareholders', [\App\Http\Controllers\ShareholderController::class, 'index'])->name('shareholders.index');
 Route::middleware('auth')->post('/shareholders', [\App\Http\Controllers\ShareholderController::class, 'store'])->name('shareholders.store');
