@@ -75,6 +75,21 @@ class ManufacturingOperationsController extends Controller
     ->lockForUpdate()->first();
    abort_unless($equipment,404);
    if(!$equipment->is_active)throw ValidationException::withMessages(['manufacturing_equipment_id'=>'Equipment inactive.']);
+   // A recorded and independently approved failed/overdue calibration stops
+   // new equipment reservations. Legacy machines with no register history
+   // retain their existing scheduling path until a calibration policy is set.
+   $calibration=DB::table('operational_registers')
+    ->where('workflow','laboratory.calibration')
+    ->where('data->equipment',(int)$equipment->id)
+    ->whereIn('status',['approved','closed'])
+    ->orderByDesc('id')->first();
+   if($calibration){
+    $cal=json_decode($calibration->data,true);
+    if(($cal['result']??null)!=='pass' ||
+        empty($cal['due_on']) || $cal['due_on']<substr($data['starts_at'],0,10))
+     throw ValidationException::withMessages(['manufacturing_equipment_id'=>
+      'Machine calibration is failed, conditional or overdue for the planned start. Schedule it after a new passed QC calibration.']);
+   }
    $order=ProductionOrder::whereKey($data['production_order_id'])->lockForUpdate()->firstOrFail();
    if(!in_array($order->status,['planned','reserved'],true))
     throw ValidationException::withMessages(['production_order_id'=>'Schedule only planned or reserved production orders.']);
