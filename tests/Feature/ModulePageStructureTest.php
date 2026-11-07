@@ -47,6 +47,7 @@ class ModulePageStructureTest extends TestCase
                     $module === 'sales' && $page === 'customer-credit-limits' => 'Customer Credit Limits',
                     $module === 'purchases' && $page === 'purchase-returns' => 'Purchase Returns',
                     $module === 'purchases' && $page === 'supplier-debit-notes' => 'Supplier Debit Notes',
+                    $module === 'purchases' && $page === 'goods-receipts' => 'Supplier Invoice Matching',
                     $module === 'purchases' && $page === 'requisitions' => 'Procurement request',
                     $module === 'inventory' && in_array($page,['reorder','material-requests'],true) => 'Procurement request',
                     $module === 'manufacturing' && $page === 'recipes' => 'Production Recipes',

@@ -36,6 +36,8 @@ Route::middleware('auth')->post('/procurement/reorder-rules', [\App\Http\Control
 Route::middleware('auth')->post('/procurement/requests', [\App\Http\Controllers\ProcurementRequestController::class,'submit'])->name('procurement.requests.store');
 Route::middleware('auth')->post('/procurement/requests/{requisition}/decide', [\App\Http\Controllers\ProcurementRequestController::class,'decide'])->name('procurement.requests.decide');
 Route::middleware('auth')->post('/procurement/requests/{requisition}/convert', [\App\Http\Controllers\ProcurementRequestController::class,'convert'])->name('procurement.requests.convert');
+Route::middleware('auth')->post('/purchases/matched-supplier-invoices', [\App\Http\Controllers\MatchedSupplierInvoiceController::class,'store'])->name('purchases.matched-supplier-invoices.store');
+Route::middleware('auth')->get('/purchases/matched-supplier-invoices/{invoice}', [\App\Http\Controllers\MatchedSupplierInvoiceController::class,'show'])->name('purchases.matched-supplier-invoices.show');
 Route::middleware('auth')->get('/purchases/supplier-debit-notes', [\App\Http\Controllers\SupplierDebitNoteController::class,'index'])->name('purchases.supplier-debit-notes.index');
 Route::middleware('auth')->post('/purchases/supplier-debit-notes/{return}', [\App\Http\Controllers\SupplierDebitNoteController::class,'post'])->name('purchases.supplier-debit-notes.post');
 Route::middleware('auth')->post('/purchases/returns', [\App\Http\Controllers\PurchaseReturnController::class,'store'])->name('purchases.returns.store');

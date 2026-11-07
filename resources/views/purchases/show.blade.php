@@ -47,6 +47,7 @@ $hasSubtotal=$subtotal->compareTo(\Brick\Math\BigDecimal::zero())>0;
 <p class="muted">Estimated expenses are allocated proportionally by item value. Expense allocation is an estimate only. Goods receipts post stock quantities and preserve purchase-value snapshots without inventory valuation or finance entries. Zero-value orders cannot be allocated.</p></div>
 <div class="panel">
 <h2>Goods Received Notes</h2>
+<p><a class="btn btn-light" href="{{ route('workspace.page',['purchases','goods-receipts']) }}">Match Supplier Invoice / Post Payable</a></p>
 @canany(['purchases.view','inventory.view','administration.view'])
 <p><a class="btn btn-light" href="{{ route('workspace.page',['purchases','purchase-returns']) }}">Return goods to supplier</a></p>
 @endcanany
