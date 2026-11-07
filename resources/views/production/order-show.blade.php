@@ -92,11 +92,11 @@
   @csrf
   <label for="production-issue-date">Issue date</label>
   <input id="production-issue-date" type="date" name="occurred_on" value="{{ old('occurred_on', now()->toDateString()) }}" max="{{ now()->toDateString() }}" required>
-  <div class="table-wrap"><table><thead><tr><th>Material</th><th>Planned quantity</th><th>Actual quantity</th><th>Unit</th></tr></thead><tbody>
+  <div class="table-wrap"><table><thead><tr><th>Material</th><th>Planned quantity</th><th>Actual quantity</th><th>Warehouse source</th><th>Unit</th></tr></thead><tbody>
    @foreach($materials as $material)
    <tr><td>{{ $material['name'] }}</td><td>{{ $material['quantity'] }}</td>
    <td><input type="text" inputmode="decimal" name="actual_quantities[{{ $material['id'] }}]" value="{{ old('actual_quantities.'.$material['id'], $material['quantity']) }}" required aria-label="Actual quantity for {{ $material['name'] }}"></td>
-   <td>{{ $material['unit'] }}</td></tr>
+   <td><select name="warehouse_ids[{{ $material['id'] }}]"><option value="">Unassigned stock</option>@foreach($warehouses as $warehouse)<option value="{{ $warehouse->id }}">{{ $warehouse->code }} / {{ $warehouse->name }}</option>@endforeach</select></td><td>{{ $material['unit'] }}</td></tr>
    @endforeach
   </tbody></table></div>
   <button type="submit" class="btn">Post material issue</button>

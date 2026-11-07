@@ -102,6 +102,7 @@ class GoodsReceiptService
                 'purchase_order_id' => $locked->id,
                 'receipt_token' => $data['receipt_token'],
                 'received_on' => $data['received_on'],
+                'company_warehouse_id' => $data['company_warehouse_id']??null,
                 'supplier_reference' => $data['supplier_reference'] ?? null,
                 'notes' => $data['notes'] ?? null,
                 'status' => 'draft',
@@ -133,6 +134,7 @@ class GoodsReceiptService
                 ]);
                 $this->stock->post($material, [
                     'type' => 'receipt', 'direction' => 'in',
+                    'company_warehouse_id' => $data['company_warehouse_id']??null,
                     'quantity' => (string) $quantity->toScale(6),
                     'reference_type' => 'goods_receipt_line', 'reference_id' => $line->id,
                     'occurred_on' => $data['received_on'],

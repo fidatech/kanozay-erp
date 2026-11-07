@@ -9,7 +9,7 @@ class InventoryStockMovement extends Model
 {
     protected $fillable = [
         'type', 'direction', 'quantity', 'reference_type', 'reference_id',
-        'occurred_on', 'notes', 'created_by',
+        'occurred_on', 'notes', 'created_by', 'company_warehouse_id',
     ];
 
     protected $casts = ['quantity' => 'decimal:6', 'occurred_on' => 'date'];

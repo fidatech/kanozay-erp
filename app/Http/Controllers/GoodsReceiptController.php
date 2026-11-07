@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\PurchaseOrder;
+use Illuminate\Validation\Rule;
 use App\Services\GoodsReceiptService;
 use Illuminate\Http\Request;
 
@@ -16,6 +17,7 @@ class GoodsReceiptController extends Controller
             'receipt_token' => ['required', 'uuid'],
             'received_on' => ['required', 'date', 'before_or_equal:today'],
             'supplier_reference' => ['nullable', 'string', 'max:100'],
+            'company_warehouse_id' => ['nullable',Rule::exists('company_warehouses','id')->where('is_active',true)],
             'notes' => ['nullable', 'string', 'max:2000'],
             'quantities' => ['required', 'array', 'min:1', 'max:100'],
             'quantities.*' => ['nullable', 'regex:/^(?:0|[1-9][0-9]{0,13})(?:\\.[0-9]{1,6})?$/'],

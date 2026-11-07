@@ -13,7 +13,7 @@ class PurchaseOrderController extends Controller {
   foreach($orders as $order){$total=BigDecimal::zero();foreach($order->items as $item)$total=$total->plus(BigDecimal::of((string)$item->quantity)->multipliedBy((string)$item->unit_price)->toScale(4,RoundingMode::HalfUp));$order->setAttribute('order_total',(string)$total);}
   return view('purchases.orders',[
    'orders'=>$orders,
-   'materials'=>\App\Models\InventoryMaterial::where('is_active',true)->orderBy('name')->get(),
+   'materials'=>\App\Models\InventoryMaterial::where('is_active',true)->orderBy('name')->get(), 'warehouses'=>\App\Models\CompanyWarehouse::where('is_active',true)->orderBy('name')->get(),
    'materialOptions'=>\App\Models\InventoryMaterial::where('is_active',true)->orderBy('name')->get(['id','sku','name','unit'])->map(fn($m)=>['id'=>$m->id,'label'=>sprintf('%s · %s (%s)', $m->sku, $m->name, $m->unit)])->values(),
    'nextNumber'=>$this->nextNumber(),
    'suppliers'=>TradeParty::where('type','supplier')->where('is_active',true)->orderBy('name')->get(),

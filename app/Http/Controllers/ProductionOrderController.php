@@ -117,7 +117,8 @@ class ProductionOrderController extends Controller {
         $finishedGoods = $order->status === 'issued' && $request->user()->can('manufacturing.update')
             ? FinishedGood::where('is_active', true)->orderBy('sku')->get()
             : collect();
-        return view('production.order-show', compact('order', 'materials', 'catalogMaterials', 'finishedGoods'));
+        $warehouses=\App\Models\CompanyWarehouse::where('is_active',true)->orderBy('name')->get();
+        return view('production.order-show', compact('order', 'materials', 'catalogMaterials', 'finishedGoods','warehouses'));
     }
 
     public function linkMaterial(Request $request, ProductionOrder $order, ProductionOrderMaterial $materialLine) {
@@ -157,9 +158,11 @@ class ProductionOrderController extends Controller {
         $data = $request->validate([
             'occurred_on' => ['required', 'date', 'before_or_equal:today'],
             'actual_quantities' => ['required', 'array', 'min:1'],
+            'warehouse_ids'=>['nullable','array'],
+            'warehouse_ids.*'=>['nullable',Rule::exists('company_warehouses','id')->where('is_active',true)],
             'actual_quantities.*' => ['required', 'regex:/^(?:0|[1-9][0-9]{0,13})(?:\\.[0-9]{1,6})?$/'],
         ]);
-        $service->issue($order, $data['actual_quantities'], $request->user()->id, $data['occurred_on']);
+        $service->issue($order, $data['actual_quantities'], $request->user()->id, $data['occurred_on'],$data['warehouse_ids']??[]);
         return back()->with('success', 'Actual materials issued to production and stock ledger updated.');
     }
 

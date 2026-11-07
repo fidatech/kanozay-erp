@@ -56,9 +56,9 @@ class ProductionMaterialService
      * lower or higher than the plan, provided other reservations remain covered.
      * The stock ledger and reservation release share one database transaction.
      */
-    public function issue(ProductionOrder $order, array $actuals, int $actorId, string $date): void
+    public function issue(ProductionOrder $order, array $actuals, int $actorId, string $date, array $warehouseIds = []): void
     {
-        DB::transaction(function () use ($order, $actuals, $actorId, $date) {
+        DB::transaction(function () use ($order, $actuals, $actorId, $date, $warehouseIds) {
             $order = ProductionOrder::query()->lockForUpdate()->findOrFail($order->id);
             $this->assertStatus($order, 'reserved');
             $lines = $order->materials()->orderBy('id')->get();
@@ -116,6 +116,7 @@ class ProductionMaterialService
                 if ($quantity->isGreaterThan(0)) {
                     $this->stock->post($materials->get($line->inventory_material_id), [
                         'type' => 'issue', 'direction' => 'out',
+                        'company_warehouse_id' => $warehouseIds[$line->id]??null,
                         'quantity' => (string) $quantity->toScale(6),
                         'reference_type' => 'production_order_material',
                         'reference_id' => $line->id,

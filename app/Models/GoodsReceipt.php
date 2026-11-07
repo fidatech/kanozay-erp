@@ -10,7 +10,7 @@ class GoodsReceipt extends Model
 {
     protected $fillable = [
         'number', 'purchase_order_id', 'receipt_token', 'received_on',
-        'supplier_reference', 'status', 'notes', 'created_by',
+        'supplier_reference', 'status', 'notes', 'created_by', 'company_warehouse_id',
         'cost_currency_id', 'cost_currency_code',
         'valuation_currency_id', 'valuation_currency_code',
         'fx_rate_snapshot', 'fx_rate_source_id', 'fx_rate_effective_date',

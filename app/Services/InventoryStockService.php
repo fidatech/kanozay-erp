@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\InventoryMaterial;
+use App\Models\CompanyWarehouse;
 use App\Models\InventoryStockMovement;
 use Brick\Math\BigDecimal;
 use Illuminate\Support\Facades\DB;
@@ -56,6 +57,37 @@ class InventoryStockService
                 throw ValidationException::withMessages(['quantity' => 'Stock balance exceeds the supported range.']);
             }
 
+            // Allocated warehouse quantities must reconcile to the existing global ledger.
+            // Stock with no warehouse is explicitly held in the unassigned pool.
+            $warehouseId = !empty($data['company_warehouse_id']) ? (int)$data['company_warehouse_id'] : null;
+            $balances = DB::table('inventory_warehouse_balances')->where('inventory_material_id',$locked->id)->lockForUpdate()->get();
+            $allocated = BigDecimal::zero();
+            foreach($balances as $row)$allocated=$allocated->plus((string)$row->quantity);
+            if($allocated->isGreaterThan($balance))
+                throw ValidationException::withMessages(['company_warehouse_id'=>'Reconcile overallocated warehouse stock before posting.']);
+            $unassigned = $balance->minus($allocated);
+            if($warehouseId) {
+                $warehouse=CompanyWarehouse::whereKey($warehouseId)->where('is_active',true)->first();
+                if(!$warehouse)throw ValidationException::withMessages(['company_warehouse_id'=>'Select an active warehouse.']);
+                $row=$balances->firstWhere('company_warehouse_id',$warehouseId);
+                $warehouseBalance=BigDecimal::of((string)($row->quantity??'0'));
+                if($directions[$type]==='out' && $warehouseBalance->isLessThan($quantity))
+                    throw ValidationException::withMessages(['quantity'=>'Insufficient stock at the selected warehouse.']);
+                $nextWarehouse=$directions[$type]==='in'?$warehouseBalance->plus($quantity):$warehouseBalance->minus($quantity);
+                if($row){
+                    DB::table('inventory_warehouse_balances')->where('id',$row->id)->update([
+                        'quantity'=>(string)$nextWarehouse->toScale(6),'updated_at'=>now()
+                    ]);
+                } else {
+                    DB::table('inventory_warehouse_balances')->insert([
+                        'inventory_material_id'=>$locked->id,'company_warehouse_id'=>$warehouseId,
+                        'quantity'=>(string)$nextWarehouse->toScale(6),'created_at'=>now(),'updated_at'=>now()
+                    ]);
+                }
+            } elseif($directions[$type]==='out' && $unassigned->isLessThan($quantity)) {
+                throw ValidationException::withMessages(['company_warehouse_id'=>'Choose the warehouse supplying this stock issue; unassigned stock is insufficient.']);
+            }
+
             $entry = $locked->movements()->create([
                 'type' => $type,
                 'direction' => $directions[$type],
@@ -65,6 +97,7 @@ class InventoryStockService
                 'occurred_on' => $data['occurred_on'],
                 'notes' => $data['notes'] ?? null,
                 'created_by' => $data['created_by'] ?? null,
+                'company_warehouse_id' => $warehouseId,
             ]);
             $locked->forceFill(['on_hand_quantity' => (string) $next->toScale(6)])->save();
 

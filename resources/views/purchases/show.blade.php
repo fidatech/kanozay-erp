@@ -53,6 +53,7 @@ $hasSubtotal=$subtotal->compareTo(\Brick\Math\BigDecimal::zero())>0;
 <form method="POST" action="{{ route('purchases.orders.receipts.store',$order) }}" style="margin:16px 0">@csrf
 <input type="hidden" name="receipt_token" value="{{ old('receipt_token', (string) \Illuminate\Support\Str::uuid()) }}">
 <div class="po-form">
+<label>Receiving warehouse<select name="company_warehouse_id"><option value="">Unassigned stock</option>@foreach($warehouses as $warehouse)<option value="{{ $warehouse->id }}">{{ $warehouse->code }} / {{ $warehouse->name }}</option>@endforeach</select></label>
 <label>Receipt date<input type="date" name="received_on" value="{{ old('received_on',now()->toDateString()) }}" required max="{{ now()->toDateString() }}"></label>
 <label>Supplier delivery reference<input type="text" name="supplier_reference" maxlength="100" value="{{ old('supplier_reference') }}"></label>
 <label>Notes<input type="text" name="notes" maxlength="2000" value="{{ old('notes') }}"></label>
