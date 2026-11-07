@@ -95,6 +95,10 @@ class ModulePageController extends Controller
             return app(FixedAssetController::class)->index($request);
         }
 
+        if ($module === 'shareholders' && in_array($page,['ownership','resolutions','distributions'],true)) {
+            return app(ShareholderGovernanceController::class)->index($request,$page);
+        }
+
         if ($module === 'shareholders' && in_array($page, ['register', 'capital', 'statements'], true)) {
             return app(ShareholderController::class)->index($request);
         }

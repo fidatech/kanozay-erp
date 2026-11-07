@@ -26,6 +26,7 @@ class ModulePageStructureTest extends TestCase
                     $module === 'hr' && $page === 'employees' => 'Employee number',
                     $module === 'hr' && $page === 'payroll' => 'Payroll periods',
                     $module === 'hr' && $page === 'benefits' => 'Payroll Components',
+                    $module === 'shareholders' && in_array($page,['ownership','resolutions','distributions'],true) => 'Shareholder Governance',
                     $module === 'hr' && $page === 'attendance' => 'Attendance register',
                     $module === 'hr' && $page === 'leave' => 'Leave requests',
                     $module === 'hr' && $page === 'departments' => 'Departments',
