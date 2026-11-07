@@ -12,6 +12,7 @@
 <label>Email <input type="email" name="email" maxlength="180" value="{{ old('email',$party->email) }}"></label>
 <label>Address <input name="address" maxlength="2000" value="{{ old('address',$party->address) }}"></label>
 <label style="grid-column:1/-1">Notes <textarea name="notes" rows="3" maxlength="2000">{{ old('notes',$party->notes) }}</textarea></label>
+<label style="grid-column:1/-1;display:flex;align-items:center;gap:10px"><input type="hidden" name="is_active" value="0"><input type="checkbox" name="is_active" value="1" @checked(old('is_active',$party->is_active)) style="width:auto;min-height:0"> Active account</label>
 </div><div class="modal-foot"><button type="button" class="btn btn-light" onclick="document.getElementById('party-edit-dialog').close()">Cancel</button><button type="submit" class="btn">Save Profile</button></div></form></dialog>
 @if($errors->any())<script>document.addEventListener('DOMContentLoaded',function(){document.getElementById('party-edit-dialog').showModal()})</script>@endif
 @endcanany
