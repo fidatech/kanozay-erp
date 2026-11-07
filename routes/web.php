@@ -152,6 +152,8 @@ Route::middleware('auth')->post('/purchases/orders/{order}/advances', [\App\Http
 Route::middleware('auth')->get('/purchases/orders/{order}', [\App\Http\Controllers\PurchaseOrderController::class,'show'])->name('purchases.orders.show');
 Route::middleware('auth')->get('/purchases/orders', [\App\Http\Controllers\PurchaseOrderController::class,'index'])->name('purchases.orders.index');
 
+Route::middleware('auth')->get('/hr/shift-attendance/export', [\App\Http\Controllers\HrShiftAttendanceReviewController::class,'export'])->name('hr.shift-attendance.export');
+Route::middleware('auth')->get('/hr/shift-attendance', [\App\Http\Controllers\HrShiftAttendanceReviewController::class,'index'])->name('hr.shift-attendance.index');
 Route::middleware('auth')->get('/workspace/{module}/{page}', [\App\Http\Controllers\ModulePageController::class, 'show'])->name('workspace.page');
 Route::middleware('auth')->get('/shareholders', [\App\Http\Controllers\ShareholderController::class, 'index'])->name('shareholders.index');
 Route::middleware('auth')->post('/shareholders', [\App\Http\Controllers\ShareholderController::class, 'store'])->name('shareholders.store');

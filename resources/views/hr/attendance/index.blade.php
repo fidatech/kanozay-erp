@@ -1,5 +1,6 @@
 @extends('layouts.kanozay')
 @section('content')
+<div style="display:flex;justify-content:flex-end;margin-bottom:12px"><a class="btn btn-light" href="{{ route('hr.shift-attendance.index') }}">Compare approved shifts with attendance</a></div>
 <div class="heading"><div><h1>Attendance register</h1><p>Daily employee records for payroll review. Statuses do not apply an automatic salary rule.</p></div><a class="btn btn-light" href="{{ route('workspace.page',['hr','payroll']) }}">Payroll periods</a></div>
 @if(session('success'))<p role="status" class="notice">{{ session('success') }}</p>@endif
 @if($errors->any())<p role="alert" class="notice notice-warning">{{ $errors->first() }}</p>@endif
