@@ -9,6 +9,10 @@ class ModulePageController extends Controller
 {
     public function show(Request $request, string $module, string $page)
     {
+        if (isset((config('operational_registers')??[])[$module.'.'.$page])) {
+            return app(OperationalRegisterController::class)->index($request,$module,$page);
+        }
+
         if ($module === 'inventory' && in_array($page,['transfers','warehouses'],true)) {
             return app(WarehouseStockController::class)->index($request,app(\App\Services\WarehouseStockService::class));
         }

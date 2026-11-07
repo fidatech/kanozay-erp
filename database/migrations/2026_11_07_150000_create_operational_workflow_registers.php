@@ -26,7 +26,7 @@ return new class extends Migration
   });
   Schema::create('operational_register_events',function(Blueprint $t){
    $t->id();
-   $t->foreignId('operational_register_id')->constrained('operational_registers','operational_event_record_fk')->restrictOnDelete();
+   $t->foreignId('operational_register_id')->constrained('operational_registers',indexName:'operational_event_record_fk')->restrictOnDelete();
    $t->string('action',30);
    $t->json('snapshot')->nullable();
    $t->text('note')->nullable();

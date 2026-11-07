@@ -32,7 +32,7 @@ class OperationalRegisterController extends Controller
 
  private function definition(string $module,string $page):array
  {
-  $definition=config('operational_registers.'.$module.'.'.$page);
+  $definition=(config('operational_registers')??[])[$module.'.'.$page]??null;
   abort_unless(is_array($definition),404);
   return $definition;
  }
