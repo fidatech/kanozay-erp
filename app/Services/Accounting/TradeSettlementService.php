@@ -2,6 +2,7 @@
 namespace App\Services\Accounting;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
+use App\Models\ActivityLog;
 use App\Models\TradeDocument;
 use App\Models\MoneyTransaction;
 use App\Models\TradeSettlementAllocation;
@@ -27,7 +28,13 @@ class TradeSettlementService {
    foreach ($document->credits as $credit) $documentRemaining=$documentRemaining->minus((string)$credit->amount);
    $transactionRemaining=BigDecimal::of((string)$transaction->amount)->minus($transactionUsed);
    if($allocation->compareTo(BigDecimal::zero())<=0 || $allocation->compareTo($documentRemaining)>0 || $allocation->compareTo($transactionRemaining)>0)throw ValidationException::withMessages(['amount'=>'Allocation must be positive and cannot exceed either outstanding balance.']);
-   return TradeSettlementAllocation::create(['trade_document_id'=>$documentId,'money_transaction_id'=>$transactionId,'amount'=>(string)$allocation,'created_by'=>$userId]);
+   $result=TradeSettlementAllocation::create(['trade_document_id'=>$documentId,'money_transaction_id'=>$transactionId,'amount'=>(string)$allocation,'created_by'=>$userId]);
+   ActivityLog::record('trade_settlement.allocated','trade_settlement_allocation',$result->id,
+    'Payment '.$transaction->id.' allocated to '.$document->number,
+    ['trade_document_id'=>$documentId,'money_transaction_id'=>$transactionId,
+     'trade_party_id'=>$document->trade_party_id,'currency_id'=>$document->currency_id,
+     'amount'=>(string)$allocation]);
+   return $result;
   });
  }
 
