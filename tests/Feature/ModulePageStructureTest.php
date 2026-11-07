@@ -32,6 +32,7 @@ class ModulePageStructureTest extends TestCase
                     $module === 'documents' => 'Document',
                     $module === 'sales' && $page === 'delivery-notes' => 'Delivery Notes',
                     $module === 'crm' => 'register',
+                    $module === 'inventory' && in_array($page,['transfers','warehouses'],true) => 'Warehouse stock allocation',
                     $module === 'inventory' && $page === 'counts' => 'Physical Stock Counts',
                     $module === 'assets' && $page === 'register' => 'Fixed asset register',
                     $module === 'assets' && $page === 'depreciation' => 'Fixed asset depreciation',
