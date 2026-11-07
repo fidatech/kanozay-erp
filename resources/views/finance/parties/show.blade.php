@@ -15,7 +15,33 @@
 </div><div class="modal-foot"><button type="button" class="btn btn-light" onclick="document.getElementById('party-edit-dialog').close()">Cancel</button><button type="submit" class="btn">Save Profile</button></div></form></dialog>
 @if($errors->any())<script>document.addEventListener('DOMContentLoaded',function(){document.getElementById('party-edit-dialog').showModal()})</script>@endif
 @endcanany
-<div class="panel"><h2>Financial Snapshot</h2><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px"><div style="padding:15px;border:1px solid #dce7f2;border-radius:12px"><small>Enabled Currencies</small><h2>{{ $party->currencies->count() }}</h2></div><div style="padding:15px;border:1px solid #dce7f2;border-radius:12px"><small>Opening Balance Records</small><h2>{{ $openingBalances->count() }}</h2></div><div style="padding:15px;border:1px solid #dce7f2;border-radius:12px"><small>Recent Financial Documents</small><h2>{{ $documents->count() }}</h2><small>Last 20 maximum</small></div></div></div>
+<div class="panel"><h2>Financial Snapshot</h2><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px"><div style="padding:15px;border:1px solid #dce7f2;border-radius:12px"><small>Enabled Currencies</small><h2>{{ $party->currencies->count() }}</h2></div><div style="padding:15px;border:1px solid #dce7f2;border-radius:12px"><small>Opening Balance Records</small><h2>{{ $openingBalances->count() }}</h2></div><div style="padding:15px;border:1px solid #dce7f2;border-radius:12px"><small>Recent Financial Documents</small><h2>{{ $documents->count() }}</h2><small>Last 100 maximum</small></div></div></div>
+<div class="panel">
+ <h2>Posted account balances</h2>
+ <p class="muted">Calculated from posted journal lines, including receivables/payables and advances. Currencies are never combined.</p>
+ <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px">
+ @foreach($party->currencies as $currency)
+ @php($balance=$accountBalances[$currency->id]??\Brick\Math\BigDecimal::zero())
+ <div style="padding:15px;border:1px solid #dce7f2;border-radius:12px">
+ <small>{{ $currency->code }}</small>
+ <h2><x-finance-amount :amount="$balance->abs()" /></h2>
+ <small>{{ $balance->isZero()?'Settled':($balance->isPositive()?($type==='customer'?'They owe us':'We owe them'):($type==='customer'?'We owe them':'They owe us')) }}</small>
+ </div>
+ @endforeach
+ </div>
+ <p><a class="btn btn-light" href="{{ route('finance.parties.statement',$party) }}">View full statement</a></p>
+</div>
+<div class="panel">
+ <h2>Recent cash movements</h2>
+ <div class="table-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Currency</th><th>Description</th></tr></thead><tbody>
+ @forelse($recentPayments as $payment)
+ <tr><td>{{ $payment->transaction_date }}</td><td>{{ ucfirst($payment->type) }}</td>
+ <td><x-finance-amount :amount="$payment->amount" /></td><td>{{ $payment->currency?->code }}</td>
+ <td>{{ $payment->description }}</td></tr>
+ @empty<tr><td colspan="5">No cash movements posted to this account.</td></tr>
+ @endforelse
+ </tbody></table></div>
+</div>
 <div class="panel"><h2>Enabled Currencies</h2><p>{{ $party->currencies->pluck('code')->join(', ') ?: 'No currencies enabled' }}</p></div>
 <div class="panel"><h2>Opening Balances</h2><div class="table-wrap"><table><thead><tr><th>Currency</th><th>Amount</th><th>Direction</th></tr></thead><tbody>@forelse($openingBalances as $balance)<tr><td>{{ $party->currencies->firstWhere('id',$balance->currency_id)?->code ?: $balance->currency_id }}</td><td><x-finance-amount :amount="\Brick\Math\BigDecimal::of((string)$balance->amount)->abs()" /></td><td>{{ \Brick\Math\BigDecimal::of((string)$balance->amount)->compareTo(\Brick\Math\BigDecimal::zero()) >= 0 ? ($type==='customer'?'They owe us':'Advance paid') : ($type==='customer'?'Customer advance':'We owe them') }}</td></tr>@empty<tr><td colspan="3">No opening balances recorded.</td></tr>@endforelse</tbody></table></div></div>
 <div class="panel"><h2>Recent {{ $type==='customer'?'Receivables':'Payables' }}</h2><div class="table-wrap"><table><thead><tr><th>Document</th><th>Date</th><th>Due date</th><th>Outstanding after payments and credits</th><th>Currency</th></tr></thead><tbody>@forelse($documents as $document)<tr><td>{{ $document->number }}</td><td>{{ $document->document_date }}</td><td>{{ $document->due_date }}</td><td><x-finance-amount :amount="$document->outstanding_amount" /></td><td>{{ $party->currencies->firstWhere('id',$document->currency_id)?->code ?: $document->currency_id }}</td></tr>@empty<tr><td colspan="5">No financial documents recorded.</td></tr>@endforelse</tbody></table></div><p class="muted">Showing up to 100 recent documents.</p></div>
