@@ -37,12 +37,34 @@ class TradePartyController extends Controller {
    if($remaining->isNegative())$remaining=BigDecimal::zero();
    $document->setAttribute('outstanding_amount',(string)$remaining->toScale(4));
   });
+  $ledgerLinks=DB::table('entity_ledger_accounts')
+   ->where('entity_type',$type)->where('entity_id',$party->id)
+   ->whereIn('purpose',['receivable','payable','advance'])->get();
+  $ledgerIds=$ledgerLinks->pluck('ledger_account_id')->all();
+  $postingTotals=DB::table('journal_lines as line')
+   ->join('journal_entries as journal','journal.id','=','line.journal_entry_id')
+   ->where('journal.status','posted')->whereIn('line.ledger_account_id',$ledgerIds)
+   ->select('journal.currency_id')
+   ->selectRaw('SUM(line.debit) AS debit_total, SUM(line.credit) AS credit_total')
+   ->groupBy('journal.currency_id')->get()->keyBy('currency_id');
+  $accountBalances=[];
+  foreach($party->currencies as $currency){
+   $row=$postingTotals->get($currency->id);
+   $amount=BigDecimal::of((string)($row->debit_total??'0'))
+    ->minus((string)($row->credit_total??'0'));
+   if($type==='supplier')$amount=$amount->negated();
+   $accountBalances[$currency->id]=$amount;
+  }
+  $recentPayments=\App\Models\MoneyTransaction::with('currency')
+   ->whereIn('counterpart_ledger_account_id',$ledgerIds)
+   ->whereIn('type',['receipt','payment'])->orderByDesc('id')->limit(15)->get();
   $cashboxes=\App\Models\FinancialAccount::where('type','cashbox')->where('is_active',true)
    ->whereIn('currency_id',$party->currencies->pluck('id'))->with('currency')->orderBy('name')->get();
   return view('finance.parties.show',[
    'party'=>$party,'type'=>$type,
    'openingBalances'=>DB::table('trade_opening_balances')->where('trade_party_id',$party->id)->get(),
    'documents'=>$documents,'cashboxes'=>$cashboxes,
+   'accountBalances'=>$accountBalances,'recentPayments'=>$recentPayments,
   ]);
  }
  public function customers(Request $request){$request->merge(['type'=>'customer']);return $this->index($request);}
