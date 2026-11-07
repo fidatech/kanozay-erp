@@ -55,9 +55,16 @@ class TradePartyController extends Controller {
    if($type==='supplier')$amount=$amount->negated();
    $accountBalances[$currency->id]=$amount;
   }
-  $recentPayments=\App\Models\MoneyTransaction::with('currency')
+  $recentPayments=\App\Models\MoneyTransaction::with(['currency','allocations'])
    ->whereIn('counterpart_ledger_account_id',$ledgerIds)
-   ->whereIn('type',['receipt','payment'])->orderByDesc('id')->limit(15)->get();
+   ->where('type',$type==='customer'?'receipt':'payment')
+   ->orderByDesc('id')->limit(100)->get();
+  $recentPayments->each(function($payment){
+   $remaining=BigDecimal::of((string)$payment->amount);
+   foreach($payment->allocations as $allocation)$remaining=$remaining->minus((string)$allocation->amount);
+   if($remaining->isNegative())$remaining=BigDecimal::zero();
+   $payment->setAttribute('unallocated_amount',(string)$remaining->toScale(4));
+  });
   $cashboxes=\App\Models\FinancialAccount::whereIn('type',['cashbox','bank','sarafi'])->where('is_active',true)
    ->whereIn('currency_id',$party->currencies->pluck('id'))->with('currency')->orderBy('name')->get();
   return view('finance.parties.show',[
