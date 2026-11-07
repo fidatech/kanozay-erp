@@ -158,4 +158,34 @@ class MatchedSupplierInvoiceTest extends TestCase
         $this->assertSame('2.000000', $service->remaining($receipt)[$line->id]);
     }
 
+    public function test_reused_submission_token_cannot_change_quantities_or_payment_terms(): void
+    {
+        [$user, $receipt, $line, $inventory] = $this->fixture();
+        $service = app(MatchedSupplierInvoiceService::class);
+        $original = $this->payload($line->id, $inventory->id);
+        $service->post($receipt, $original, $user->id);
+
+        $changedQuantity = $original;
+        $changedQuantity['quantities'][$line->id] = '2';
+        try {
+            $service->post($receipt, $changedQuantity, $user->id);
+            $this->fail('A token must not silently accept different quantities.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('submission_token', $exception->errors());
+        }
+
+        $changedDueDate = $original;
+        $changedDueDate['due_date'] = today()->addDays(20)->toDateString();
+        try {
+            $service->post($receipt, $changedDueDate, $user->id);
+            $this->fail('A token must not silently accept different terms.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('submission_token', $exception->errors());
+        }
+
+        $this->assertDatabaseCount('matched_supplier_invoices', 1);
+        $this->assertDatabaseCount('trade_documents', 1);
+        $this->assertDatabaseCount('journal_entries', 1);
+    }
+
 }
