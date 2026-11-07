@@ -21,6 +21,10 @@ class ModulePageController extends Controller
             return app(SupplierAdvanceController::class)->index($request,app(\App\Services\SupplierAdvanceService::class));
         }
 
+        if($module==='sales' && $page==='delivery-tracking') {
+            return app(SalesDeliveryTrackingController::class)->index($request);
+        }
+
         if (isset((config('operational_data_hubs')??[])[$module.'.'.$page])) {
             return app(OperationalDataHubController::class)->show($request,$module,$page);
         }

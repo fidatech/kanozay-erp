@@ -73,6 +73,7 @@ Route::middleware('auth')->post('/assets/disposals/{disposal}/finance-post', [\A
 Route::middleware('auth')->post('/assets/{asset}/disposal', [\App\Http\Controllers\FixedAssetLifecycleController::class,'dispose'])->name('assets.lifecycle.disposal');
 Route::middleware('auth')->post('/assets/{asset}/depreciation-policy', [\App\Http\Controllers\FixedAssetDepreciationController::class,'savePolicy'])->name('assets.depreciation.policy');
 Route::middleware('auth')->post('/assets/{asset}/depreciation-post', [\App\Http\Controllers\FixedAssetDepreciationController::class,'post'])->name('assets.depreciation.post');
+Route::middleware('auth')->post('/sales/delivery-tracking', [\App\Http\Controllers\SalesDeliveryTrackingController::class,'store'])->name('sales.delivery-tracking.store');
 Route::middleware('auth')->get('/sales/delivery-notes/create', [\App\Http\Controllers\SalesDeliveryNoteController::class,'create'])->name('sales.delivery-notes.create');
 Route::middleware('auth')->post('/sales/delivery-notes', [\App\Http\Controllers\SalesDeliveryNoteController::class,'store'])->name('sales.delivery-notes.store');
 Route::middleware('auth')->get('/sales/delivery-notes/{note}', [\App\Http\Controllers\SalesDeliveryNoteController::class,'show'])->name('sales.delivery-notes.show');

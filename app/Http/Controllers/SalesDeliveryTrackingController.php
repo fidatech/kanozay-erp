@@ -33,7 +33,7 @@ class SalesDeliveryTrackingController extends Controller
   ]);
   $note=SalesDeliveryNote::findOrFail($data['sales_delivery_note_id']);
   $service->record($note,$data,$request->user()->id);
-  return redirect()->route('workspace.page',['sales','delivery-tracking'],false)
+  return redirect()->route('workspace.page',['sales','delivery-tracking'])
    ->with('success','Delivery milestone recorded with source-note audit history.');
  }
 }

@@ -16,6 +16,7 @@
 </style>
 <div class="dn-controls">
 <a class="btn btn-light" href="{{ route('workspace.page',['sales','delivery-notes']) }}">Back to delivery notes</a>
+<a class="btn btn-light" href="{{ route('workspace.page',['module'=>'sales','page'=>'delivery-tracking','note_id'=>$note->id]) }}">Tracking history</a>
 <button class="btn" type="button" onclick="window.print()"><i class="fa-solid fa-print"></i> Print / Save PDF</button>
 @if($note->status==='issued')
 @canany(['sales.update','administration.update'])
