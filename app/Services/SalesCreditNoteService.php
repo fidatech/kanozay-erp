@@ -80,6 +80,8 @@ class SalesCreditNoteService
                     'unit_price' => $line->unit_price, 'line_total' => (string) $amount, 'restocked' => $restock,
                 ]);
                 if ($restock) {
+                    $batch = \App\Models\ProductionBatch::query()->lockForUpdate()->findOrFail($line->production_batch_id);
+                    app(FinishedGoodLotControlService::class)->assertDispatchAllowed($batch,$data['credit_date']);
                     $good = \App\Models\FinishedGood::query()->lockForUpdate()->findOrFail($line->finished_good_id);
                     $good->forceFill(['on_hand_packages' => $good->on_hand_packages + $quantity])->save();
                 }

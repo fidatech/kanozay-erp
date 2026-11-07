@@ -18,6 +18,9 @@ Route::post('/language', function (\Illuminate\Http\Request $request) {
 Route::middleware('auth')->post('/production/recipes/kanozay-confirm', [\App\Http\Controllers\KanozayWorkbookPreviewController::class, 'confirm'])->name('production.recipes.kanozay-confirm');
 Route::middleware('auth')->post('/production/recipes/kanozay-preview', [\App\Http\Controllers\KanozayWorkbookPreviewController::class, '__invoke'])->name('production.recipes.kanozay-preview');
 Route::middleware('auth')->post('/production/recipes/import-preview', [\App\Http\Controllers\ProductionRecipeImportController::class, 'preview'])->name('production.recipes.import-preview');
+Route::middleware('auth')->get('/inventory/finished-good-lots', [\App\Http\Controllers\FinishedGoodLotControlController::class,'index'])->name('inventory.finished-good-lots.index');
+Route::middleware('auth')->post('/inventory/finished-good-lots', [\App\Http\Controllers\FinishedGoodLotControlController::class,'register'])->name('inventory.finished-good-lots.store');
+Route::middleware('auth')->post('/inventory/finished-good-lots/{batch}/decision', [\App\Http\Controllers\FinishedGoodLotControlController::class,'decision'])->name('inventory.finished-good-lots.decision');
 Route::middleware('auth')->post('/manufacturing/cost-allocations', [\App\Http\Controllers\ProductionCostAllocationController::class,'store'])->name('manufacturing.overhead.store');
 Route::middleware('auth')->post('/manufacturing/cost-allocations/{allocation}/decision', [\App\Http\Controllers\ProductionCostAllocationController::class,'decide'])->whereNumber('allocation')->name('manufacturing.overhead.decide');
 Route::middleware('auth')->post('/supplier-advances/payments', [\App\Http\Controllers\SupplierAdvanceController::class,'pay'])->name('supplier-advances.pay');

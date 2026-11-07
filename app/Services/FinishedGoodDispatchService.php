@@ -31,6 +31,7 @@ class FinishedGoodDispatchService
             if ($batch->status !== 'released' || (int) $batch->finished_good_id !== $goodId) {
                 $this->reject('Choose a released batch for this finished good.');
             }
+            app(FinishedGoodLotControlService::class)->assertDispatchAllowed($batch,$data['dispatch_date']);
             if ($batch->released_at && $data['dispatch_date'] < $batch->released_at->toDateString()) {
                 $this->reject('Dispatch date cannot precede the batch warehouse release date.');
             }
