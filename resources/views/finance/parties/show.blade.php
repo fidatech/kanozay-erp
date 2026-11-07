@@ -51,7 +51,7 @@
  <h2>{{ $type==='customer'?'Record customer receipt':'Record supplier payment' }}</h2>
  <p class="muted">Post a cash movement to the party ledger. Select an outstanding invoice to allocate the full payment automatically; leave it unallocated if this is an advance or a general account payment.</p>
  @if($cashboxes->isEmpty())
-  <p class="muted">Configure an active cashbox in a currency enabled for this account before recording a payment.</p>
+  <p class="muted">Configure an active cashbox, bank or sarafi account in a currency enabled for this account before recording a payment.</p>
  @else
  <form method="POST" action="{{ route('finance.journals.quick.store') }}" class="party-payment-form" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
   @csrf
@@ -60,10 +60,10 @@
   <input type="hidden" name="return_to_party" value="1">
   <input type="hidden" name="type" value="{{ $type==='customer'?'credit':'debit' }}">
   <label>Payment date <input type="date" name="transaction_date" required value="{{ old('transaction_date',date('Y-m-d')) }}"></label>
-  <label>Cashbox <select name="cash_account_id" id="party-payment-cashbox" required>
-   <option value="">Choose cashbox</option>
+  <label>Payment account <select name="financial_account_id" id="party-payment-cashbox" required>
+   <option value="">Choose cashbox / bank / sarafi</option>
    @foreach($cashboxes as $cashbox)
-   <option value="{{ $cashbox->id }}" data-currency="{{ $cashbox->currency_id }}" @selected(old('cash_account_id')==$cashbox->id)>{{ $cashbox->name }} — {{ $cashbox->currency?->code }}</option>
+   <option value="{{ $cashbox->id }}" data-currency="{{ $cashbox->currency_id }}" @selected(old('financial_account_id')==$cashbox->id)>{{ ucfirst($cashbox->type) }}: {{ $cashbox->name }} — {{ $cashbox->currency?->code }}</option>
    @endforeach
   </select></label>
   <label>Currency <select name="currency_id" id="party-payment-currency" required>
