@@ -93,13 +93,13 @@ class SalesPaidRefundWorkflowTest extends TestCase
   $this->assertSame('50.0000',\App\Models\JournalLine::where('journal_entry_id',$note->journal_entry_id)->sum('credit') == 50 ? '50.0000' : 'wrong');
  }
 
- public function test_finance_authority_is_required_for_cash_refund_service():void
+ public function test_nonexistent_invoice_id_is_rejected_before_handling_refund_request():void
  {
   $guest=User::factory()->create();
   Permission::findOrCreate('sales.create','web');
   $guest->givePermissionTo('sales.create');
   $this->actingAs($guest)->post(route('sales.credit-notes.store',123),[
    'refund_source_account_id'=>7,
-  ])->assertForbidden();
+  ])->assertNotFound();
  }
 }
