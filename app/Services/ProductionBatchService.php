@@ -16,6 +16,9 @@ class ProductionBatchService
         return DB::transaction(function () use ($order, $good, $reported, $notes, $actor) {
             $order = ProductionOrder::query()->lockForUpdate()->findOrFail($order->id);
             $this->assertStatus($order, 'issued');
+            if(DB::table('production_work_steps')->where('production_order_id',$order->id)
+                ->where('status','!=','completed')->exists())
+                $this->reject('Complete each approved production-routing work step before submitting the batch to QC.');
             if ($order->batch()->exists()) {
                 $this->reject('This production order already has a batch.');
             }

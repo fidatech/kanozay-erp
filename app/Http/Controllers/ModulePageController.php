@@ -9,6 +9,10 @@ class ModulePageController extends Controller
 {
     public function show(Request $request, string $module, string $page)
     {
+        if ($module==='manufacturing' && $page==='work-orders') {
+            return app(ProductionWorkStepController::class)->index($request);
+        }
+
         if ($module==='manufacturing' && $page==='costing') {
             return app(ProductionCostAllocationController::class)->index($request);
         }

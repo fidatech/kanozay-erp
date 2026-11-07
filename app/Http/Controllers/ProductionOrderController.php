@@ -63,6 +63,8 @@ class ProductionOrderController extends Controller {
                 ]);
             }
             $order->update(['number' => 'PRD-'.str_pad((string) $order->id, 6, '0', STR_PAD_LEFT)]);
+            // Freeze independently approved routing at the moment the plan is created.
+            app(\App\Services\ProductionWorkStepService::class)->initializeOrder($order);
             return $order;
         });
         return redirect()->route('production.orders.show', $order)->with('success', 'Production plan created. No stock has been reserved or consumed.');
