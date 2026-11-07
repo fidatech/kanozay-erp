@@ -119,9 +119,9 @@ class ProductionBatchService
         });
     }
 
-    public function release(ProductionBatch $batch, string $date, int $actor): void
+    public function release(ProductionBatch $batch, string $date, int $actor, ?int $warehouseId=null): void
     {
-        DB::transaction(function () use ($batch, $date, $actor) {
+        DB::transaction(function () use ($batch, $date, $actor, $warehouseId) {
             $batch = ProductionBatch::query()->lockForUpdate()->findOrFail($batch->id);
             $this->assertStatus($batch, 'qc_approved');
             if ($batch->receipt()->exists() || $batch->accepted_packages < 1) {
@@ -137,12 +137,14 @@ class ProductionBatchService
             app(ProductionCostService::class)->snapshot($batch);
             $good->movements()->create([
                 'production_batch_id' => $batch->id,
+                'company_warehouse_id' => $warehouseId,
                 'type' => 'production_receipt',
                 'quantity_packages' => $batch->accepted_packages,
                 'occurred_on' => $date,
                 'created_by' => $actor,
             ]);
             $good->forceFill(['on_hand_packages' => $good->on_hand_packages + $batch->accepted_packages])->save();
+            app(FinishedGoodWarehouseService::class)->receipt($batch,$warehouseId,(int)$batch->accepted_packages,$date,$actor);
             $batch->forceFill(['status' => 'released', 'released_by' => $actor, 'released_at' => now()])->save();
             $batch->order()->update(['status' => 'completed']);
         });

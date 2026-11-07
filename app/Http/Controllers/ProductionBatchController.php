@@ -59,13 +59,14 @@ class ProductionBatchController extends Controller
         abort_unless($batch->production_order_id === $order->id, 404);
         $data = $request->validate([
             'occurred_on' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
+            'company_warehouse_id' => ['nullable', Rule::exists('company_warehouses','id')->where('is_active',true)],
         ]);
         if ($batch->decided_at && $data['occurred_on'] < $batch->decided_at->toDateString()) {
             throw \Illuminate\Validation\ValidationException::withMessages([
                 'occurred_on' => 'Warehouse release date cannot precede laboratory approval.',
             ]);
         }
-        $service->release($batch, $data['occurred_on'], $request->user()->id);
+        $service->release($batch, $data['occurred_on'], $request->user()->id,$data['company_warehouse_id']??null);
         return back()->with('success', 'Approved packages released to finished goods inventory.');
     }
 }

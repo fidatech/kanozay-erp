@@ -7,7 +7,7 @@ use LogicException;
 
 class FinishedGoodMovement extends Model
 {
-    protected $fillable = ['production_batch_id', 'type', 'quantity_packages', 'occurred_on', 'created_by'];
+    protected $fillable = ['production_batch_id', 'type', 'quantity_packages', 'occurred_on', 'created_by','company_warehouse_id'];
 
     protected static function booted(): void
     {

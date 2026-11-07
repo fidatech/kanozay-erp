@@ -107,6 +107,7 @@ class SalesInvoiceService
                     (int) $line['quantity_packages'],
                     [
                         'submission_token' => $line['dispatch_token'],
+                        'company_warehouse_id' => $line['company_warehouse_id']??null,
                         'dispatch_date' => $data['invoice_date'],
                         'reference' => $number,
                         'notes' => 'Dispatch for sales invoice '.$number,

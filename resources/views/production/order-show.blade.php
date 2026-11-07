@@ -173,6 +173,9 @@
    <form method="POST" action="{{ route('production.orders.batches.release', [$order, $batch]) }}" style="display:flex;gap:12px;align-items:end;flex-wrap:wrap">
     @csrf
     <label>Release date<input type="date" name="occurred_on" value="{{ now()->toDateString() }}" min="{{ $batch->decided_at?->toDateString() }}" max="{{ now()->toDateString() }}" required></label>
+    <label>Receiving warehouse<select name="company_warehouse_id"><option value="">Unassigned finished goods pool</option>
+    @foreach($warehouses as $warehouse)<option value="{{ $warehouse->id }}">{{ $warehouse->code }} · {{ $warehouse->name }}</option>@endforeach
+    </select></label>
     <button type="submit" class="btn">Release {{ $batch->accepted_packages }} accepted packages to stock</button>
    </form>
    @endcan

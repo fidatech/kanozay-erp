@@ -40,6 +40,7 @@ class SalesInvoiceController extends Controller
             'incomeAccounts' => LedgerAccount::where('type', 'income')->where('is_group', false)->where('is_active', true)->orderBy('code')->get(),
             'batches' => $batches->filter(fn ($batch) => $batch->available_packages > 0),
             'orderLines' => $orderLines,
+            'warehouses'=>\App\Models\CompanyWarehouse::where('is_active',true)->orderBy('name')->get(),
         ]);
     }
 
@@ -58,6 +59,7 @@ class SalesInvoiceController extends Controller
             'lines.*.dispatch_token' => ['required', 'uuid', 'distinct'],
             'lines.*.sales_order_line_id' => ['nullable', 'integer', 'exists:sales_order_lines,id'],
             'lines.*.production_batch_id' => ['required', 'integer', 'distinct', 'exists:production_batches,id'],
+            'lines.*.company_warehouse_id'=>['nullable',\Illuminate\Validation\Rule::exists('company_warehouses','id')->where('is_active',true)],
             'lines.*.quantity_packages' => ['required', 'integer', 'min:1', 'max:2147483647'],
             'lines.*.unit_price' => ['required', 'regex:/^(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,4})?$/', 'numeric', 'gt:0'],
         ]);

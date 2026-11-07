@@ -24,7 +24,16 @@ class FinishedGoodDispatchService
     {
         return DB::transaction(function () use ($goodId, $batchId, $quantity, $data, $actorId) {
             $existing = FinishedGoodDispatch::where('submission_token', $data['submission_token'])->first();
-            if ($existing) return $existing->load('lines');
+            if ($existing){
+                $line=$existing->lines()->first();
+                if(!$line || (int)$line->finished_good_id!==$goodId ||
+                    (int)$line->production_batch_id!==$batchId ||
+                    (int)$line->quantity_packages!==$quantity ||
+                    (int)($line->company_warehouse_id??0)!==(int)($data['company_warehouse_id']??0) ||
+                    $existing->dispatch_date->toDateString()!==$data['dispatch_date'])
+                    $this->reject('Dispatch token belongs to another batch movement.');
+                return $existing->load('lines');
+            }
             if ($quantity < 1) $this->reject('Dispatch quantity must be at least one package.');
 
             $batch = ProductionBatch::query()->lockForUpdate()->findOrFail($batchId);
@@ -53,7 +62,13 @@ class FinishedGoodDispatchService
                 'notes' => $data['notes'] ?? null,
                 'created_by' => $actorId,
             ]);
+            app(FinishedGoodWarehouseService::class)->dispatch(
+                $batch,$data['company_warehouse_id']??null,$quantity,
+                $data['dispatch_date'],$dispatch->number,$actorId,
+                (string)\Illuminate\Support\Str::uuid()
+            );
             $dispatch->lines()->create([
+                'company_warehouse_id'=>$data['company_warehouse_id']??null,
                 'finished_good_id' => $good->id,
                 'production_batch_id' => $batch->id,
                 'quantity_packages' => $quantity,

@@ -7,7 +7,7 @@ use LogicException;
 
 class FinishedGoodDispatchLine extends Model
 {
-    protected $fillable = ['finished_good_dispatch_id', 'finished_good_id', 'production_batch_id', 'quantity_packages'];
+    protected $fillable = ['finished_good_dispatch_id', 'finished_good_id', 'production_batch_id', 'quantity_packages','company_warehouse_id'];
 
     protected static function booted(): void
     {
