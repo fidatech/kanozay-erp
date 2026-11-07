@@ -48,6 +48,50 @@
 <div class="panel"><h2>Recent {{ $type==='customer'?'Receivables':'Payables' }}</h2><div class="table-wrap"><table><thead><tr><th>Document</th><th>Date</th><th>Due date</th><th>Outstanding after payments and credits</th><th>Currency</th></tr></thead><tbody>@forelse($documents as $document)<tr><td>{{ $document->number }}</td><td>{{ $document->document_date }}</td><td>{{ $document->due_date }}</td><td><x-finance-amount :amount="$document->outstanding_amount" /></td><td>{{ $party->currencies->firstWhere('id',$document->currency_id)?->code ?: $document->currency_id }}</td></tr>@empty<tr><td colspan="5">No financial documents recorded.</td></tr>@endforelse</tbody></table></div><p class="muted">Showing up to 100 recent documents.</p></div>
 
 @canany(['administration.update','finance.update'])
+@if($recentPayments->contains(fn($payment)=>\Brick\Math\BigDecimal::of((string)$payment->unallocated_amount)->isPositive()) && $documents->contains(fn($document)=>\Brick\Math\BigDecimal::of((string)$document->outstanding_amount)->isPositive()))
+<section class="panel">
+ <h2>Allocate an existing payment</h2>
+ <p class="muted">Match money already recorded against an open invoice. This creates a settlement allocation only; it does not post another cash movement or journal.</p>
+ <form method="POST" action="{{ route('finance.settlements.store') }}" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px">
+  @csrf<input type="hidden" name="return_to_party" value="1">
+  <label>Unallocated {{ $type==='customer'?'receipt':'payment' }}
+   <select name="money_transaction_id" required id="party-allocation-payment">
+    <option value="">Choose payment</option>
+    @foreach($recentPayments as $payment)
+     @if(\Brick\Math\BigDecimal::of((string)$payment->unallocated_amount)->isPositive())
+      <option value="{{ $payment->id }}" data-currency="{{ $payment->currency_id }}">{{ $payment->transaction_date }} — {{ $payment->description }} ({{ $payment->unallocated_amount }} {{ $payment->currency?->code }} available)</option>
+     @endif
+    @endforeach
+   </select>
+  </label>
+  <label>Open invoice <select name="trade_document_id" required id="party-allocation-invoice">
+   <option value="">Choose invoice</option>
+   @foreach($documents as $document)
+    @if(\Brick\Math\BigDecimal::of((string)$document->outstanding_amount)->isPositive())
+     <option value="{{ $document->id }}" data-currency="{{ $document->currency_id }}">{{ $document->number }} — {{ $document->outstanding_amount }} remaining</option>
+    @endif
+   @endforeach
+  </select></label>
+  <label>Amount to allocate <input type="text" name="amount" inputmode="decimal" required maxlength="25" placeholder="0.00"></label>
+  <div style="display:flex;align-items:flex-end"><button class="btn" type="submit">Allocate payment</button></div>
+ </form>
+ <script>
+ document.addEventListener('DOMContentLoaded',function(){
+  const payment=document.getElementById('party-allocation-payment');
+  const invoice=document.getElementById('party-allocation-invoice');
+  if(!payment||!invoice)return;
+  payment.addEventListener('change',function(){
+   const currency=payment.selectedOptions[0]?.dataset.currency;
+   [...invoice.options].forEach(option=>{if(option.value)option.hidden=!!currency&&option.dataset.currency!==currency;});
+   if(invoice.selectedOptions[0]?.hidden)invoice.value='';
+  });
+ });
+ </script>
+</section>
+@endif
+@endcanany
+
+@canany(['administration.update','finance.update'])
 <section class="panel">
  <h2>{{ $type==='customer'?'Record customer receipt':'Record supplier payment' }}</h2>
  @if(!$party->is_active)<p class="muted">This account is inactive. Reactivate it before posting new payments.</p>@else
