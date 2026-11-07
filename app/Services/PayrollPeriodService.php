@@ -87,9 +87,24 @@ class PayrollPeriodService
             if($components->isNotEmpty()){
                 $grouped=$components->groupBy('payroll_line_id');
                 foreach($lines as $item){
+                    $list=$grouped->get($item->id,collect());
+                    if($list->isEmpty()){
+                        // Existing reviewed manual net-pay adjustments are salary
+                        // expense for that employee, never silently overwritten
+                        // when other employees use itemized components.
+                        $salaryBase=$salaryBase->plus((string)$item->payable_amount);
+                        continue;
+                    }
                     $salaryBase=$salaryBase->plus((string)$item->salary_snapshot);
                     $expected=BigDecimal::of((string)$item->salary_snapshot);
-                    foreach($grouped->get($item->id,collect()) as $component){
+                    foreach($list as $component){
+                        $account=LedgerAccount::whereKey($component->ledger_account_id)
+                          ->where('is_active',true)->where('is_group',false)->first();
+                        if(!$account || DB::table('entity_ledger_accounts')
+                           ->where('ledger_account_id',$component->ledger_account_id)->exists() ||
+                           ($component->kind==='allowance' ? $account->type!=='expense'
+                               : $account->type!=='liability'))
+                            $this->reject('Payroll component ledger changed or is inactive. Review the component before approval.');
                         if($component->kind==='allowance'){
                             $allowances[$component->ledger_account_id]=($allowances[$component->ledger_account_id]??BigDecimal::zero())->plus((string)$component->amount);
                             $expected=$expected->plus((string)$component->amount);
