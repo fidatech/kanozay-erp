@@ -13,6 +13,10 @@ class ModulePageController extends Controller
             return app(WarehouseStockController::class)->index($request,app(\App\Services\WarehouseStockService::class));
         }
 
+        if ($module === 'assets' && in_array($page,['maintenance','schedules','service-history','transfers','disposals'],true)) {
+            return app(FixedAssetLifecycleController::class)->index($request,$page);
+        }
+
         if ($module === 'assets' && $page === 'depreciation') {
             return app(FixedAssetDepreciationController::class)->index($request);
         }

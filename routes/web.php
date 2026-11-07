@@ -20,6 +20,10 @@ Route::middleware('auth')->post('/production/recipes/kanozay-preview', [\App\Htt
 Route::middleware('auth')->post('/production/recipes/import-preview', [\App\Http\Controllers\ProductionRecipeImportController::class, 'preview'])->name('production.recipes.import-preview');
 Route::middleware('auth')->get('/inventory/warehouse-stock', [\App\Http\Controllers\WarehouseStockController::class,'index'])->name('inventory.warehouse-stock.index');
 Route::middleware('auth')->post('/inventory/warehouse-stock', [\App\Http\Controllers\WarehouseStockController::class,'store'])->name('inventory.warehouse-stock.store');
+Route::middleware('auth')->post('/assets/maintenance-orders', [\App\Http\Controllers\FixedAssetLifecycleController::class,'requestService'])->name('assets.lifecycle.maintenance.store');
+Route::middleware('auth')->post('/assets/maintenance-orders/{ticket}/transition', [\App\Http\Controllers\FixedAssetLifecycleController::class,'updateService'])->whereNumber('ticket')->name('assets.lifecycle.maintenance.update');
+Route::middleware('auth')->post('/assets/{asset}/location-transfer', [\App\Http\Controllers\FixedAssetLifecycleController::class,'relocate'])->name('assets.lifecycle.transfer');
+Route::middleware('auth')->post('/assets/{asset}/disposal', [\App\Http\Controllers\FixedAssetLifecycleController::class,'dispose'])->name('assets.lifecycle.disposal');
 Route::middleware('auth')->post('/assets/{asset}/depreciation-policy', [\App\Http\Controllers\FixedAssetDepreciationController::class,'savePolicy'])->name('assets.depreciation.policy');
 Route::middleware('auth')->post('/assets/{asset}/depreciation-post', [\App\Http\Controllers\FixedAssetDepreciationController::class,'post'])->name('assets.depreciation.post');
 Route::middleware('auth')->get('/sales/delivery-notes/create', [\App\Http\Controllers\SalesDeliveryNoteController::class,'create'])->name('sales.delivery-notes.create');
