@@ -166,6 +166,10 @@ Route::middleware('auth')->post('/shareholders/governance/resolutions', [\App\Ht
 Route::middleware('auth')->post('/shareholders/governance/resolutions/{resolution}/decision', [\App\Http\Controllers\ShareholderGovernanceController::class,'decide'])->name('shareholders.governance.decide');
 Route::middleware('auth')->post('/shareholders/governance/distributions', [\App\Http\Controllers\ShareholderGovernanceController::class,'distribute'])->name('shareholders.governance.distribute');
 Route::middleware('auth')->post('/hr/payroll/{period}/lines/{line}/components', [\App\Http\Controllers\PayrollComponentController::class,'store'])->name('hr.payroll.components.store');
+Route::middleware('auth')->get('/hr/payroll/tax-policies', [\App\Http\Controllers\PayrollTaxPolicyController::class,'index'])->name('hr.payroll.tax-policies.index');
+Route::middleware('auth')->post('/hr/payroll/tax-policies', [\App\Http\Controllers\PayrollTaxPolicyController::class,'store'])->name('hr.payroll.tax-policies.store');
+Route::middleware('auth')->post('/hr/payroll/tax-policies/{policy}/approve', [\App\Http\Controllers\PayrollTaxPolicyController::class,'approve'])->name('hr.payroll.tax-policies.approve');
+Route::middleware('auth')->post('/hr/payroll/tax-policies/{policy}/apply', [\App\Http\Controllers\PayrollTaxPolicyController::class,'apply'])->name('hr.payroll.tax-policies.apply');
 Route::middleware('auth')->get('/hr/payroll/{period}', [\App\Http\Controllers\PayrollPeriodController::class, 'show'])->name('hr.payroll.show');
 Route::middleware('auth')->post('/hr/payroll', [\App\Http\Controllers\PayrollPeriodController::class, 'store'])->name('hr.payroll.store');
 Route::middleware('auth')->patch('/hr/payroll/{period}/lines/{line}', [\App\Http\Controllers\PayrollPeriodController::class, 'updateLine'])->name('hr.payroll.lines.update');

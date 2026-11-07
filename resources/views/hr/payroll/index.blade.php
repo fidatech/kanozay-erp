@@ -1,5 +1,6 @@
 @extends('layouts.kanozay')
 @section('content')
+<p style="margin-bottom:12px"><a class="btn btn-light" href="{{ route('hr.payroll.tax-policies.index') }}">Configure reviewed withholding policies</a></p>
 <div style="margin-bottom:12px"><a class="btn btn-light" href="{{ route('hr.advances.index') }}">Salary advances</a></div>
 <div class="heading"><div><h1>Payroll periods</h1><p>Salary snapshots by month and currency. Review each employee amount before approval.</p></div><a class="btn btn-light" href="{{ route('workspace.page',['hr','employees']) }}">Employees</a></div>
 @if(session('success'))<p role="status" class="notice">{{ session('success') }}</p>@endif

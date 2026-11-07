@@ -13,7 +13,7 @@
 @if(session('success'))<p class="notice">{{ session('success') }}</p>@endif
 @if($errors->any())<p class="notice notice-warning">{{ implode(' ',$errors->all()) }}</p>@endif
 <p class="tax-alert">No tax rates are installed by default. Enter brackets only from Kanozay's confirmed legal/payroll instructions. A bracket computes fixed withholding plus a percentage of salary exceeding its lower threshold. All adjacent brackets must be continuous, starting at zero and ending with an open-ended bracket. Draft policies cannot affect payroll.</p>
-@canany(['hr.update','administration.update'])
+@if(auth()->user()->can('administration.update') || (auth()->user()->can('hr.update') && auth()->user()->can('finance.update')))
 <section class="tax-panel"><h2>Register a draft tax policy</h2>
 <form method="POST" action="{{ route('hr.payroll.tax-policies.store') }}">@csrf
 <div class="tax-grid">
@@ -28,7 +28,7 @@
 <h3>Marginal salary brackets</h3>
 <p>Each bracket starts where the previous one ends. Upper bound is exclusive and can be blank only for the final bracket.</p>
 <div class="tax-wrap"><table><thead><tr><th>Lower bound</th><th>Upper bound</th><th>Fixed amount at lower bound</th><th>Percentage above lower bound</th></tr></thead><tbody id="tax-brackets">
-@for($i=0;$i<3;$i)<tr>
+@for($i=0;$i<1;$i)<tr>
 <td><input name="brackets[{{ $i }}][lower_bound]" inputmode="decimal" placeholder="{{ $i===0?'0':'' }}" @if($i===0) value="0" @endif required></td>
 <td><input name="brackets[{{ $i }}][upper_bound]" inputmode="decimal" placeholder="Blank for final"></td>
 <td><input name="brackets[{{ $i }}][fixed_tax]" inputmode="decimal" value="0" required></td>
@@ -50,7 +50,7 @@ function kanozayAddBracket(){
  }box.appendChild(row);
 }
 </script>
-@endcanany
+@endif
 <section class="tax-panel"><h2>Approved and draft policies</h2>
 <div class="tax-wrap"><table><thead><tr><th>Policy</th><th>Currency</th><th>Effective</th><th>Basis</th><th>Bracket formula</th><th>State</th><th>Action</th></tr></thead><tbody>
 @forelse($policies as $p)
@@ -58,7 +58,7 @@ function kanozayAddBracket(){
 <td>{{ $p->effective_from?->toDateString() }}</td><td>{{ str_replace('_',' ',$p->basis) }}</td>
 <td>@foreach($p->brackets as $b)<div>{{ $b->lower_bound }}–{{ $b->upper_bound??'∞' }}: {{ $b->fixed_tax }} + {{ $b->marginal_percent }}% above {{ $b->excess_above }}</div>@endforeach</td>
 <td>{{ ucfirst($p->status) }}@if($p->approval_reference)<div>{{ $p->approval_reference }}</div>@endif</td>
-<td>@if($p->status==='draft')@canany(['finance.update','administration.update'])
+<td>@if($p->status==='draft')@if(auth()->user()->can('administration.update') || (auth()->user()->can('hr.update') && auth()->user()->can('finance.update')))
 <form method="POST" action="{{ route('hr.payroll.tax-policies.approve',$p) }}" style="display:grid;gap:8px">@csrf
 <input name="approval_reference" minlength="3" maxlength="180" required placeholder="Independent approval reference"><button class="btn btn-light">Approve</button>
 </form>@endcanany

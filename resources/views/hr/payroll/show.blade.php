@@ -3,6 +3,7 @@
 <div class="heading"><div><h1>Payroll: {{ $period->period_start->format('Y-m') }} · {{ $period->currency->code }}</h1><p>Status: {{ ucfirst($period->status) }}. Salary snapshots are retained after employee profile changes.</p></div><div class="actions"><a class="btn btn-light" href="{{ route('workspace.page',['hr','attendance','month'=>$period->period_start->format('Y-m')]) }}">Attendance</a><a class="btn btn-light" href="{{ route('workspace.page',['hr','payroll']) }}">All periods</a></div></div>
 @if(session('success'))<p role="status" class="notice">{{ session('success') }}</p>@endif
 @if($errors->any())<p role="alert" class="notice notice-warning">{{ $errors->first() }}</p>@endif
+<p><a class="btn btn-light" href="{{ route('hr.payroll.tax-policies.index',['period_id'=>$period->id]) }}">Reviewed payroll tax policies and withholding preview</a></p>
 <div class="card" style="padding:20px;margin-bottom:16px"><h2>Employee amounts</h2><p>Amounts shown are in {{ $period->currency->code }}. Attendance counts are for review only; no salary, tax or leave deduction is calculated automatically.</p><div class="table-wrap"><table><thead><tr><th>Employee</th><th>Attendance recorded</th><th>Salary snapshot</th><th>Approved payable</th><th>Reason</th><th>Payment</th></tr></thead><tbody>
 @foreach($period->lines as $line)<tr><td>{{ $line->employee->employee_number }}<br><small>{{ $line->employee->full_name }}</small></td><td>@php
     $counts = $attendance[$line->employee_profile_id] ?? [];
