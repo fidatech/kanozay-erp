@@ -31,10 +31,10 @@ class ModulePageController extends Controller
 
         // Map module navigation to the existing live transactional controllers.
         if ($module==='inventory' && $page==='materials') {
-            return app(InventoryMaterialController::class)->index($request);
+            return app(InventoryMaterialController::class)->index($request,app(\App\Services\ApprovedCatalogService::class));
         }
         if ($module==='inventory' && $page==='products') {
-            return app(FinishedGoodController::class)->index($request);
+            return app(FinishedGoodController::class)->index($request,app(\App\Services\ApprovedCatalogService::class));
         }
         if ($module==='manufacturing' && $page==='boms') {
             return app(ProductionRecipeController::class)->index($request);
