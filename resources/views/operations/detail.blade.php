@@ -111,6 +111,9 @@
 @endcanany
 @endif
 @if($record->status==='approved')
+@if($module==='hr' && $page==='exits')
+<p><strong>Closing this approved exit deactivates the employee profile.</strong> Both HR update and Finance update authorization are required. Outstanding assets, employee advances and unresolved payroll drafts must be cleared.</p>
+@endif
 @canany([$module.'.update','administration.update'])
 <form method="POST" action="{{ route('operations.transition',[$module,$page,$record]) }}">@csrf
 <input name="note" maxlength="1500" placeholder="Completion reference">

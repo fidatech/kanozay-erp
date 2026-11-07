@@ -306,6 +306,12 @@ class OperationalRegisterController extends Controller
    if(in_array($decision,['submit','cancel','revise'],true)&&
       $locked->created_by!==$request->user()->id&&!$request->user()->can('administration.update'))
     abort(403);
+   // Complete approved employee separations atomically with real employee
+   // deactivation only after finance, payroll and asset checks.
+   if($module==='hr' && $page==='exits' && $decision==='close'){
+    abort_unless($request->user()->can('hr.update') && $request->user()->can('finance.update'),403);
+    app(\App\Services\EmployeeExitService::class)->closeApprovedRecord($locked,$request->user()->id);
+   }
    $changes=['status'=>$to];
    if(in_array($decision,['approve','reject'],true))$changes+=[
     'reviewed_by'=>$request->user()->id,'reviewed_at'=>now(),
