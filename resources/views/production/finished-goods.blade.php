@@ -18,7 +18,12 @@
   <label>SKU<input name="sku" value="{{ old('sku') }}" maxlength="64" required></label>
   <label>Product name<input name="name" value="{{ old('name') }}" maxlength="180" required></label>
   <label>Package unit<input name="package_unit" value="{{ old('package_unit', 'bag') }}" maxlength="40" required></label>
-  <label>Package weight (kg)<input name="package_weight_kg" type="number" step="0.001" min="0.001" value="{{ old('package_weight_kg') }}" required></label>
+  <label>Catalog unit<select name="catalog_unit_id"><option value="">No approved unit link</option>
+@foreach($catalogUnits as $unit)<option value="{{ $unit->id }}">{{ $unit->data['symbol']??'' }} · {{ $unit->data['name']??'' }}</option>@endforeach
+</select></label>
+<label>Product category<select name="catalog_category_id"><option value="">Unclassified</option>
+@foreach($catalogCategories as $category)@if(in_array($category->data['group']??null,['finished','other'],true))<option value="{{ $category->id }}">{{ $category->data['name']??'' }}</option>@endif @endforeach</select></label>
+<label>Package weight (kg)<input name="package_weight_kg" type="number" step="0.001" min="0.001" value="{{ old('package_weight_kg') }}" required></label>
   <button class="btn" type="submit">Add product</button>
  </form>
 </div>
@@ -26,13 +31,21 @@
 <div class="card" style="padding:20px">
  <h3>Available finished goods</h3>
  <div class="table-wrap"><table>
-  <thead><tr><th>SKU</th><th>Product</th><th>Unit</th><th>Weight (kg)</th><th>Packages on hand</th><th>Status</th></tr></thead>
+  <thead><tr><th>SKU</th><th>Product</th><th>Unit</th><th>Catalog category</th><th>Weight (kg)</th><th>Packages on hand</th><th>Status</th></tr></thead>
   <tbody>
   @forelse($goods as $good)
   <tr><td><a href="{{ route('production.finished-goods.show', $good) }}"><strong>{{ $good->sku }}</strong></a></td><td>{{ $good->name }}</td><td>{{ $good->package_unit }}</td>
-   <td>{{ $good->package_weight_kg }}</td><td>{{ number_format($good->on_hand_packages) }}</td>
+   <td>{{ $good->catalogCategory?->data['name']??'Unclassified' }}
+@can('inventory.update')
+<details><summary>Assign catalog</summary><form method="POST" action="{{ route('production.finished-goods.catalog',$good) }}">@csrf
+<select name="catalog_unit_id"><option value="">No unit link</option>
+@foreach($catalogUnits as $unit)@if(($unit->data['symbol']??null)===$good->package_unit)<option value="{{ $unit->id }}" @selected($good->catalog_unit_id===$unit->id)>{{ $unit->data['name']??'' }}</option>@endif @endforeach</select>
+<select name="catalog_category_id"><option value="">Unclassified</option>
+@foreach($catalogCategories as $category)@if(in_array($category->data['group']??null,['finished','other'],true))<option value="{{ $category->id }}" @selected($good->catalog_category_id===$category->id)>{{ $category->data['name']??'' }}</option>@endif @endforeach</select><button class="btn btn-light">Assign</button>
+</form></details>@endcan
+</td><td>{{ $good->package_weight_kg }}</td><td>{{ number_format($good->on_hand_packages) }}</td>
    <td>{{ $good->is_active ? 'Active' : 'Inactive' }}</td></tr>
-  @empty<tr><td colspan="6">No finished goods are registered yet.</td></tr>@endforelse
+  @empty<tr><td colspan="7">No finished goods are registered yet.</td></tr>@endforelse
   </tbody>
  </table></div>
  {{ $goods->links() }}

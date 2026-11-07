@@ -3,6 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\FinishedGood;
+use App\Services\ApprovedCatalogService;
+use App\Models\ActivityLog;
+use Illuminate\Support\Facades\DB;
 use App\Models\ProductionBatch;
 use App\Models\SalesCreditNoteLine;
 use App\Services\FinishedGoodDispatchService;
@@ -11,11 +14,13 @@ use Illuminate\Validation\Rule;
 
 class FinishedGoodController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request,ApprovedCatalogService $catalog)
     {
         abort_unless($request->user()->can('inventory.view'), 403);
         return view('production.finished-goods', [
-            'goods' => FinishedGood::orderBy('sku')->paginate(20),
+            'goods' => FinishedGood::with(['catalogUnit','catalogCategory'])->orderBy('sku')->paginate(20),
+            'catalogUnits'=>$catalog->entries('units'),
+            'catalogCategories'=>$catalog->entries('categories'),
         ]);
     }
 
@@ -50,7 +55,27 @@ class FinishedGoodController extends Controller
         return redirect()->route('production.finished-goods.show', $good)->with('success', 'Finished goods dispatch posted. Warehouse stock was reduced from the selected released batch.');
     }
 
-    public function store(Request $request)
+    public function assignCatalog(Request $request,FinishedGood $good,ApprovedCatalogService $catalog)
+    {
+        abort_unless($request->user()->can('inventory.update'),403);
+        $data=$request->validate([
+            'catalog_unit_id'=>['nullable','integer','exists:operational_registers,id'],
+            'catalog_category_id'=>['nullable','integer','exists:operational_registers,id'],
+        ]);
+        $catalog->validateUnit($data['catalog_unit_id']??null,$good->package_unit);
+        $catalog->validateCategory($data['catalog_category_id']??null,'finished');
+        DB::transaction(function()use($good,$data){
+            $good->update([
+                'catalog_unit_id'=>$data['catalog_unit_id']??null,
+                'catalog_category_id'=>$data['catalog_category_id']??null,
+            ]);
+            ActivityLog::record('inventory.finished_good.catalog.assigned','finished_good',$good->id,
+                'Approved catalog references assigned without changing package unit or weight.');
+        });
+        return back()->with('success','Approved product unit and category assigned.');
+    }
+
+    public function store(Request $request,ApprovedCatalogService $catalog)
     {
         abort_unless($request->user()->can('inventory.create'), 403);
         $data = $request->validate([
@@ -58,7 +83,11 @@ class FinishedGoodController extends Controller
             'name' => ['required', 'string', 'max:180'],
             'package_unit' => ['required', 'string', 'max:40'],
             'package_weight_kg' => ['required', 'numeric', 'gt:0', 'max:999999999.999', 'decimal:0,3'],
+            'catalog_unit_id'=>['nullable','integer','exists:operational_registers,id'],
+            'catalog_category_id'=>['nullable','integer','exists:operational_registers,id'],
         ]);
+        $catalog->validateUnit($data['catalog_unit_id']??null,$data['package_unit']);
+        $catalog->validateCategory($data['catalog_category_id']??null,'finished');
         FinishedGood::create($data);
         return redirect()->route('production.finished-goods.index')->with('success', 'Finished good added. Opening stock is zero.');
     }

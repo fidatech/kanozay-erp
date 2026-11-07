@@ -7,7 +7,7 @@ use Brick\Math\BigDecimal;
 
 class InventoryMaterial extends Model
 {
-    protected $fillable = ['sku', 'name', 'unit', 'is_packaging', 'is_active'];
+    protected $fillable = ['sku', 'name', 'unit', 'is_packaging', 'is_active', 'catalog_unit_id', 'catalog_category_id'];
 
     protected $casts = [
         'is_packaging' => 'boolean',
@@ -21,6 +21,9 @@ class InventoryMaterial extends Model
         return (string) BigDecimal::of((string) $this->on_hand_quantity)
             ->minus(BigDecimal::of((string) $this->reserved_quantity))->toScale(6);
     }
+
+    public function catalogUnit(){return $this->belongsTo(OperationalRegister::class,'catalog_unit_id');}
+    public function catalogCategory(){return $this->belongsTo(OperationalRegister::class,'catalog_category_id');}
 
     public function movements()
     {

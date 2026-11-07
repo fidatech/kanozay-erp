@@ -4,6 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\Currency;
 use App\Models\InventoryMaterial;
+use App\Services\ApprovedCatalogService;
+use Illuminate\Support\Facades\DB;
+use App\Models\ActivityLog;
 use App\Models\CompanyWarehouse;
 use App\Services\InventoryAdjustmentService;
 use App\Services\InventoryCostService;
@@ -13,14 +16,16 @@ use Illuminate\Validation\Rule;
 
 class InventoryMaterialController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request,ApprovedCatalogService $catalog)
     {
         abort_unless($request->user()->can('inventory.view'), 403);
 
         return view('inventory.materials', [
             'currencies' => Currency::where('is_active', true)->orderBy('code')->get(),
+            'catalogUnits'=>$catalog->entries('units'),
+            'catalogCategories'=>$catalog->entries('categories'),
             'warehouses' => CompanyWarehouse::where('is_active',true)->orderBy('name')->get(),
-            'materials' => InventoryMaterial::query()
+            'materials' => InventoryMaterial::query()->with(['catalogUnit','catalogCategory'])
                 ->withExists(['movements as has_opening' => fn ($query) => $query->where('type', 'opening')])
                 ->orderBy('name')->paginate(20),
         ]);
@@ -49,7 +54,7 @@ class InventoryMaterialController extends Controller
         ]);
     }
 
-    public function store(Request $request)
+    public function store(Request $request,ApprovedCatalogService $catalog)
     {
         abort_unless($request->user()->can('inventory.create'), 403);
         $request->merge(['sku' => strtoupper(trim((string) $request->input('sku')))]);
@@ -58,10 +63,35 @@ class InventoryMaterialController extends Controller
             'name' => ['required', 'string', 'max:180'],
             'unit' => ['required', 'string', 'max:30'],
             'is_packaging' => ['required', 'boolean'],
+            'catalog_unit_id'=>['nullable','integer','exists:operational_registers,id'],
+            'catalog_category_id'=>['nullable','integer','exists:operational_registers,id'],
         ]);
 
+        $catalog->validateUnit($data['catalog_unit_id']??null,$data['unit']);
+        $subject=$data['is_packaging']?'packaging':'raw';
+        $catalog->validateCategory($data['catalog_category_id']??null,$subject);
         InventoryMaterial::create($data);
         return redirect()->route('inventory.materials.index')->with('success', 'Material created. No stock has been posted.');
+    }
+
+    public function assignCatalog(Request $request,InventoryMaterial $material,ApprovedCatalogService $catalog)
+    {
+        abort_unless($request->user()->can('inventory.update'),403);
+        $data=$request->validate([
+            'catalog_unit_id'=>['nullable','integer','exists:operational_registers,id'],
+            'catalog_category_id'=>['nullable','integer','exists:operational_registers,id'],
+        ]);
+        $catalog->validateUnit($data['catalog_unit_id']??null,$material->unit);
+        $catalog->validateCategory($data['catalog_category_id']??null,$material->is_packaging?'packaging':'raw');
+        DB::transaction(function()use($material,$data){
+            $material->update([
+                'catalog_unit_id'=>$data['catalog_unit_id']??null,
+                'catalog_category_id'=>$data['catalog_category_id']??null,
+            ]);
+            ActivityLog::record('inventory.material.catalog.assigned','inventory_material',$material->id,
+                'Approved catalog references assigned without changing stock unit or quantities.');
+        });
+        return back()->with('success','Approved unit and category references assigned.');
     }
 
     public function opening(Request $request, InventoryMaterial $material, InventoryStockService $stock)

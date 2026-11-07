@@ -14,12 +14,23 @@
 <div class="card" style="padding:22px">
  @if(session('success'))<p role="status" style="color:#08734b">{{ session('success') }}</p>@endif
  @if($errors->any())<p role="alert" style="color:#b42318">{{ $errors->first() }}</p>@endif
- <div class="table-wrap"><table><thead><tr><th>SKU</th><th>Material</th><th>Type</th><th>Unit</th><th>On hand</th><th>Reserved</th><th>Available</th><th>Status</th><th>Opening stock</th></tr></thead><tbody>
+ <div class="table-wrap"><table><thead><tr><th>SKU</th><th>Material</th><th>Type</th><th>Unit</th><th>Approved category</th><th>On hand</th><th>Reserved</th><th>Available</th><th>Status</th><th>Opening stock</th></tr></thead><tbody>
  @forelse($materials as $material)
  <tr>
   <td><a href="{{ route('inventory.materials.show', $material) }}"><strong>{{ $material->sku }}</strong></a></td><td>{{ $material->name }}</td>
   <td>{{ $material->is_packaging ? 'Packaging' : 'Ingredient' }}</td><td>{{ $material->unit }}</td>
-  <td>{{ $material->on_hand_quantity }}</td><td>{{ $material->reserved_quantity }}</td><td>{{ $material->available_quantity }}</td><td>{{ $material->is_active ? 'Active' : 'Inactive' }}</td>
+  <td>{{ $material->catalogCategory?->data['name']??'Unclassified' }}
+@can('inventory.update')
+<details><summary>Assign approved catalog</summary>
+<form method="POST" action="{{ route('inventory.materials.catalog',$material) }}">@csrf
+<select name="catalog_unit_id"><option value="">No unit link</option>
+@foreach($catalogUnits as $unit)@if(($unit->data['symbol']??null)===$material->unit)<option value="{{ $unit->id }}" @selected($material->catalog_unit_id===$unit->id)>{{ $unit->data['name']??$material->unit }}</option>@endif @endforeach
+</select>
+<select name="catalog_category_id"><option value="">Unclassified</option>
+@foreach($catalogCategories as $category)@if(in_array($category->data['group']??null,[$material->is_packaging?'packaging':'raw','other'],true))
+<option value="{{ $category->id }}" @selected($material->catalog_category_id===$category->id)>{{ $category->data['name']??'Category' }}</option>@endif @endforeach
+</select><button class="btn btn-light">Assign</button></form></details>
+@endcan</td><td>{{ $material->on_hand_quantity }}</td><td>{{ $material->reserved_quantity }}</td><td>{{ $material->available_quantity }}</td><td>{{ $material->is_active ? 'Active' : 'Inactive' }}</td>
   <td>
    @if($material->has_opening)Recorded
    @elseif(!$material->is_active)Inactive
@@ -47,7 +58,7 @@
    @endif
   </td>
  </tr>
- @empty<tr><td colspan="9" class="empty">No materials yet. Add a material to begin recording inventory.</td></tr>@endforelse
+ @empty<tr><td colspan="10" class="empty">No materials yet. Add a material to begin recording inventory.</td></tr>@endforelse
  </tbody></table></div>
  {{ $materials->links() }}
  <p class="muted" style="margin-top:18px">Reserving production materials reduces available stock without changing on-hand stock. Posting a production material issue reduces on-hand stock and releases its reservation. Confirmed purchase-order receipts increase stock through posted GRNs.</p>
@@ -60,7 +71,13 @@
    <label>SKU <input name="sku" maxlength="64" required placeholder="RM-001"></label>
    <label>Name <input name="name" maxlength="180" required></label>
    <label>Stock unit <input name="unit" maxlength="30" required placeholder="kg, L, pcs"></label>
-   <label>Material type <select name="is_packaging" required><option value="0">Ingredient / raw material</option><option value="1">Packaging</option></select></label>
+   <label>Approved catalog unit<select name="catalog_unit_id"><option value="">Legacy unit / no catalog link</option>
+@foreach($catalogUnits as $unit)<option value="{{ $unit->id }}">{{ $unit->data['symbol']??'' }} — {{ $unit->data['name']??'' }}</option>@endforeach
+</select></label>
+<label>Approved category<select name="catalog_category_id"><option value="">Unclassified</option>
+@foreach($catalogCategories as $category)<option value="{{ $category->id }}">{{ $category->data['name']??'' }} ({{ $category->data['group']??'' }})</option>@endforeach
+</select></label>
+<label>Material type <select name="is_packaging" required><option value="0">Ingredient / raw material</option><option value="1">Packaging</option></select></label>
    <p class="muted">Use the same unit as the approved recipe. Unit conversion is not yet supported.</p>
   </div>
   <div class="modal-foot"><button type="button" class="btn btn-light" onclick="this.closest('dialog').close()">Cancel</button><button type="submit" class="btn">Save material</button></div>
