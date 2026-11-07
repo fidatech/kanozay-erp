@@ -20,6 +20,8 @@ Route::middleware('auth')->post('/production/recipes/kanozay-preview', [\App\Htt
 Route::middleware('auth')->post('/production/recipes/import-preview', [\App\Http\Controllers\ProductionRecipeImportController::class, 'preview'])->name('production.recipes.import-preview');
 Route::middleware('auth')->get('/inventory/warehouse-stock', [\App\Http\Controllers\WarehouseStockController::class,'index'])->name('inventory.warehouse-stock.index');
 Route::middleware('auth')->post('/inventory/warehouse-stock', [\App\Http\Controllers\WarehouseStockController::class,'store'])->name('inventory.warehouse-stock.store');
+Route::middleware('auth')->post('/purchases/returns', [\App\Http\Controllers\PurchaseReturnController::class,'store'])->name('purchases.returns.store');
+Route::middleware('auth')->get('/purchases/returns/{return}', [\App\Http\Controllers\PurchaseReturnController::class,'show'])->name('purchases.returns.show');
 Route::middleware('auth')->post('/assets/maintenance-orders', [\App\Http\Controllers\FixedAssetLifecycleController::class,'requestService'])->name('assets.lifecycle.maintenance.store');
 Route::middleware('auth')->post('/assets/maintenance-orders/{ticket}/transition', [\App\Http\Controllers\FixedAssetLifecycleController::class,'updateService'])->whereNumber('ticket')->name('assets.lifecycle.maintenance.update');
 Route::middleware('auth')->post('/assets/{asset}/location-transfer', [\App\Http\Controllers\FixedAssetLifecycleController::class,'relocate'])->name('assets.lifecycle.transfer');

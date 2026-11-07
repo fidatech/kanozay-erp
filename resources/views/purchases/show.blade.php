@@ -47,6 +47,9 @@ $hasSubtotal=$subtotal->compareTo(\Brick\Math\BigDecimal::zero())>0;
 <p class="muted">Estimated expenses are allocated proportionally by item value. Expense allocation is an estimate only. Goods receipts post stock quantities and preserve purchase-value snapshots without inventory valuation or finance entries. Zero-value orders cannot be allocated.</p></div>
 <div class="panel">
 <h2>Goods Received Notes</h2>
+@canany(['purchases.view','inventory.view','administration.view'])
+<p><a class="btn btn-light" href="{{ route('workspace.page',['purchases','purchase-returns']) }}">Return goods to supplier</a></p>
+@endcanany
 <p class="muted">Only confirmed orders can receive goods. Quantities use the linked material's unit. Posting a GRN increases inventory immediately and freezes purchase prices in the order currency. These snapshots exclude other landed costs and accounting entries. A base-currency purchase equivalent is shown only when an explicit direct historical exchange rate was available on the receipt date; it is not an inventory valuation.</p>
 @if(in_array($order->status,['confirmed','partially_received'],true))
 @can('inventory.update')
