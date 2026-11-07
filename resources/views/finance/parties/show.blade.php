@@ -50,6 +50,7 @@
 @canany(['administration.update','finance.update'])
 <section class="panel">
  <h2>{{ $type==='customer'?'Record customer receipt':'Record supplier payment' }}</h2>
+ @if(!$party->is_active)<p class="muted">This account is inactive. Reactivate it before posting new payments.</p>@else
  <p class="muted">Post a cash movement to the party ledger. Select an outstanding invoice to allocate the full payment automatically; leave it unallocated if this is an advance or a general account payment.</p>
  @if($cashboxes->isEmpty())
   <p class="muted">Configure an active cashbox, bank or sarafi account in a currency enabled for this account before recording a payment.</p>
@@ -102,6 +103,7 @@
   sync();
  });
  </script>
+ @endif
  @endif
 </section>
 @endcanany
