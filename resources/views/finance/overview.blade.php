@@ -21,6 +21,7 @@
 <a href="{{ route('finance.customers.index') }}"><i class="fa-solid fa-users"></i>Customers</a>
 <a href="{{ route('finance.suppliers.index') }}"><i class="fa-solid fa-truck-field"></i>Suppliers</a>
 <a href="{{ route('finance.journals.index') }}"><i class="fa-solid fa-book"></i>Journal Entries</a>
+<a href="{{ route('finance.periods.index') }}"><i class="fa-solid fa-calendar-check"></i>Period Closures</a>
 <a href="{{ route('finance.accounts.index') }}"><i class="fa-solid fa-building-columns"></i>Financial Accounts</a>
 <a href="{{ route('finance.money.index') }}"><i class="fa-solid fa-money-bill-transfer"></i>Receipts &amp; Payments</a>
 <a href="{{ route('finance.documents.index') }}"><i class="fa-solid fa-file-invoice-dollar"></i>Receivables &amp; Payables</a>
