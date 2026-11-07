@@ -55,8 +55,8 @@ class CrmWorkflowTest extends TestCase
     public function test_complaint_is_scoped_to_existing_customers():void
     {
         $user=$this->manager();
-        $supplier=TradeParty::create(['type'=>'supplier','name'=>'Supplier','is_active'=>true]);
-        $customer=TradeParty::create(['type'=>'customer','name'=>'Customer','is_active'=>true]);
+        $supplier=TradeParty::create(['type'=>'supplier','name'=>'Supplier','is_active'=>true,'created_by'=>$user->id]);
+        $customer=TradeParty::create(['type'=>'customer','name'=>'Customer','is_active'=>true,'created_by'=>$user->id]);
         $data=['subject'=>'Package seal issue','priority'=>'high','status'=>'open','description'=>'Synthetic issue'];
         $this->actingAs($user)->post(route('crm.records.store','complaints'),$data+['trade_party_id'=>$supplier->id])
             ->assertSessionHasErrors('trade_party_id');
