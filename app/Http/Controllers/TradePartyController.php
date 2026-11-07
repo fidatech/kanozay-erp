@@ -65,6 +65,8 @@ class TradePartyController extends Controller {
    if($remaining->isNegative())$remaining=BigDecimal::zero();
    $payment->setAttribute('unallocated_amount',(string)$remaining->toScale(4));
   });
+  $openDocuments=$documents->filter(fn($document)=>BigDecimal::of((string)$document->outstanding_amount)->isPositive())->values();
+  $unallocatedPayments=$recentPayments->filter(fn($payment)=>BigDecimal::of((string)$payment->unallocated_amount)->isPositive())->values();
   $cashboxes=\App\Models\FinancialAccount::whereIn('type',['cashbox','bank','sarafi'])->where('is_active',true)
    ->whereIn('currency_id',$party->currencies->pluck('id'))->with('currency')->orderBy('name')->get();
   return view('finance.parties.show',[
@@ -72,6 +74,7 @@ class TradePartyController extends Controller {
    'openingBalances'=>DB::table('trade_opening_balances')->where('trade_party_id',$party->id)->get(),
    'documents'=>$documents,'cashboxes'=>$cashboxes,
    'accountBalances'=>$accountBalances,'recentPayments'=>$recentPayments,
+   'openDocuments'=>$openDocuments,'unallocatedPayments'=>$unallocatedPayments,
   ]);
  }
  public function customers(Request $request){$request->merge(['type'=>'customer']);return $this->index($request);}
