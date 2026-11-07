@@ -48,7 +48,10 @@ class JournalPostingService {
   });
  }
  public function reverse(JournalEntry $journal,int $userId):JournalEntry {
-  return DB::transaction(function()use($journal,$userId){$original=JournalEntry::whereKey($journal->id)->lockForUpdate()->firstOrFail();if(DB::table('supplier_advance_applications')->where('journal_entry_id',$original->id)->exists())
+  return DB::transaction(function()use($journal,$userId){$original=JournalEntry::whereKey($journal->id)->lockForUpdate()->firstOrFail();if(DB::table('production_overhead_allocations')->join('journal_lines as jl','jl.id','=','production_overhead_allocations.source_journal_line_id')
+    ->where('jl.journal_entry_id',$original->id)->whereIn('production_overhead_allocations.status',['submitted','approved'])->exists())
+    throw ValidationException::withMessages(['status'=>'Finance must withdraw production cost allocations before reversing their source expense journal.']);
+   if(DB::table('supplier_advance_applications')->where('journal_entry_id',$original->id)->exists())
     throw ValidationException::withMessages(['status'=>'Settled supplier advances require a dedicated correction workflow.']);
    if(DB::table('shareholder_profit_distributions')->where('journal_entry_id',$original->id)->exists())
     throw ValidationException::withMessages(['status'=>'Posted shareholder profit distributions require a controlled resolution-linked correction.']);

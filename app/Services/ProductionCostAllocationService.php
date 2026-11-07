@@ -38,7 +38,8 @@ class ProductionCostAllocationService
    $line=JournalLine::whereKey($data['source_journal_line_id'])->lockForUpdate()->firstOrFail();
    $account=$line->account;
    $journal=DB::table('journal_entries')->where('id',$line->journal_entry_id)->first();
-   if(!$journal || $journal->status!=='posted' || $journal->reversal_of_id)
+   if(!$journal || $journal->status!=='posted' || $journal->reversal_of_id ||
+    DB::table('journal_entries')->where('reversal_of_id',$journal->id)->exists())
     throw ValidationException::withMessages(['source_journal_line_id'=>'Source must be an original, posted expense journal.']);
    if(!$account || !$account->is_active || $account->is_group || $account->type!=='expense' ||
      BigDecimal::of((string)$line->debit)->isLessThanOrEqualTo(0) ||
