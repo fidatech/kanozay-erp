@@ -17,6 +17,29 @@ class ModulePageController extends Controller
             return app(OperationalRegisterController::class)->index($request,$module,$page);
         }
 
+        // Map module navigation to the existing live transactional controllers.
+        if ($module==='inventory' && $page==='materials') {
+            return app(InventoryMaterialController::class)->index($request);
+        }
+        if ($module==='inventory' && $page==='products') {
+            return app(FinishedGoodController::class)->index($request);
+        }
+        if ($module==='manufacturing' && $page==='boms') {
+            return app(ProductionRecipeController::class)->index($request);
+        }
+        if ($module==='sales' && $page==='quotations') {
+            return app(SalesQuotationController::class)->index($request);
+        }
+        if ($module==='sales' && $page==='orders') {
+            return app(SalesOrderController::class)->index($request);
+        }
+        if ($module==='sales' && $page==='invoices') {
+            return app(SalesInvoiceController::class)->index($request);
+        }
+        if ($module==='hr' && $page==='payroll-runs') {
+            return app(PayrollPeriodController::class)->index($request);
+        }
+
         if ($module === 'inventory' && in_array($page,['transfers','warehouses'],true)) {
             return app(WarehouseStockController::class)->index($request,app(\App\Services\WarehouseStockService::class));
         }
