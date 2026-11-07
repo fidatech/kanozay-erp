@@ -20,6 +20,10 @@ Route::middleware('auth')->post('/production/recipes/kanozay-preview', [\App\Htt
 Route::middleware('auth')->post('/production/recipes/import-preview', [\App\Http\Controllers\ProductionRecipeImportController::class, 'preview'])->name('production.recipes.import-preview');
 Route::middleware('auth')->get('/inventory/warehouse-stock', [\App\Http\Controllers\WarehouseStockController::class,'index'])->name('inventory.warehouse-stock.index');
 Route::middleware('auth')->post('/inventory/warehouse-stock', [\App\Http\Controllers\WarehouseStockController::class,'store'])->name('inventory.warehouse-stock.store');
+Route::middleware('auth')->post('/manufacturing/equipment', [\App\Http\Controllers\ManufacturingOperationsController::class,'equipment'])->name('manufacturing.equipment.store');
+Route::middleware('auth')->post('/manufacturing/schedules', [\App\Http\Controllers\ManufacturingOperationsController::class,'schedule'])->name('manufacturing.schedules.store');
+Route::middleware('auth')->post('/manufacturing/schedules/{schedule}/transition', [\App\Http\Controllers\ManufacturingOperationsController::class,'transition'])->name('manufacturing.schedules.transition');
+Route::middleware('auth')->post('/manufacturing/downtime', [\App\Http\Controllers\ManufacturingOperationsController::class,'downtime'])->name('manufacturing.downtime.store');
 Route::middleware('auth')->post('/laboratory/specifications', [\App\Http\Controllers\LaboratoryQualityController::class,'specification'])->name('laboratory.specifications.store');
 Route::middleware('auth')->post('/laboratory/samples', [\App\Http\Controllers\LaboratoryQualityController::class,'sample'])->name('laboratory.samples.store');
 Route::middleware('auth')->get('/laboratory/samples/{sample}', [\App\Http\Controllers\LaboratoryQualityController::class,'show'])->name('laboratory.samples.show');

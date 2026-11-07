@@ -38,6 +38,7 @@ class ModulePageStructureTest extends TestCase
                     $module === 'assets' && $page === 'depreciation' => 'Fixed asset depreciation',
                     $module === 'assets' && in_array($page,['maintenance','schedules','service-history','transfers','disposals'],true) => 'Asset lifecycle',
                     $module === 'purchases' && $page === 'orders' => 'New Purchase Order',
+                    $module === 'manufacturing' && in_array($page,['equipment','downtime','scheduling','plans','work-orders'],true) => 'Manufacturing operations',
                     $module === 'laboratory' && $page !== 'calibration' => 'Laboratory QC register',
                     $module === 'sales' && $page === 'pricing' => 'Customer Price Lists',
                     $module === 'sales' && $page === 'customer-credit-limits' => 'Customer Credit Limits',
