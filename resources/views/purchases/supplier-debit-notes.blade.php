@@ -35,8 +35,8 @@
 </section>
 @endcanany
 <section class="sd-panel"><h2>Posted supplier debit notes</h2>
-<div class="sd-table"><table><thead><tr><th>Debit note</th><th>Return</th><th>Supplier</th><th>Credit date</th><th>Amount</th><th>GL journal</th><th>Payable</th></tr></thead><tbody>
-@forelse($notes as $n)<tr><td>{{ $n->number }}</td><td>{{ $n->purchaseReturn?->number }}</td><td>{{ $n->document?->party?->name }}</td><td>{{ $n->credit_date?->toDateString() }}</td><td>{{ $n->amount }} {{ $n->currency?->code }}</td><td>{{ $n->journal?->number }}</td><td>{{ $n->document?->number }}</td></tr>
-@empty<tr><td colspan="7">No posted supplier debit notes.</td></tr>@endforelse
+<div class="sd-table"><table><thead><tr><th>Debit note</th><th>Return</th><th>Supplier</th><th>Credit date</th><th>Amount</th><th>Supplier reference</th><th>GL journal</th><th>Payable</th></tr></thead><tbody>
+@forelse($notes as $n)<tr><td>{{ $n->number }}</td><td>{{ $n->purchaseReturn?->number }}</td><td>{{ $n->document?->party?->name }}</td><td>{{ $n->credit_date?->toDateString() }}</td><td>{{ $n->amount }} {{ $n->currency?->code }}</td><td>{{ $n->supplier_credit_reference }}</td><td>{{ $n->journal?->number }}</td><td>{{ $n->document?->number }}</td></tr>
+@empty<tr><td colspan="8">No posted supplier debit notes.</td></tr>@endforelse
 </tbody></table></div>{{ $notes->links() }}</section>
 @endsection
