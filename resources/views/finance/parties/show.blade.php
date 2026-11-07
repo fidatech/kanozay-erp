@@ -18,5 +18,63 @@
 <div class="panel"><h2>Financial Snapshot</h2><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px"><div style="padding:15px;border:1px solid #dce7f2;border-radius:12px"><small>Enabled Currencies</small><h2>{{ $party->currencies->count() }}</h2></div><div style="padding:15px;border:1px solid #dce7f2;border-radius:12px"><small>Opening Balance Records</small><h2>{{ $openingBalances->count() }}</h2></div><div style="padding:15px;border:1px solid #dce7f2;border-radius:12px"><small>Recent Financial Documents</small><h2>{{ $documents->count() }}</h2><small>Last 20 maximum</small></div></div></div>
 <div class="panel"><h2>Enabled Currencies</h2><p>{{ $party->currencies->pluck('code')->join(', ') ?: 'No currencies enabled' }}</p></div>
 <div class="panel"><h2>Opening Balances</h2><div class="table-wrap"><table><thead><tr><th>Currency</th><th>Amount</th><th>Direction</th></tr></thead><tbody>@forelse($openingBalances as $balance)<tr><td>{{ $party->currencies->firstWhere('id',$balance->currency_id)?->code ?: $balance->currency_id }}</td><td><x-finance-amount :amount="\Brick\Math\BigDecimal::of((string)$balance->amount)->abs()" /></td><td>{{ \Brick\Math\BigDecimal::of((string)$balance->amount)->compareTo(\Brick\Math\BigDecimal::zero()) >= 0 ? ($type==='customer'?'They owe us':'Advance paid') : ($type==='customer'?'Customer advance':'We owe them') }}</td></tr>@empty<tr><td colspan="3">No opening balances recorded.</td></tr>@endforelse</tbody></table></div></div>
-<div class="panel"><h2>Recent {{ $type==='customer'?'Receivables':'Payables' }}</h2><div class="table-wrap"><table><thead><tr><th>Document</th><th>Date</th><th>Due date</th><th>Amount after credits</th><th>Currency</th></tr></thead><tbody>@forelse($documents as $document)<tr><td>{{ $document->number }}</td><td>{{ $document->document_date }}</td><td>{{ $document->due_date }}</td><td><x-finance-amount :amount="$document->net_amount" /></td><td>{{ $party->currencies->firstWhere('id',$document->currency_id)?->code ?: $document->currency_id }}</td></tr>@empty<tr><td colspan="5">No financial documents recorded.</td></tr>@endforelse</tbody></table></div><p class="muted">Showing up to 20 recent documents.</p></div>
+<div class="panel"><h2>Recent {{ $type==='customer'?'Receivables':'Payables' }}</h2><div class="table-wrap"><table><thead><tr><th>Document</th><th>Date</th><th>Due date</th><th>Outstanding after payments and credits</th><th>Currency</th></tr></thead><tbody>@forelse($documents as $document)<tr><td>{{ $document->number }}</td><td>{{ $document->document_date }}</td><td>{{ $document->due_date }}</td><td><x-finance-amount :amount="$document->outstanding_amount" /></td><td>{{ $party->currencies->firstWhere('id',$document->currency_id)?->code ?: $document->currency_id }}</td></tr>@empty<tr><td colspan="5">No financial documents recorded.</td></tr>@endforelse</tbody></table></div><p class="muted">Showing up to 100 recent documents.</p></div>
+
+@canany(['administration.update','finance.update'])
+<section class="panel">
+ <h2>{{ $type==='customer'?'Record customer receipt':'Record supplier payment' }}</h2>
+ <p class="muted">Post a cash movement to the party ledger. Select an outstanding invoice to allocate the full payment automatically; leave it unallocated if this is an advance or a general account payment.</p>
+ @if($cashboxes->isEmpty())
+  <p class="muted">Configure an active cashbox in a currency enabled for this account before recording a payment.</p>
+ @else
+ <form method="POST" action="{{ route('finance.journals.quick.store') }}" class="party-payment-form" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
+  @csrf
+  <input type="hidden" name="submission_token" value="{{ (string)\Illuminate\Support\Str::uuid() }}">
+  <input type="hidden" name="trade_party_id" value="{{ $party->id }}">
+  <input type="hidden" name="type" value="{{ $type==='customer'?'credit':'debit' }}">
+  <label>Payment date <input type="date" name="transaction_date" required value="{{ old('transaction_date',date('Y-m-d')) }}"></label>
+  <label>Cashbox <select name="cash_account_id" id="party-payment-cashbox" required>
+   <option value="">Choose cashbox</option>
+   @foreach($cashboxes as $cashbox)
+   <option value="{{ $cashbox->id }}" data-currency="{{ $cashbox->currency_id }}" @selected(old('cash_account_id')==$cashbox->id)>{{ $cashbox->name }} — {{ $cashbox->currency?->code }}</option>
+   @endforeach
+  </select></label>
+  <label>Currency <select name="currency_id" id="party-payment-currency" required>
+   <option value="">Select currency</option>
+   @foreach($party->currencies as $currency)
+   <option value="{{ $currency->id }}" @selected(old('currency_id')==$currency->id)>{{ $currency->code }}</option>
+   @endforeach
+  </select></label>
+  <label>Amount <input type="text" name="amount" required inputmode="decimal" maxlength="25" placeholder="0.00" value="{{ old('amount') }}"></label>
+  <label>Settle invoice (optional) <select name="trade_document_id" id="party-payment-invoice">
+   <option value="">Unallocated payment / advance</option>
+   @foreach($documents as $document)
+    @if(\Brick\Math\BigDecimal::of((string)$document->outstanding_amount)->isPositive())
+    <option value="{{ $document->id }}" data-currency="{{ $document->currency_id }}" @selected(old('trade_document_id')==$document->id)>{{ $document->number }} — {{ $document->outstanding_amount }} (remaining)</option>
+    @endif
+   @endforeach
+  </select></label>
+  <label style="grid-column:1/-1">Description <input name="description" maxlength="2000" value="{{ old('description') }}" placeholder="Payment reference or notes"></label>
+  <div style="grid-column:1/-1"><button type="submit" class="btn">{{ $type==='customer'?'Post receipt':'Post payment' }}</button></div>
+ </form>
+ <script>
+ document.addEventListener('DOMContentLoaded',function(){
+  const currency=document.getElementById('party-payment-currency');
+  const cashbox=document.getElementById('party-payment-cashbox');
+  const invoice=document.getElementById('party-payment-invoice');
+  const sync=()=>{
+   const selectedCurrency=currency.value;
+   [...cashbox.options].forEach(option=>{if(option.value)option.hidden=!!selectedCurrency && option.dataset.currency!==selectedCurrency;});
+   [...invoice.options].forEach(option=>{if(option.value)option.hidden=!!selectedCurrency && option.dataset.currency!==selectedCurrency;});
+   if(cashbox.selectedOptions[0]?.hidden)cashbox.value='';
+   if(invoice.selectedOptions[0]?.hidden)invoice.value='';
+  };
+  currency.addEventListener('change',sync);
+  cashbox.addEventListener('change',function(){const selected=cashbox.selectedOptions[0];if(selected?.dataset.currency){currency.value=selected.dataset.currency;sync();}});
+  sync();
+ });
+ </script>
+ @endif
+</section>
+@endcanany
 @endsection
