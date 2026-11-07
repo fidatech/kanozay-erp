@@ -26,7 +26,7 @@ return new class extends Migration {
         });
         Schema::create('matched_supplier_invoice_lines',function(Blueprint $table){
             $table->id();
-            $table->foreignId('matched_supplier_invoice_id')->constrained('matched_supplier_invoices')->restrictOnDelete();
+            $table->foreignId('matched_supplier_invoice_id')->constrained('matched_supplier_invoices',indexName:'matched_invoice_line_fk')->restrictOnDelete();
             $table->foreignId('goods_receipt_line_id')->constrained('goods_receipt_lines')->restrictOnDelete();
             $table->foreignId('inventory_material_id')->constrained('inventory_materials')->restrictOnDelete();
             $table->decimal('quantity',20,6);
