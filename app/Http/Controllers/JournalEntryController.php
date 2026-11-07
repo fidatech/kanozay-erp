@@ -52,7 +52,10 @@ class JournalEntryController extends Controller {
   }
   if(!$debits->isPositive() || $debits->compareTo($credits)!==0)
    throw ValidationException::withMessages(['lines'=>'Total debits must equal total credits before a draft can be saved.']);
-  DB::transaction(function()use($data,$request){DocumentSequence::firstOrCreate(['document_type'=>'journal_entry'],['prefix'=>'JE-','next_number'=>1,'padding'=>6,'is_active'=>true]);$number=DocumentSequence::issue('journal_entry');$entry=JournalEntry::create(['number'=>$number,'entry_date'=>$data['entry_date'],'description'=>$data['description'],'reference'=>$data['reference']??null,'currency_id'=>$data['currency_id'],'created_by'=>$request->user()->id,'status'=>'draft']);foreach($data['lines'] as $line)$entry->lines()->create($line);ActivityLog::record('journal.created','journal_entry',$entry->id,'Draft journal '.$entry->number.' created');});return back()->with('status','Draft journal created.');}
+  DB::transaction(function()use($data,$request){
+    app(\App\Services\FinancePeriodClosingService::class)->holdPostingGate();
+    app(\App\Services\FinancePeriodClosingService::class)->assertOpenDate($data['entry_date']);
+    DocumentSequence::firstOrCreate(['document_type'=>'journal_entry'],['prefix'=>'JE-','next_number'=>1,'padding'=>6,'is_active'=>true]);$number=DocumentSequence::issue('journal_entry');$entry=JournalEntry::create(['number'=>$number,'entry_date'=>$data['entry_date'],'description'=>$data['description'],'reference'=>$data['reference']??null,'currency_id'=>$data['currency_id'],'created_by'=>$request->user()->id,'status'=>'draft']);foreach($data['lines'] as $line)$entry->lines()->create($line);ActivityLog::record('journal.created','journal_entry',$entry->id,'Draft journal '.$entry->number.' created');});return back()->with('status','Draft journal created.');}
  public function post(Request $request,JournalEntry $journal,JournalPostingService $service){$this->guard($request,true);$service->post($journal,$request->user()->id);return back()->with('status','Journal posted successfully.');}
  public function reverse(Request $request,JournalEntry $journal,JournalPostingService $service){$this->guard($request,true);$service->reverse($journal,$request->user()->id);return back()->with('status','Reversal posted successfully.');}
 }

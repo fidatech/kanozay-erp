@@ -9,6 +9,12 @@ use Illuminate\Validation\ValidationException;
 class JournalPostingService {
  public function post(JournalEntry $journal,int $userId):JournalEntry {
   return DB::transaction(function()use($journal,$userId){
+   // Shared gate serializes journal posting and month-close transitions.
+   $closeService=app(\App\Services\FinancePeriodClosingService::class);
+   $closeService->holdPostingGate();
+   $postingDate=JournalEntry::whereKey($journal->id)->value('entry_date');
+   if(!$postingDate)throw ValidationException::withMessages(['entry_date'=>'Journal not found.']);
+   $closeService->assertOpenDate(substr((string)$postingDate,0,10));
    // Serialize postings affecting mapped party ledgers with reconciliation approvals.
    $currencyId=JournalEntry::whereKey($journal->id)->value('currency_id');
    $accountIds=DB::table('journal_lines')->where('journal_entry_id',$journal->id)

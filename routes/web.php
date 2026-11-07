@@ -220,6 +220,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/finance/profit-and-loss', [\App\Http\Controllers\ProfitAndLossController::class,'index'])->name('finance.profit-and-loss.index');
     Route::get('/finance/balance-sheet', [\App\Http\Controllers\BalanceSheetController::class,'index'])->name('finance.balance-sheet.index');
     Route::get('/finance/cash-movements', [\App\Http\Controllers\CashMovementReportController::class,'index'])->name('finance.cash-movements.index');
+    Route::get('/finance/periods', [\App\Http\Controllers\FinancePeriodClosingController::class,'index'])->name('finance.periods.index');
+    Route::post('/finance/periods/close', [\App\Http\Controllers\FinancePeriodClosingController::class,'close'])->name('finance.periods.close');
+    Route::post('/finance/periods/{period}/reopen', [\App\Http\Controllers\FinancePeriodClosingController::class,'reopen'])->name('finance.periods.reopen');
     Route::get('/finance/journals', [\App\Http\Controllers\JournalEntryController::class,'index'])->name('finance.journals.index');
     Route::post('/finance/journals', [\App\Http\Controllers\JournalEntryController::class,'store'])->name('finance.journals.store');
     Route::post('/finance/journals/quick-transaction', [\App\Http\Controllers\QuickPartyTransactionController::class,'store'])->name('finance.journals.quick.store');
