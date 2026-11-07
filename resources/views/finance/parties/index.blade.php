@@ -121,6 +121,7 @@
   <label>Email<input name="email" type="email" maxlength="180" value="{{ $party->email }}"></label>
   <label>Address<input name="address" maxlength="2000" value="{{ $party->address }}"></label>
   <label class="sp-wide">Notes<textarea name="notes" maxlength="2000" rows="2">{{ $party->notes }}</textarea></label>
+  <label class="sp-wide" style="display:flex;align-items:center;gap:9px"><input type="hidden" name="is_active" value="0"><input type="checkbox" name="is_active" value="1" @checked($party->is_active) style="width:auto;min-height:0"> Active account</label>
   <div class="sp-dialog-footer"><button type="button" class="sp-action" data-close-dialog>Cancel</button><button class="btn" type="submit">Save Changes</button></div>
  </form>
  @php($availableCurrencies=$currencies->reject(fn($currency)=>$party->currencies->contains('id',$currency->id)))
