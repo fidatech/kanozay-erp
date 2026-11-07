@@ -18,6 +18,15 @@ Route::post('/language', function (\Illuminate\Http\Request $request) {
 Route::middleware('auth')->post('/production/recipes/kanozay-confirm', [\App\Http\Controllers\KanozayWorkbookPreviewController::class, 'confirm'])->name('production.recipes.kanozay-confirm');
 Route::middleware('auth')->post('/production/recipes/kanozay-preview', [\App\Http\Controllers\KanozayWorkbookPreviewController::class, '__invoke'])->name('production.recipes.kanozay-preview');
 Route::middleware('auth')->post('/production/recipes/import-preview', [\App\Http\Controllers\ProductionRecipeImportController::class, 'preview'])->name('production.recipes.import-preview');
+Route::middleware('auth')->post('/documents/categories', [\App\Http\Controllers\ManagedDocumentController::class,'category'])->name('documents.categories.store');
+Route::middleware('auth')->post('/documents/upload', [\App\Http\Controllers\ManagedDocumentController::class,'upload'])->name('documents.upload');
+Route::middleware('auth')->get('/documents/{document}/download', [\App\Http\Controllers\ManagedDocumentController::class,'download'])->whereNumber('document')->name('documents.download');
+Route::middleware('auth')->get('/documents/{document}/versions/{version}/download', [\App\Http\Controllers\ManagedDocumentController::class,'download'])->whereNumber('document')->whereNumber('version')->name('documents.download.version');
+Route::middleware('auth')->post('/documents/{document}/replace', [\App\Http\Controllers\ManagedDocumentController::class,'replace'])->whereNumber('document')->name('documents.replace');
+Route::middleware('auth')->post('/documents/{document}/approval-request', [\App\Http\Controllers\ManagedDocumentController::class,'requestApproval'])->whereNumber('document')->name('documents.approvals.request');
+Route::middleware('auth')->post('/documents/{document}/approvals/{approval}/decision', [\App\Http\Controllers\ManagedDocumentController::class,'decide'])->whereNumber('document')->whereNumber('approval')->name('documents.approvals.decide');
+Route::middleware('auth')->patch('/documents/{document}/metadata', [\App\Http\Controllers\ManagedDocumentController::class,'metadata'])->whereNumber('document')->name('documents.metadata');
+Route::middleware('auth')->delete('/documents/{document}', [\App\Http\Controllers\ManagedDocumentController::class,'archive'])->whereNumber('document')->name('documents.archive');
 Route::middleware('auth')->post('/crm/{page}', [\App\Http\Controllers\CrmController::class,'store'])->name('crm.records.store');
 Route::middleware('auth')->patch('/crm/{page}/{record}', [\App\Http\Controllers\CrmController::class,'update'])->whereNumber('record')->name('crm.records.update');
 Route::middleware('auth')->delete('/crm/{page}/{record}', [\App\Http\Controllers\CrmController::class,'destroy'])->whereNumber('record')->name('crm.records.delete');

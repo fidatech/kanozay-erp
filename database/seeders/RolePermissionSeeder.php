@@ -15,7 +15,7 @@ class RolePermissionSeeder extends Seeder
 
         $modules = [
             'dashboard', 'purchases', 'inventory', 'manufacturing', 'laboratory',
-            'sales', 'crm', 'finance', 'shareholders', 'hr', 'maintenance', 'reports',
+            'sales', 'crm', 'documents', 'finance', 'shareholders', 'hr', 'maintenance', 'reports',
             'administration', 'users', 'roles',
         ];
 
@@ -30,7 +30,7 @@ class RolePermissionSeeder extends Seeder
         $admin->syncPermissions(Permission::where('guard_name', 'web')->get());
 
         $rolePermissions = [
-            'Administrator' => ['dashboard.view', 'administration.view', 'administration.update', 'users.view', 'users.create', 'users.update', 'roles.view', 'roles.create', 'roles.update'],
+            'Administrator' => ['dashboard.view', 'administration.view', 'administration.update', 'documents.view', 'documents.create', 'documents.update', 'documents.delete', 'users.view', 'users.create', 'users.update', 'roles.view', 'roles.create', 'roles.update'],
             'Finance Manager' => ['dashboard.view', 'finance.view', 'finance.create', 'finance.update', 'reports.view'],
             'Shareholder Officer' => ['dashboard.view', 'shareholders.view', 'shareholders.create', 'shareholders.update'],
             'Production Manager' => ['dashboard.view', 'manufacturing.view', 'manufacturing.create', 'manufacturing.update', 'inventory.view', 'inventory.update', 'laboratory.view', 'laboratory.create', 'laboratory.update'],

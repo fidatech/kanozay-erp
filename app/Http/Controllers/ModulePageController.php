@@ -9,6 +9,10 @@ class ModulePageController extends Controller
 {
     public function show(Request $request, string $module, string $page)
     {
+        if ($module === 'documents' && in_array($page,['library','categories','approvals','versions','templates','retention','expirations'],true)) {
+            return app(ManagedDocumentController::class)->index($request,$page);
+        }
+
         if ($module === 'crm' && config('crm_workflows.'.$page) !== null) {
             return app(CrmController::class)->index($request, $page);
         }
