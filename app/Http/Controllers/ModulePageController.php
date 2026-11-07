@@ -9,6 +9,10 @@ class ModulePageController extends Controller
 {
     public function show(Request $request, string $module, string $page)
     {
+        if ($module === 'sales' && $page === 'delivery-notes') {
+            return app(SalesDeliveryNoteController::class)->index($request);
+        }
+
         if ($module === 'documents' && in_array($page,['library','categories','approvals','versions','templates','retention','expirations'],true)) {
             return app(ManagedDocumentController::class)->index($request,$page);
         }

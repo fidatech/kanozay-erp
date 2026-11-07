@@ -30,6 +30,7 @@ class ModulePageStructureTest extends TestCase
                     $module === 'hr' && $page === 'departments' => 'Departments',
                     $module === 'hr' && $page === 'advances' => 'Salary advances',
                     $module === 'documents' => 'Document',
+                    $module === 'sales' && $page === 'delivery-notes' => 'Delivery Notes',
                     $module === 'crm' => 'register',
                     $module === 'inventory' && $page === 'counts' => 'Physical Stock Counts',
                     $module === 'assets' && $page === 'register' => 'Fixed asset register',

@@ -18,6 +18,11 @@ Route::post('/language', function (\Illuminate\Http\Request $request) {
 Route::middleware('auth')->post('/production/recipes/kanozay-confirm', [\App\Http\Controllers\KanozayWorkbookPreviewController::class, 'confirm'])->name('production.recipes.kanozay-confirm');
 Route::middleware('auth')->post('/production/recipes/kanozay-preview', [\App\Http\Controllers\KanozayWorkbookPreviewController::class, '__invoke'])->name('production.recipes.kanozay-preview');
 Route::middleware('auth')->post('/production/recipes/import-preview', [\App\Http\Controllers\ProductionRecipeImportController::class, 'preview'])->name('production.recipes.import-preview');
+Route::middleware('auth')->get('/sales/delivery-notes/create', [\App\Http\Controllers\SalesDeliveryNoteController::class,'create'])->name('sales.delivery-notes.create');
+Route::middleware('auth')->post('/sales/delivery-notes', [\App\Http\Controllers\SalesDeliveryNoteController::class,'store'])->name('sales.delivery-notes.store');
+Route::middleware('auth')->get('/sales/delivery-notes/{note}', [\App\Http\Controllers\SalesDeliveryNoteController::class,'show'])->name('sales.delivery-notes.show');
+Route::middleware('auth')->post('/sales/delivery-notes/{note}/delivered', [\App\Http\Controllers\SalesDeliveryNoteController::class,'delivered'])->name('sales.delivery-notes.delivered');
+Route::middleware('auth')->post('/sales/delivery-notes/{note}/cancel', [\App\Http\Controllers\SalesDeliveryNoteController::class,'cancel'])->name('sales.delivery-notes.cancel');
 Route::middleware('auth')->post('/documents/categories', [\App\Http\Controllers\ManagedDocumentController::class,'category'])->name('documents.categories.store');
 Route::middleware('auth')->post('/documents/upload', [\App\Http\Controllers\ManagedDocumentController::class,'upload'])->name('documents.upload');
 Route::middleware('auth')->get('/documents/{document}/download', [\App\Http\Controllers\ManagedDocumentController::class,'download'])->whereNumber('document')->name('documents.download');

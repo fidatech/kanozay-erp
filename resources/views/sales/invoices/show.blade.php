@@ -2,7 +2,7 @@
 @section('content')
 <div class="heading no-print">
  <div><h1>{{ $invoice->number }}</h1><p>Posted sales invoice and linked customer receivable</p></div>
- <div style="display:flex;gap:8px"><a class="btn btn-light" href="{{ route('sales.invoices.index') }}">Back to invoices</a>@can('sales.create')<a class="btn btn-light" href="{{ route('sales.credit-notes.create',$invoice) }}">Return / credit note</a>@endcan<button class="btn" type="button" onclick="window.print()"><i class="fa-solid fa-print"></i> Print / Save PDF</button></div>
+ <div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn btn-light" href="{{ route('sales.invoices.index') }}">Back to invoices</a>@can('sales.create')<a class="btn btn-light" href="{{ route('sales.delivery-notes.create',['invoice_id'=>$invoice->id]) }}">Create delivery note</a>@endcan@can('sales.create')<a class="btn btn-light" href="{{ route('sales.credit-notes.create',$invoice) }}">Return / credit note</a>@endcan<button class="btn" type="button" onclick="window.print()"><i class="fa-solid fa-print"></i> Print / Save PDF</button></div>
 </div>
 <div class="card invoice-sheet" dir="{{ session('locale','en') === 'en' ? 'ltr' : 'rtl' }}" style="max-width:900px;margin:0 auto;padding:42px;background:#fff;color:#1b2738">
  <header style="display:flex;align-items:center;justify-content:space-between;gap:24px;border-bottom:3px solid #5921a8;padding-bottom:18px">
