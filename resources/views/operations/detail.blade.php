@@ -68,6 +68,20 @@
 </details></section>
 @endcanany
 @endif
+@if($module==='purchases' && $page==='quotations' && $record->status==='approved')
+@canany(['purchases.create','administration.update'])
+<section class="od-panel"><h2>Convert approved supplier quotation to draft PO</h2>
+<p>Conversion preserves the reviewed material, currency, quantity and supplier unit price. A purchase order stays in draft until procurement confirms it.</p>
+<form method="POST" action="{{ route('supplier-quotations.convert',$record) }}" class="od-grid">@csrf
+<input type="hidden" name="submission_token" value="{{ (string)\Illuminate\Support\Str::uuid() }}">
+<label>Purchase source<select name="source" required><option value="local">Local purchase</option><option value="foreign">Foreign purchase</option></select></label>
+<label>Order date<input type="date" name="order_date" max="{{ today()->toDateString() }}" value="{{ today()->toDateString() }}" required></label>
+<label>Expected delivery date<input type="date" name="expected_date"></label>
+<label class="wide">Procurement notes<textarea name="notes" rows="2" maxlength="2000"></textarea></label>
+<div><button type="submit" class="btn" onclick="return confirm('Create a new draft PO from this approved offer?')">Convert to draft purchase order</button></div>
+</form></section>
+@endcanany
+@endif
 <section class="od-panel"><h2>Approval workflow</h2>
 <p class="muted">Approvers cannot approve their own records. A closed record stays visible with its complete change history. This approval does not itself create stock or financial postings.</p>
 <div class="od-actions">
