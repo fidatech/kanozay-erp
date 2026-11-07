@@ -18,6 +18,7 @@ Route::post('/language', function (\Illuminate\Http\Request $request) {
 Route::middleware('auth')->post('/production/recipes/kanozay-confirm', [\App\Http\Controllers\KanozayWorkbookPreviewController::class, 'confirm'])->name('production.recipes.kanozay-confirm');
 Route::middleware('auth')->post('/production/recipes/kanozay-preview', [\App\Http\Controllers\KanozayWorkbookPreviewController::class, '__invoke'])->name('production.recipes.kanozay-preview');
 Route::middleware('auth')->post('/production/recipes/import-preview', [\App\Http\Controllers\ProductionRecipeImportController::class, 'preview'])->name('production.recipes.import-preview');
+Route::middleware('auth')->get('/data-hubs/{module}/{page}/export', [\App\Http\Controllers\OperationalDataHubController::class,'export'])->name('data-hubs.export');
 Route::middleware('auth')->get('/operations/{module}/{page}/export', [\App\Http\Controllers\OperationalRegisterController::class,'export'])->name('operations.export');
 Route::middleware('auth')->get('/operations/{module}/{page}/{record}', [\App\Http\Controllers\OperationalRegisterController::class,'show'])->name('operations.show');
 Route::middleware('auth')->post('/operations/{module}/{page}', [\App\Http\Controllers\OperationalRegisterController::class,'store'])->name('operations.store');

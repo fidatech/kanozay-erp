@@ -9,6 +9,10 @@ class ModulePageController extends Controller
 {
     public function show(Request $request, string $module, string $page)
     {
+        if (isset((config('operational_data_hubs')??[])[$module.'.'.$page])) {
+            return app(OperationalDataHubController::class)->show($request,$module,$page);
+        }
+
         if (isset((config('operational_registers')??[])[$module.'.'.$page])) {
             return app(OperationalRegisterController::class)->index($request,$module,$page);
         }
