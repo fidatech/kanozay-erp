@@ -35,6 +35,7 @@ class QuickPartyTransactionController extends Controller
             'type'=>['required',Rule::in(['credit','debit'])],
             'currency_id'=>['required','integer',Rule::exists('currencies','id')->where('is_active',true)],
             'cash_account_id'=>['nullable','integer','exists:financial_accounts,id'],
+            'financial_account_id'=>['nullable','integer','exists:financial_accounts,id'],
             'amount'=>['required','numeric','gt:0','decimal:0,4','max:999999999999.9999'],
             'description'=>['nullable','string','max:2000'],
             'trade_document_id'=>['nullable','integer','exists:trade_documents,id'],
@@ -51,18 +52,37 @@ class QuickPartyTransactionController extends Controller
             $partyLedgerId=DB::table('entity_ledger_accounts')->where(['entity_type'=>$party->type,'entity_id'=>$party->id,'currency_id'=>$data['currency_id'],'purpose'=>$purpose])->value('ledger_account_id');
             $partyLedger=$partyLedgerId?LedgerAccount::find($partyLedgerId):null;
             if(!$partyLedger||!$partyLedger->is_active||$partyLedger->is_group)throw ValidationException::withMessages(['trade_party_id'=>'Customer/supplier ledger mapping is missing or inactive.']);
-            $available=FinancialAccount::where('type','cashbox')->where('is_active',true)->where('currency_id',$data['currency_id'])->orderBy('id')->get();
-            if($available->isEmpty())throw ValidationException::withMessages(['currency_id'=>'Configure an active cashbox for this currency before recording a payment.']);
-            if(!empty($data['cash_account_id'])){
-                $cash=$available->firstWhere('id',(int)$data['cash_account_id']);
-                if(!$cash)throw ValidationException::withMessages(['cash_account_id'=>'Choose an active cashbox in the selected currency.']);
+            // Retain cashbox-only behavior for legacy quick forms. The account
+            // profile explicitly selects from cashbox, bank and sarafi accounts.
+            $usingModernAccount=!empty($data['financial_account_id']);
+            $available=FinancialAccount::where('is_active',true)
+                ->where('currency_id',$data['currency_id'])
+                ->whereIn('type',$usingModernAccount?['cashbox','bank','sarafi']:['cashbox'])
+                ->orderBy('id')->get();
+            if($available->isEmpty())throw ValidationException::withMessages([
+                'currency_id'=>'No active payment account is available for this currency.',
+            ]);
+            $selectedAccountId=$data['financial_account_id']??$data['cash_account_id']??null;
+            if($selectedAccountId){
+                $cash=$available->firstWhere('id',(int)$selectedAccountId);
+                if(!$cash)throw ValidationException::withMessages([
+                    'financial_account_id'=>'Choose an active financial account in the selected currency.',
+                ]);
             }else{
-                if($available->count()!==1)throw ValidationException::withMessages(['cash_account_id'=>'Multiple cashboxes exist for this currency. Select the correct one.']);
+                if($available->count()!==1)throw ValidationException::withMessages([
+                    'cash_account_id'=>'Select a payment account when more than one is available.',
+                ]);
                 $cash=$available->first();
             }
-            $cashLedgerId=DB::table('entity_ledger_accounts')->where(['entity_type'=>'cashbox','entity_id'=>$cash->id,'currency_id'=>$data['currency_id'],'purpose'=>'cash'])->value('ledger_account_id');
+            $cashLedgerId=DB::table('entity_ledger_accounts')->where([
+                'entity_type'=>$cash->type,'entity_id'=>$cash->id,
+                'currency_id'=>$data['currency_id'],'purpose'=>'cash',
+            ])->value('ledger_account_id');
             $cashLedger=$cashLedgerId?LedgerAccount::find($cashLedgerId):null;
-            if(!$cashLedger||!$cashLedger->is_active||$cashLedger->is_group||$cashLedger->id===$partyLedger->id)throw ValidationException::withMessages(['cash_account_id'=>'Cashbox ledger mapping is missing or invalid.']);
+            if(!$cashLedger||!$cashLedger->is_active||$cashLedger->is_group||$cashLedger->id===$partyLedger->id)
+                throw ValidationException::withMessages([
+                    'financial_account_id'=>'Payment account ledger mapping is missing or invalid.',
+                ]);
             // Optional invoice settlement is checked before journal posting and
             // completed in the same transaction as the money movement.
             $settlementDocument=null;
