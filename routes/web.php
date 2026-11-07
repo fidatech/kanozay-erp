@@ -18,6 +18,8 @@ Route::post('/language', function (\Illuminate\Http\Request $request) {
 Route::middleware('auth')->post('/production/recipes/kanozay-confirm', [\App\Http\Controllers\KanozayWorkbookPreviewController::class, 'confirm'])->name('production.recipes.kanozay-confirm');
 Route::middleware('auth')->post('/production/recipes/kanozay-preview', [\App\Http\Controllers\KanozayWorkbookPreviewController::class, '__invoke'])->name('production.recipes.kanozay-preview');
 Route::middleware('auth')->post('/production/recipes/import-preview', [\App\Http\Controllers\ProductionRecipeImportController::class, 'preview'])->name('production.recipes.import-preview');
+Route::middleware('auth')->post('/assets/{asset}/depreciation-policy', [\App\Http\Controllers\FixedAssetDepreciationController::class,'savePolicy'])->name('assets.depreciation.policy');
+Route::middleware('auth')->post('/assets/{asset}/depreciation-post', [\App\Http\Controllers\FixedAssetDepreciationController::class,'post'])->name('assets.depreciation.post');
 Route::middleware('auth')->get('/sales/delivery-notes/create', [\App\Http\Controllers\SalesDeliveryNoteController::class,'create'])->name('sales.delivery-notes.create');
 Route::middleware('auth')->post('/sales/delivery-notes', [\App\Http\Controllers\SalesDeliveryNoteController::class,'store'])->name('sales.delivery-notes.store');
 Route::middleware('auth')->get('/sales/delivery-notes/{note}', [\App\Http\Controllers\SalesDeliveryNoteController::class,'show'])->name('sales.delivery-notes.show');

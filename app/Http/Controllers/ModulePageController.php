@@ -9,6 +9,10 @@ class ModulePageController extends Controller
 {
     public function show(Request $request, string $module, string $page)
     {
+        if ($module === 'assets' && $page === 'depreciation') {
+            return app(FixedAssetDepreciationController::class)->index($request);
+        }
+
         if ($module === 'sales' && $page === 'delivery-notes') {
             return app(SalesDeliveryNoteController::class)->index($request);
         }

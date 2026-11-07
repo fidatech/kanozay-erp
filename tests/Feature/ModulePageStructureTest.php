@@ -34,6 +34,7 @@ class ModulePageStructureTest extends TestCase
                     $module === 'crm' => 'register',
                     $module === 'inventory' && $page === 'counts' => 'Physical Stock Counts',
                     $module === 'assets' && $page === 'register' => 'Fixed asset register',
+                    $module === 'assets' && $page === 'depreciation' => 'Fixed asset depreciation',
                     $module === 'purchases' && $page === 'orders' => 'New Purchase Order',
                     $module === 'manufacturing' && $page === 'recipes' => 'Production Recipes',
                     $module === 'manufacturing' && $page === 'orders' => 'Production Orders',
