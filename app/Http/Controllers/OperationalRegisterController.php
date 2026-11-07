@@ -115,6 +115,99 @@ class OperationalRegisterController extends Controller
   );
  }
 
+
+ /**
+  * Dedicated cross-field integrity checks for operational records.
+  * These records never change money, stock, payroll or production batches.
+  */
+ private function enforceDomainConstraints(string $module,string $page,array $data,?int $exclude=null):void
+ {
+  $key=$module.'.'.$page;
+  $reject=fn(string $name,string $message)=>throw ValidationException::withMessages([$name=>$message]);
+
+  $duplicates=function(array $fields)use($key,$exclude):bool {
+   $q=DB::table('operational_registers')->where('workflow',$key)
+    ->whereNotIn('status',['cancelled','rejected']);
+   if($exclude!==null)$q->where('id','!=',$exclude);
+   foreach($fields as $name=>$value)$q->where('data->'.$name,$value);
+   return $q->exists();
+  };
+
+  if($key==='purchases.quotations'){
+   $party=\App\Models\TradeParty::findOrFail($data['supplier']);
+   if(!$party->currencies()->whereKey($data['currency'])->exists())
+    $reject('data.currency','Quoted currency is not enabled for this supplier.');
+  }
+  if($key==='purchases.shipments'){
+   $po=\App\Models\PurchaseOrder::findOrFail($data['purchase_order']);
+   if($po->source!=='foreign')$reject('data.purchase_order','Shipment tracking is for foreign purchase orders only.');
+   if(!empty($data['departed_on'])&&!empty($data['eta'])&&$data['eta']<$data['departed_on'])
+    $reject('data.eta','Expected arrival must follow departure.');
+  }
+  if($key==='purchases.supplier-performance' && $data['period_end']<$data['period_start'])
+   $reject('data.period_end','Evaluation end date cannot precede start.');
+  if($key==='inventory.locations' && $duplicates(['warehouse'=>$data['warehouse'],'code'=>$data['code']]))
+   $reject('data.code','A record with this storage bin code already exists in this warehouse.');
+  if($key==='inventory.units' && $duplicates(['symbol'=>$data['symbol']]))
+   $reject('data.symbol','This unit symbol is already registered.');
+  if($key==='inventory.categories' && $duplicates(['code'=>$data['code']]))
+   $reject('data.code','This category code is already registered.');
+  if(in_array($key,['manufacturing.processes','manufacturing.routing'],true)){
+   $seq=$key==='manufacturing.routing'?'step':'sequence';
+   if($duplicates(['recipe'=>$data['recipe'],$seq=>$data[$seq]]))
+    $reject('data.'.$seq,'This recipe already has an operation at this sequence number.');
+  }
+  if($key==='manufacturing.packaging'){
+   if(!DB::table('inventory_materials')->where('id',$data['packaging_material'])->where('is_packaging',true)->exists())
+    $reject('data.packaging_material','Select a material explicitly classified as packaging.');
+  }
+  if($key==='laboratory.calibration' && $data['due_on']<=$data['calibrated_on'])
+   $reject('data.due_on','Next calibration due date must follow calibration date.');
+  if($key==='sales.dispatch'){
+   $invoice=\App\Models\SalesInvoice::findOrFail($data['invoice']);
+   if($data['planned_on']<$invoice->invoice_date->toDateString())
+    $reject('data.planned_on','Dispatch plan cannot precede the source invoice.');
+  }
+  if($key==='sales.delivery-tracking'){
+   $note=\App\Models\SalesDeliveryNote::findOrFail($data['delivery_note']);
+   if($data['event_on']<$note->delivery_date->toDateString())
+    $reject('data.event_on','Delivery tracking event cannot precede the delivery note.');
+   if($data['status']==='delivered' &&
+    (empty($data['proof_reference']) || $note->status!=='delivered'))
+    $reject('data.status','Use the delivery-note proof-of-receipt workflow and enter its proof reference first.');
+  }
+  if($key==='sales.sales-targets' && substr($data['target_month'],8,2)!=='01')
+   $reject('data.target_month','A monthly sales target must use the first day of its month.');
+  if($key==='hr.contracts' && !empty($data['ends_on']) && $data['ends_on']<$data['started_on'])
+   $reject('data.ends_on','Contract end date cannot precede effective date.');
+  if($key==='hr.overtime'){
+   if(\Brick\Math\BigDecimal::of($data['hours'])->isGreaterThan('24'))
+    $reject('data.hours','A daily overtime request cannot exceed 24 hours.');
+   if($data['worked_on']>today()->toDateString())
+    $reject('data.worked_on','Completed overtime must not use a future work date.');
+  }
+  if($key==='hr.shifts'){
+   if($data['starts_at']===$data['ends_at'])
+    $reject('data.ends_at','Shift start and end times must differ.');
+   $start=\Carbon\CarbonImmutable::parse($data['shift_date'].' '.$data['starts_at']);
+   $end=\Carbon\CarbonImmutable::parse($data['shift_date'].' '.$data['ends_at']);
+   if($end->lessThanOrEqualTo($start))$end=$end->addDay();
+   $rows=DB::table('operational_registers')->where('workflow',$key)
+    ->where('data->employee',$data['employee'])
+    ->whereNotIn('status',['cancelled','rejected'])->get();
+   foreach($rows as $row){
+    if($exclude!==null && (int)$row->id===$exclude)continue;
+    $other=json_decode($row->data,true);
+    if(empty($other['shift_date'])||empty($other['starts_at'])||empty($other['ends_at']))continue;
+    $otherStart=\Carbon\CarbonImmutable::parse($other['shift_date'].' '.$other['starts_at']);
+    $otherEnd=\Carbon\CarbonImmutable::parse($other['shift_date'].' '.$other['ends_at']);
+    if($otherEnd->lessThanOrEqualTo($otherStart))$otherEnd=$otherEnd->addDay();
+    if($start->lessThan($otherEnd)&&$end->greaterThan($otherStart))
+     $reject('data.shift_date','This employee already has a conflicting shift.');
+   }
+  }
+ }
+
  public function index(Request $request,string $module,string $page)
  {
   $definition=$this->definition($module,$page);
@@ -140,6 +233,7 @@ class OperationalRegisterController extends Controller
   $def=$this->definition($module,$page);$this->allowed($request,$module,true);
   $request->validate(['submission_token'=>['required','uuid']]);
   $data=$this->validateData($request,$def);
+  $this->enforceDomainConstraints($module,$page,$data);
   DB::transaction(function()use($request,$module,$page,$data){
    $token=$request->input('submission_token');
    if(OperationalRegister::where('submission_token',$token)->exists())
@@ -164,6 +258,7 @@ class OperationalRegisterController extends Controller
  {
   $def=$this->definition($module,$page);$this->allowed($request,$module,true);
   $data=$this->validateData($request,$def);
+  $this->enforceDomainConstraints($module,$page,$data,$record->id);
   DB::transaction(function()use($request,$module,$page,$record,$data){
    $locked=OperationalRegister::whereKey($record->id)->lockForUpdate()->firstOrFail();
    $this->sameWorkflow($locked,$module,$page);
