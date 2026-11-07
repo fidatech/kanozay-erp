@@ -50,6 +50,13 @@ class OperationalRegisterController extends Controller
   foreach($fields as $field){
    if(($field['type']??'')!=='lookup')continue;
    $source=$field['source'];[$table,$label,$where]=self::SOURCES[$source];
+   if($source==='employees'){
+    // Employee names are encrypted at rest. Query-builder columns are ciphertext.
+    // Always render the decrypted Eloquent attribute for authorized HR selectors.
+    $sources[$source]=\App\Models\EmployeeProfile::where('is_active',true)
+      ->orderBy('id')->limit(1000)->get()->map(fn($e)=>['id'=>$e->id,'label'=>$e->full_name])->all();
+    continue;
+   }
    $query=DB::table($table)->select('id',$label)->orderBy($label)->limit(1000);
    foreach($where as $column=>$value)$query->where($column,$value);
    $sources[$source]=$query->get()->map(fn($r)=>['id'=>$r->id,'label'=>$r->$label])->all();
