@@ -28,6 +28,19 @@ Status definitions:
 - Added an early isolated supplier invoice test step in GitHub CI to obtain actionable failure feedback before the full suite.
 - Full test and MySQL transactional acceptance must be verified from the actual GitHub Actions results; do not assume passing status from a successful commit.
 
+## Customer, supplier and accounting implementation update
+
+Implemented on the development branch after the tracker was created:
+
+- Customer and supplier profile pages display per-currency balances derived from posted journals, recent related money movements, and receivable/payable documents with remaining amounts net of payments and credits.
+- Account profile payment form supports customer receipts and supplier payments, with explicit currency and active cashbox/bank/sarafi selection.
+- Optional invoice settlement is executed in the same database transaction as the money movement and balanced journal. A mismatched party, currency, document type, exceeded outstanding amount, or unavailable ledger aborts the transaction.
+- Legacy cashbox-only quick forms remain supported. Account-originated payments redirect back to the customer/supplier profile.
+- Existing customer and supplier edit forms now support active/inactive status, retaining historical account records.
+- Manual trade documents cannot use an automatically mapped third-party ledger as their posting offset.
+
+**Development status:** these are committed implementation changes, not acceptance results. Historical legacy import, customer-approved finance policies, automated full cross-module reconciliation and final accounting UAT remain open.
+
 ## Acceptance and release gates
 
 1. Passing SQLite feature suite and isolated regression suite on the latest commit.
