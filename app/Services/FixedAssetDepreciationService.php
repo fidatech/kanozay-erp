@@ -83,7 +83,7 @@ class FixedAssetDepreciationService
                 throw ValidationException::withMessages(['month'=>'Post depreciation months in chronological order without gaps.']);
 
             $base=BigDecimal::of((string)$asset->acquisition_cost)->minus((string)$policy->salvage_value);
-            $monthAmount=$base->dividedBy((string)$policy->useful_life_months,4,RoundingMode::HALF_UP);
+            $monthAmount=$base->dividedBy((string)$policy->useful_life_months,4,RoundingMode::HalfUp);
             if($index===(int)$policy->useful_life_months-1) {
                 $monthAmount=$base->minus($monthAmount->multipliedBy((string)$index))->toScale(4);
             }

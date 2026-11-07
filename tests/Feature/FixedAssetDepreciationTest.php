@@ -56,7 +56,11 @@ class FixedAssetDepreciationTest extends TestCase
             $this->actingAs($user)->post(route('assets.depreciation.post',$asset),['month'=>$month])->assertRedirect();
         }
         $this->assertDatabaseCount('fixed_asset_depreciation_entries',3);
-        $this->assertSame('120.0000',(string)FixedAssetDepreciationEntry::sum('amount'));
+        $sum=\Brick\Math\BigDecimal::zero();
+        foreach(FixedAssetDepreciationEntry::all() as $entry){
+            $sum=$sum->plus((string)$entry->amount);
+        }
+        $this->assertSame('120.0000',(string)$sum->toScale(4));
         $this->assertDatabaseCount('journal_entries',3);
         $this->assertSame(3,JournalEntry::where('status','posted')->count());
         $this->actingAs($user)->post(route('assets.depreciation.post',$asset),['month'=>$start])->assertSessionHasErrors('month');
