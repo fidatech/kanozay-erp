@@ -51,6 +51,11 @@ class FixedAssetLifecycleController extends Controller
             'page'=>$page,'pageTitle'=>config('erp_pages.assets.pages.'.$page),
             'assets'=>$assets,'warehouses'=>$warehouses,'tasks'=>$tasks,'movements'=>$movements,
             'disposals'=>$disposals,
+            'acquisitionJournals'=>\App\Models\JournalEntry::where('status','posted')->whereNotNull('reference')->latest('id')->limit(500)->get(),
+            'assetLedgers'=>\App\Models\LedgerAccount::where('type','asset')->where('is_group',false)->where('is_active',true)->orderBy('code')->get(),
+            'expenseLedgers'=>\App\Models\LedgerAccount::where('type','expense')->where('is_group',false)->where('is_active',true)->orderBy('code')->get(),
+            'incomeLedgers'=>\App\Models\LedgerAccount::where('type','income')->where('is_group',false)->where('is_active',true)->orderBy('code')->get(),
+            'disposalPostings'=>DB::table('fixed_asset_disposal_postings')->get()->keyBy('fixed_asset_disposal_id'),
         ]);
     }
 

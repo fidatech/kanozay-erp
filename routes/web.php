@@ -43,6 +43,7 @@ Route::middleware('auth')->get('/purchases/returns/{return}', [\App\Http\Control
 Route::middleware('auth')->post('/assets/maintenance-orders', [\App\Http\Controllers\FixedAssetLifecycleController::class,'requestService'])->name('assets.lifecycle.maintenance.store');
 Route::middleware('auth')->post('/assets/maintenance-orders/{ticket}/transition', [\App\Http\Controllers\FixedAssetLifecycleController::class,'updateService'])->whereNumber('ticket')->name('assets.lifecycle.maintenance.update');
 Route::middleware('auth')->post('/assets/{asset}/location-transfer', [\App\Http\Controllers\FixedAssetLifecycleController::class,'relocate'])->name('assets.lifecycle.transfer');
+Route::middleware('auth')->post('/assets/disposals/{disposal}/finance-post', [\App\Http\Controllers\FixedAssetDisposalAccountingController::class,'post'])->whereNumber('disposal')->name('assets.lifecycle.disposal-accounting');
 Route::middleware('auth')->post('/assets/{asset}/disposal', [\App\Http\Controllers\FixedAssetLifecycleController::class,'dispose'])->name('assets.lifecycle.disposal');
 Route::middleware('auth')->post('/assets/{asset}/depreciation-policy', [\App\Http\Controllers\FixedAssetDepreciationController::class,'savePolicy'])->name('assets.depreciation.policy');
 Route::middleware('auth')->post('/assets/{asset}/depreciation-post', [\App\Http\Controllers\FixedAssetDepreciationController::class,'post'])->name('assets.depreciation.post');

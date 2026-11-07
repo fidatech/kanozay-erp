@@ -95,8 +95,9 @@
 <div><button class="btn" type="submit" onclick="return confirm('Retire this asset from operational use?')">Record physical disposal</button></div>
 </form>
 @endcanany</div>
+@include('assets.disposal-accounting')
 <div class="al-panel"><h2>Disposal register</h2><div class="al-wrap"><table><thead><tr><th>Asset</th><th>Date</th><th>Method</th><th>Acquisition less depreciation</th><th>Proceeds</th><th>Financial status</th></tr></thead><tbody>
-@forelse($disposals as $d)<tr><td>{{ $d->asset_tag }}</td><td>{{ $d->disposed_on }}</td><td>{{ ucfirst($d->method) }}</td><td>{{ $d->currency_code }} {{ $d->book_value }}<br><small>Depreciation: {{ $d->accumulated_depreciation }}</small></td><td>{{ $d->proceeds }}</td><td>Pending reconciliation</td></tr>
+@forelse($disposals as $d)<tr><td>{{ $d->asset_tag }}</td><td>{{ $d->disposed_on }}</td><td>{{ ucfirst($d->method) }}</td><td>{{ $d->currency_code }} {{ $d->book_value }}<br><small>Depreciation: {{ $d->accumulated_depreciation }}</small></td><td>{{ $d->proceeds }}</td><td>{{ ucwords(str_replace("_"," ",$d->financial_status)) }}@if($disposalPostings->has($d->id))<br><small>{{ $disposalPostings[$d->id]->reconciliation_reference }}</small>@endif</td></tr>
 @empty<tr><td colspan="6">No disposed assets.</td></tr>@endforelse
 </tbody></table></div></div>
 @endif
