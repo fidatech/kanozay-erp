@@ -10,6 +10,9 @@ use App\Models\JournalEntry;
 use App\Models\LedgerAccount;
 use App\Models\MoneyTransaction;
 use App\Models\TradeParty;
+use App\Models\TradeDocument;
+use App\Services\Accounting\TradeSettlementService;
+use Brick\Math\BigDecimal;
 use App\Services\Accounting\JournalPostingService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -34,10 +37,13 @@ class QuickPartyTransactionController extends Controller
             'cash_account_id'=>['nullable','integer','exists:financial_accounts,id'],
             'amount'=>['required','numeric','gt:0','decimal:0,4','max:999999999999.9999'],
             'description'=>['nullable','string','max:2000'],
+            'trade_document_id'=>['nullable','integer','exists:trade_documents,id'],
         ]);
         DB::transaction(function()use($data,$request,$posting){
             // A replay of the same submitted form must never post another payment.
-            if(MoneyTransaction::where('submission_token',$data['submission_token'])->exists())return;
+            if(MoneyTransaction::where('submission_token',$data['submission_token'])->exists()){
+                throw ValidationException::withMessages(['submission_token'=>'This transaction was already submitted. Refresh the account before entering a new payment.']);
+            }
             $party=TradeParty::whereKey($data['trade_party_id'])->where('is_active',true)->firstOrFail();
             if(!$party->currencies()->whereKey($data['currency_id'])->exists())throw ValidationException::withMessages(['currency_id'=>'This currency is not enabled for the selected party.']);
             $purpose=$party->type==='customer'?'receivable':'payable';
@@ -56,6 +62,20 @@ class QuickPartyTransactionController extends Controller
             $cashLedgerId=DB::table('entity_ledger_accounts')->where(['entity_type'=>'cashbox','entity_id'=>$cash->id,'currency_id'=>$data['currency_id'],'purpose'=>'cash'])->value('ledger_account_id');
             $cashLedger=$cashLedgerId?LedgerAccount::find($cashLedgerId):null;
             if(!$cashLedger||!$cashLedger->is_active||$cashLedger->is_group||$cashLedger->id===$partyLedger->id)throw ValidationException::withMessages(['cash_account_id'=>'Cashbox ledger mapping is missing or invalid.']);
+            // Optional invoice settlement is checked before journal posting and
+            // completed in the same transaction as the money movement.
+            $settlementDocument=null;
+            if(!empty($data['trade_document_id'])){
+                $settlementDocument=TradeDocument::whereKey($data['trade_document_id'])->firstOrFail();
+                $expectedDocumentType=$party->type==='customer'?'receivable':'payable';
+                $expectedMovement=$party->type==='customer'?'credit':'debit';
+                if($data['type']!==$expectedMovement ||
+                    $settlementDocument->type!==$expectedDocumentType ||
+                    (int)$settlementDocument->trade_party_id!==(int)$party->id ||
+                    (int)$settlementDocument->currency_id!==(int)$data['currency_id']){
+                    throw ValidationException::withMessages(['trade_document_id'=>'Choose a matching outstanding invoice for this party, currency and payment direction.']);
+                }
+            }
             $received=$data['type']==='credit';
             $transactionType=$received?'receipt':'payment';
             $description=trim((string)($data['description']??'')) ?: ($received?'Received from ':'Paid to ').$party->name;
@@ -71,10 +91,16 @@ class QuickPartyTransactionController extends Controller
                 'counterpart_ledger_account_id'=>$partyLedger->id,'currency_id'=>$data['currency_id'],
                 'amount'=>$data['amount'],'description'=>$description,'journal_entry_id'=>$journal->id,'created_by'=>$request->user()->id,
             ]);
+            if($settlementDocument){
+                app(TradeSettlementService::class)->allocate(
+                    $settlementDocument->id, $transaction->id, (string)$data['amount'], $request->user()->id
+                );
+            }
             ActivityLog::record('party_transaction.posted','money_transaction',$transaction->id,ucfirst($data['type']).' for '.$party->name.' ('.$number.')',[
                 'party_id'=>$party->id,'currency_id'=>$data['currency_id'],'type'=>$data['type'],'journal_id'=>$journal->id,
             ]);
         });
-        return redirect()->route('finance.journals.index')->with('status','Credit/debit transaction posted to the journal.');
+        return redirect()->route('finance.journals.index')->with('status',
+            !empty($data['trade_document_id']) ? 'Payment posted and allocated to the selected invoice.' : 'Credit/debit transaction posted to the journal.');
     }
 }
