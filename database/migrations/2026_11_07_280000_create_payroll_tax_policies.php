@@ -28,7 +28,7 @@ return new class extends Migration {
   Schema::create('payroll_tax_applications',function(Blueprint $t){
    $t->id();
    $t->foreignId('payroll_line_id')->unique()->constrained('payroll_lines')->restrictOnDelete();
-   $t->foreignId('payroll_line_component_id')->unique()
+   $t->foreignId('payroll_line_component_id')->nullable()->unique()
     ->constrained('payroll_line_components',indexName:'payroll_tax_application_component_fk')->restrictOnDelete();
    $t->foreignId('payroll_tax_policy_id')->constrained('payroll_tax_policies')->restrictOnDelete();
    $t->decimal('taxable_base',20,4);$t->decimal('withheld',20,4);
