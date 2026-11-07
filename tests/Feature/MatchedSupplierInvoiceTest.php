@@ -119,4 +119,43 @@ class MatchedSupplierInvoiceTest extends TestCase
         $this->assertDatabaseCount('matched_supplier_invoices', 1);
         $this->assertDatabaseCount('journal_entries', 1);
     }
+    public function test_incorrect_supplier_invoice_total_rolls_back_every_financial_record(): void
+    {
+        [$user, $receipt, $line, $inventory] = $this->fixture();
+        $data = $this->payload($line->id, $inventory->id, '3', '61');
+
+        try {
+            app(MatchedSupplierInvoiceService::class)->post($receipt, $data, $user->id);
+            $this->fail('A supplier invoice with an incorrect source total must not post.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('invoice_total', $exception->errors());
+        }
+
+        $this->assertDatabaseCount('matched_supplier_invoices', 0);
+        $this->assertDatabaseCount('trade_documents', 0);
+        $this->assertDatabaseCount('journal_entries', 0);
+        $this->assertDatabaseCount('journal_lines', 0);
+        $this->assertSame('5.000000', app(MatchedSupplierInvoiceService::class)->remaining($receipt)[$line->id]);
+    }
+
+    public function test_same_supplier_invoice_number_with_a_new_token_is_rejected(): void
+    {
+        [$user, $receipt, $line, $inventory] = $this->fixture();
+        $service = app(MatchedSupplierInvoiceService::class);
+        $service->post($receipt, $this->payload($line->id, $inventory->id), $user->id);
+        $duplicate = $this->payload($line->id, $inventory->id, '1', '20');
+
+        try {
+            $service->post($receipt, $duplicate, $user->id);
+            $this->fail('Duplicate supplier invoice references must not create additional payables.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('supplier_invoice_number', $exception->errors());
+        }
+
+        $this->assertDatabaseCount('matched_supplier_invoices', 1);
+        $this->assertDatabaseCount('trade_documents', 1);
+        $this->assertDatabaseCount('journal_entries', 1);
+        $this->assertSame('2.000000', $service->remaining($receipt)[$line->id]);
+    }
+
 }
