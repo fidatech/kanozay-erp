@@ -1,8 +1,8 @@
 @extends('layouts.kanozay')
 @section('content')
-<div class="heading"><div><h1><i class="fa-solid {{ $type==='customer'?'fa-users':'fa-truck-field' }}"></i> {{ $party->name }}</h1><p>{{ ucfirst($type) }} profile &amp; financial overview</p></div><div style="display:flex;gap:10px;flex-wrap:wrap">@can('administration.update')<button class="btn" type="button" onclick="document.getElementById('party-edit-dialog').showModal()">Edit Profile</button>@endcan<a class="btn btn-light" href="{{ route($type==='customer'?'finance.customers.index':'finance.suppliers.index') }}">Back to {{ ucfirst($type) }}s</a></div></div>
+<div class="heading"><div><h1><i class="fa-solid {{ $type==='customer'?'fa-users':'fa-truck-field' }}"></i> {{ $party->name }}</h1><p>{{ ucfirst($type) }} profile &amp; financial overview</p></div><div style="display:flex;gap:10px;flex-wrap:wrap">@canany(['administration.update','finance.update'])<button class="btn" type="button" onclick="document.getElementById('party-edit-dialog').showModal()">Edit Profile</button>@endcan<a class="btn btn-light" href="{{ route($type==='customer'?'finance.customers.index':'finance.suppliers.index') }}">Back to {{ ucfirst($type) }}s</a></div></div>
 <div class="panel"><h2>Contact &amp; Account Details</h2><div class="table-wrap"><table><tbody><tr><th>Code</th><td>{{ $party->code ?: '—' }}</td><th>Status</th><td>{{ $party->is_active?'Active':'Inactive' }}</td></tr><tr><th>Contact person</th><td>{{ $party->contact_person ?: '—' }}</td><th>Phone</th><td>{{ $party->phone ?: '—' }}</td></tr><tr><th>Email</th><td>{{ $party->email ?: '—' }}</td><th>Address</th><td>{{ $party->address ?: '—' }}</td></tr><tr><th>Notes</th><td colspan="3">{{ $party->notes ?: '—' }}</td></tr></tbody></table></div></div>
-@can('administration.update')
+@canany(['administration.update','finance.update'])
 <dialog id="party-edit-dialog" class="k-modal" style="width:min(720px,calc(100vw - 30px))"><div class="modal-head"><h2>Edit {{ ucfirst($type) }} Profile</h2><button type="button" class="modal-close" aria-label="Close edit profile" onclick="document.getElementById('party-edit-dialog').close()">&times;</button></div>@if($errors->any())<p style="color:#b42318;padding:12px 22px">{{ $errors->first() }}</p>@endif
 <form method="POST" class="modal-form" action="{{ route($type==='customer'?'finance.customers.update':'finance.suppliers.update',$party) }}"><div class="modal-body" style="grid-template-columns:repeat(auto-fit,minmax(230px,1fr))">@csrf @method('PATCH')
 <label>Name <input name="name" required maxlength="180" value="{{ old('name',$party->name) }}"></label>
@@ -14,7 +14,7 @@
 <label style="grid-column:1/-1">Notes <textarea name="notes" rows="3" maxlength="2000">{{ old('notes',$party->notes) }}</textarea></label>
 </div><div class="modal-foot"><button type="button" class="btn btn-light" onclick="document.getElementById('party-edit-dialog').close()">Cancel</button><button type="submit" class="btn">Save Profile</button></div></form></dialog>
 @if($errors->any())<script>document.addEventListener('DOMContentLoaded',function(){document.getElementById('party-edit-dialog').showModal()})</script>@endif
-@endcan
+@endcanany
 <div class="panel"><h2>Financial Snapshot</h2><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px"><div style="padding:15px;border:1px solid #dce7f2;border-radius:12px"><small>Enabled Currencies</small><h2>{{ $party->currencies->count() }}</h2></div><div style="padding:15px;border:1px solid #dce7f2;border-radius:12px"><small>Opening Balance Records</small><h2>{{ $openingBalances->count() }}</h2></div><div style="padding:15px;border:1px solid #dce7f2;border-radius:12px"><small>Recent Financial Documents</small><h2>{{ $documents->count() }}</h2><small>Last 20 maximum</small></div></div></div>
 <div class="panel"><h2>Enabled Currencies</h2><p>{{ $party->currencies->pluck('code')->join(', ') ?: 'No currencies enabled' }}</p></div>
 <div class="panel"><h2>Opening Balances</h2><div class="table-wrap"><table><thead><tr><th>Currency</th><th>Amount</th><th>Direction</th></tr></thead><tbody>@forelse($openingBalances as $balance)<tr><td>{{ $party->currencies->firstWhere('id',$balance->currency_id)?->code ?: $balance->currency_id }}</td><td><x-finance-amount :amount="\Brick\Math\BigDecimal::of((string)$balance->amount)->abs()" /></td><td>{{ \Brick\Math\BigDecimal::of((string)$balance->amount)->compareTo(\Brick\Math\BigDecimal::zero()) >= 0 ? ($type==='customer'?'They owe us':'Advance paid') : ($type==='customer'?'Customer advance':'We owe them') }}</td></tr>@empty<tr><td colspan="3">No opening balances recorded.</td></tr>@endforelse</tbody></table></div></div>
@@ -31,6 +31,7 @@
   @csrf
   <input type="hidden" name="submission_token" value="{{ (string)\Illuminate\Support\Str::uuid() }}">
   <input type="hidden" name="trade_party_id" value="{{ $party->id }}">
+  <input type="hidden" name="return_to_party" value="1">
   <input type="hidden" name="type" value="{{ $type==='customer'?'credit':'debit' }}">
   <label>Payment date <input type="date" name="transaction_date" required value="{{ old('transaction_date',date('Y-m-d')) }}"></label>
   <label>Cashbox <select name="cash_account_id" id="party-payment-cashbox" required>
