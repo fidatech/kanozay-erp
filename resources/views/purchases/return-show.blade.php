@@ -25,7 +25,10 @@
 @endforeach
 </tbody><tfoot><tr><th colspan="5">Estimated total ({{ $return->currency?->code }})</th><th>{{ $hasAllCosts?(string)$total->toScale(4,\Brick\Math\RoundingMode::HalfUp):'Incomplete source costs' }}</th></tr></tfoot></table>
 <p style="background:#fff8e6;padding:12px">Inventory was reduced when posted. A supplier credit and payable adjustment must be reviewed separately. The amounts above use original purchase-price snapshots and exclude customs, freight, landed costs, settlement and FX changes.</p>
-<p><strong>Status:</strong> Supplier credit pending</p>
+<p><strong>Status:</strong> {{ $return->financial_status==='supplier_credit_posted'?'Supplier debit note posted':'Supplier credit pending' }}</p>
+@canany(['finance.update','administration.update'])
+@if($return->financial_status==='supplier_credit_pending')<p class="no-print"><a class="btn btn-light" href="{{ route('purchases.supplier-debit-notes.index') }}">Post finance-reviewed supplier debit note</a></p>@endif
+@endcanany
 <div style="margin-top:65px;display:flex;justify-content:space-between"><span>Warehouse officer: ___________________</span><span>Supplier acknowledgment: ___________________</span></div>
 </div>
 @endsection

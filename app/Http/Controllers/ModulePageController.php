@@ -31,6 +31,10 @@ class ModulePageController extends Controller
             return app(ProcurementRequestController::class)->index($request,$module,$page);
         }
 
+        if ($module === 'purchases' && $page === 'supplier-debit-notes') {
+            return app(SupplierDebitNoteController::class)->index($request);
+        }
+
         if ($module === 'purchases' && $page === 'purchase-returns') {
             return app(PurchaseReturnController::class)->index($request,app(\App\Services\PurchaseReturnService::class));
         }
