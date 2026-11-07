@@ -30,7 +30,7 @@
 @endcanany
 <section class="fl-panel"><h2>Controlled finished goods and release state</h2>
 <div class="fl-table"><table><thead><tr><th>Batch</th><th>Finished product</th><th>Accepted packages</th><th>Manufactured</th><th>Expires</th><th>Lot status</th><th>Trace reference</th><th>QC decision</th></tr></thead><tbody>
-@forelse($lots as $lot)<tr><td>{{ $lot->batch_number }}</td><td>{{ $lot->sku }} · {{ $lot->product_name }}</td><td>{{ $lot->accepted_packages }}</td><td>{{ $lot->manufactured_on??'Not recorded' }}</td><td>{{ $lot->expires_on??'Not recorded' }}</td><td><strong>{{ strtoupper($lot->status) }}</strong>@if($lot->expires_on && $lot->expires_on<=today()->toDateString())<br><small>Past recorded expiry</small>@endif</td><td>{{ $lot->traceability_reference??'—' }}</td>
+@forelse($lots as $lot)<tr><td>{{ $lot->batch_number }}@if($lot->status==='recalled')<br><a href="{{ route('inventory.finished-good-recall.show',$lot->production_batch_id) }}">Trace affected customers</a>@endif</td><td>{{ $lot->sku }} · {{ $lot->product_name }}</td><td>{{ $lot->accepted_packages }}</td><td>{{ $lot->manufactured_on??'Not recorded' }}</td><td>{{ $lot->expires_on??'Not recorded' }}</td><td><strong>{{ strtoupper($lot->status) }}</strong>@if($lot->expires_on && $lot->expires_on<=today()->toDateString())<br><small>Past recorded expiry</small>@endif</td><td>{{ $lot->traceability_reference??'—' }}</td>
 <td>
 @canany(['inventory.update','laboratory.update','administration.update'])
 @if($lot->status!=='recalled')
