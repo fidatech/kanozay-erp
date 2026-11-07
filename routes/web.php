@@ -19,6 +19,8 @@ Route::middleware('auth')->post('/production/recipes/kanozay-confirm', [\App\Htt
 Route::middleware('auth')->post('/production/recipes/kanozay-preview', [\App\Http\Controllers\KanozayWorkbookPreviewController::class, '__invoke'])->name('production.recipes.kanozay-preview');
 Route::middleware('auth')->post('/production/recipes/import-preview', [\App\Http\Controllers\ProductionRecipeImportController::class, 'preview'])->name('production.recipes.import-preview');
 Route::middleware('auth')->post('/manufacturing/work-steps/{step}/advance', [\App\Http\Controllers\ProductionWorkStepController::class,'advance'])->whereNumber('step')->name('manufacturing.work-steps.advance');
+Route::middleware('auth')->get('/inventory/finished-good-warehouses', [\App\Http\Controllers\FinishedGoodWarehouseController::class,'index'])->name('inventory.finished-good-warehouses.index');
+Route::middleware('auth')->post('/inventory/finished-good-warehouses', [\App\Http\Controllers\FinishedGoodWarehouseController::class,'transfer'])->name('inventory.finished-good-warehouses.transfer');
 Route::middleware('auth')->get('/inventory/finished-good-recall/{batch}', [\App\Http\Controllers\FinishedGoodRecallController::class,'show'])->name('inventory.finished-good-recall.show');
 Route::middleware('auth')->post('/inventory/finished-good-recall/{batch}/invoice-lines/{line}/contact', [\App\Http\Controllers\FinishedGoodRecallController::class,'contact'])->name('inventory.finished-good-recall.contact');
 Route::middleware('auth')->get('/inventory/finished-good-recall/{batch}/export', [\App\Http\Controllers\FinishedGoodRecallController::class,'export'])->name('inventory.finished-good-recall.export');

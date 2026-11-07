@@ -1,5 +1,8 @@
 @extends('layouts.kanozay')
 @section('content')
+<div style="display:flex;gap:9px;flex-wrap:wrap;margin:10px 0">
+<a class="btn btn-light" href="{{ route('inventory.finished-good-warehouses.index') }}">Finished-goods warehouse allocations</a>
+<a class="btn btn-light" href="{{ route('inventory.finished-good-lots.index') }}">Batch expiry & recalls</a></div>
 <div class="heading">
  <div><h1>Finished goods inventory</h1><p>Approved production batches are released here only after laboratory acceptance.</p></div>
  <div class="actions"><a class="btn" href="{{ route('production.orders.index') }}">Production orders</a></div>
