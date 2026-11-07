@@ -29,8 +29,9 @@ return new class extends Migration
             $table->decimal('expected_quantity', 20, 6);
             $table->decimal('counted_quantity', 20, 6);
             $table->uuid('idempotency_key')->unique();
-            $table->foreignId('inventory_stock_adjustment_id')->nullable()
-                ->constrained('inventory_stock_adjustments')->restrictOnDelete();
+            $table->foreignId('inventory_stock_adjustment_id')->nullable();
+            $table->foreign('inventory_stock_adjustment_id', 'stock_count_line_adjustment_fk')
+                ->references('id')->on('inventory_stock_adjustments')->restrictOnDelete();
             $table->timestamps();
             $table->unique(['inventory_stock_count_id', 'inventory_material_id'], 'stock_count_material_unique');
         });
