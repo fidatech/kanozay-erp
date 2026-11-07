@@ -34,7 +34,7 @@
 <button class="btn btn-light">Request controlled reopen</button></form>
 @endcanany
 @elseif($p->status==='reopened')
-Reopened with independent approval
+Reopened with independent approval <small>{{ $p->reopening_reference }}</small>
 @endif</td></tr>
 @empty<tr><td colspan="7">No calendar month has been closed.</td></tr>@endforelse
 </tbody></table></div>{{ $periods->links() }}</section>
