@@ -20,6 +20,8 @@ Route::middleware('auth')->post('/production/recipes/kanozay-preview', [\App\Htt
 Route::middleware('auth')->post('/production/recipes/import-preview', [\App\Http\Controllers\ProductionRecipeImportController::class, 'preview'])->name('production.recipes.import-preview');
 Route::middleware('auth')->get('/inventory/warehouse-stock', [\App\Http\Controllers\WarehouseStockController::class,'index'])->name('inventory.warehouse-stock.index');
 Route::middleware('auth')->post('/inventory/warehouse-stock', [\App\Http\Controllers\WarehouseStockController::class,'store'])->name('inventory.warehouse-stock.store');
+Route::middleware('auth')->post('/sales/customer-credit-limits', [\App\Http\Controllers\CustomerCommercialPolicyController::class,'credit'])->name('sales.credit-limits.store');
+Route::middleware('auth')->post('/sales/customer-prices', [\App\Http\Controllers\CustomerCommercialPolicyController::class,'price'])->name('sales.prices.store');
 Route::middleware('auth')->post('/procurement/reorder-rules', [\App\Http\Controllers\ProcurementRequestController::class,'saveRule'])->name('procurement.rules.store');
 Route::middleware('auth')->post('/procurement/requests', [\App\Http\Controllers\ProcurementRequestController::class,'submit'])->name('procurement.requests.store');
 Route::middleware('auth')->post('/procurement/requests/{requisition}/decide', [\App\Http\Controllers\ProcurementRequestController::class,'decide'])->name('procurement.requests.decide');

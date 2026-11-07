@@ -62,6 +62,10 @@ class SalesInvoiceService
             }
             if (! $subtotal->isGreaterThan(0)) $this->reject('Invoice total must be greater than zero.');
 
+            // The customer is locked above; block credit-limit breaches before any
+            // finished-goods dispatch or financial journal is posted.
+            app(CustomerCreditPolicy::class)->enforce($customer->id,$currency->id,$subtotal);
+
             DocumentSequence::firstOrCreate(['document_type' => 'sales_invoice'], [
                 'prefix' => 'INV-', 'next_number' => 1, 'padding' => 6, 'is_active' => true,
             ]);

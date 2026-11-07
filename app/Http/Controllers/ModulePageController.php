@@ -13,6 +13,10 @@ class ModulePageController extends Controller
             return app(WarehouseStockController::class)->index($request,app(\App\Services\WarehouseStockService::class));
         }
 
+        if ($module==='sales' && in_array($page,['pricing','customer-credit-limits'],true)) {
+            return app(CustomerCommercialPolicyController::class)->index($request,$page);
+        }
+
         if (($module==='inventory' && in_array($page,['reorder','material-requests'],true)) ||
             ($module==='purchases' && $page==='requisitions')) {
             return app(ProcurementRequestController::class)->index($request,$module,$page);
