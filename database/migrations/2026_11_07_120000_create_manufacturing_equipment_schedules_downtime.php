@@ -22,7 +22,7 @@ return new class extends Migration {
   });
   Schema::create('manufacturing_downtime_entries',function(Blueprint $t) {
    $t->id();$t->uuid('submission_token')->unique();
-   $t->foreignId('manufacturing_equipment_id')->constrained('manufacturing_equipment')->restrictOnDelete();
+   $t->foreignId('manufacturing_equipment_id');$t->foreign('manufacturing_equipment_id','manuf_downtime_equipment_fk')->references('id')->on('manufacturing_equipment')->restrictOnDelete();
    $t->foreignId('production_order_id')->nullable()->constrained('production_orders')->restrictOnDelete();
    $t->dateTime('started_at');$t->dateTime('ended_at');
    $t->unsignedInteger('duration_minutes');$t->string('cause',40);
