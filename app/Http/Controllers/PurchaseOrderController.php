@@ -36,6 +36,12 @@ class PurchaseOrderController extends Controller {
    'items.*.unit_price'=>['required','numeric','min:0','decimal:0,4','max:999999999999.9999'],
   ]);
   DB::transaction(function()use($data,$request){
+   $supplier=TradeParty::whereKey($data['supplier_id'])->lockForUpdate()->firstOrFail();
+   if(!$supplier->currencies()->whereKey($data['currency_id'])->exists()){
+    throw \Illuminate\Validation\ValidationException::withMessages([
+     'currency_id'=>'Enable this currency on the selected supplier account before creating the purchase order.',
+    ]);
+   }
    $order=PurchaseOrder::create([
     'number'=>'TMP-'.(string) \Illuminate\Support\Str::uuid(),'supplier_id'=>$data['supplier_id'],'currency_id'=>$data['currency_id'],
     'source'=>$data['source'],'order_date'=>$data['order_date'],'expected_date'=>$data['expected_date']??null,
@@ -111,8 +117,24 @@ class PurchaseOrderController extends Controller {
   DB::transaction(function()use($order){
    $locked=PurchaseOrder::whereKey($order->id)->lockForUpdate()->firstOrFail();
    abort_unless($locked->status==='draft',422,'Only draft purchase orders can be confirmed.');
-   abort_unless($locked->items()->exists(),422,'Cannot confirm an empty purchase order.');
+   $items=$locked->items()->with('inventoryMaterial')->lockForUpdate()->get();
+   abort_unless($items->isNotEmpty(),422,'Cannot confirm an empty purchase order.');
+   if($items->contains(fn($item)=>!$item->inventory_material_id ||
+       !$item->inventoryMaterial || !$item->inventoryMaterial->is_active)){
+    throw \Illuminate\Validation\ValidationException::withMessages([
+     'items'=>'Link every purchase order item to an active inventory material before confirmation.',
+    ]);
+   }
+   $supplier=TradeParty::whereKey($locked->supplier_id)->lockForUpdate()->firstOrFail();
+   if(!$supplier->is_active || $supplier->type!=='supplier' ||
+       !$supplier->currencies()->whereKey($locked->currency_id)->exists()){
+    throw \Illuminate\Validation\ValidationException::withMessages([
+     'supplier_id'=>'An active supplier with the purchase currency enabled is required to confirm.',
+    ]);
+   }
    $locked->update(['status'=>'confirmed']);
+   ActivityLog::record('purchase_order.confirmed','purchase_order',$locked->id,
+    'Confirmed purchase order with '. $items->count().' linked inventory lines.');
   });
   return back()->with('success','Purchase order confirmed. No stock or finance postings were made.');
  }
