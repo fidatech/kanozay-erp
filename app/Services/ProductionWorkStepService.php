@@ -59,9 +59,20 @@ class ProductionWorkStepService
       ->where('step','<',$row->step)->where('status','!=','completed')->exists())
      throw ValidationException::withMessages(['work_step'=>'Complete earlier process stages before starting this operation.']);
     if($row->manufacturing_equipment_id!==null){
-     $equipment=DB::table('manufacturing_equipment')->where('id',$row->manufacturing_equipment_id)->first();
+     // Lock the machine itself so two parallel order requests cannot start
+     // different work steps on the same equipment concurrently.
+     $equipment=DB::table('manufacturing_equipment')
+      ->where('id',$row->manufacturing_equipment_id)->lockForUpdate()->first();
      if(!$equipment||!$equipment->is_active)
       throw ValidationException::withMessages(['work_step'=>'Routing equipment is inactive.']);
+     if(DB::table('production_work_steps')
+       ->where('manufacturing_equipment_id',$equipment->id)
+       ->where('id','!=',$row->id)->where('status','in_progress')->exists())
+      throw ValidationException::withMessages(['work_step'=>'Equipment is currently in use by another production work step. Complete it before starting this stage.']);
+     if(DB::table('manufacturing_downtime_entries')
+       ->where('manufacturing_equipment_id',$equipment->id)
+       ->where('started_at','<=',now())->where('ended_at','>',now())->exists())
+      throw ValidationException::withMessages(['work_step'=>'Equipment has recorded downtime at the requested start time.']);
      $calibration=DB::table('operational_registers')
       ->where('workflow','laboratory.calibration')
       ->where('data->equipment',(int)$equipment->id)
@@ -71,6 +82,9 @@ class ProductionWorkStepService
       if(($result['result']??'')!=='pass' || empty($result['due_on']) || $result['due_on']<today()->toDateString())
        throw ValidationException::withMessages(['work_step'=>'Equipment calibration failed or expired.']);
      }
+     // Missing calibration records remain a separate quality-policy decision:
+     // do not invent an expiry requirement where none was approved.
+
     }
     DB::table('production_work_steps')->where('id',$row->id)->update([
       'status'=>'in_progress','started_at'=>now(),'started_by'=>$actorId,'updated_at'=>now(),
