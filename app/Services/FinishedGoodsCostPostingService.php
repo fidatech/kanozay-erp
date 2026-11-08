@@ -190,6 +190,37 @@ class FinishedGoodsCostPostingService
         });
     }
 
+    /**
+     * Repair only a posted invoice whose source factory capitalization was
+     * already posted on/before its original issue date. Never synthesize a
+     * different historic cost date or reprice already billed merchandise.
+     */
+    public function reconcilePostedInvoice(int $invoiceId,string $reference,int $actorId):int
+    {
+        return DB::transaction(function()use($invoiceId,$reference,$actorId){
+            $invoice=DB::table('sales_invoices')->where('id',$invoiceId)->first();
+            abort_unless($invoice,404);
+            if($invoice->status!=='posted'){
+                $this->reject('Only finalized customer invoices can have missing COGS reconciled.');
+            }
+            $lines=SalesInvoiceLine::where('sales_invoice_id',$invoiceId)->orderBy('id')->get();
+            if($lines->isEmpty())$this->reject('Posted invoice contains no costable dispatched batches.');
+            $repaired=0;
+            foreach($lines as $line){
+                if(DB::table('production_invoice_cogs_postings')
+                    ->where('sales_invoice_line_id',$line->id)->exists())continue;
+                $this->postInvoiceLine($line,$actorId);
+                $repaired++;
+            }
+            if($repaired){
+                ActivityLog::record('sales.invoice.cogs_reconciled','sales_invoice',$invoiceId,
+                    'Reconciled missing original-currency cost postings against previously capitalized batch inventory.',
+                    ['approval_reference'=>$reference,'posted_lines'=>$repaired]);
+            }
+            return $repaired;
+        });
+    }
+
     public function postReturnRecovery(SalesReturnQuarantine $quarantine,string $date,int $actorId):object
     {
         return DB::transaction(function()use($quarantine,$date,$actorId){
