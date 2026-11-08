@@ -22,7 +22,7 @@
 </select><button type="submit" class="btn">Load receipt</button></form>
 </div>
 @if($receipt)
-@canany(['purchases.update','administration.update'])
+@if(auth()->user()->can('administration.update') || (auth()->user()->can('purchases.update') && auth()->user()->can('inventory.update')))
 <section class="pr-panel">
 <h2>Return items from {{ $receipt->number }}</h2>
 <p class="pr-note">Posting decreases physical inventory and consumes FIFO cost layers. It does not automatically change supplier payable balances, apply a debit note or confirm a supplier credit. Reconcile those with Finance and the supplier.</p>
@@ -48,7 +48,7 @@
 </tbody></table></div>
 <button type="submit" class="btn" onclick="return confirm('Post this supplier return and reduce physical stock?')">Post supplier return</button>
 </form></section>
-@endcanany
+@endif
 @endif
 <section class="pr-panel"><h2>Posted purchase returns</h2><div class="pr-wrap"><table><thead><tr><th>Return number</th><th>Receipt</th><th>Supplier</th><th>Return date</th><th>Financial status</th><th>Details</th></tr></thead><tbody>
 @forelse($returns as $return)
