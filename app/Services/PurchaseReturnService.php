@@ -77,6 +77,8 @@ class PurchaseReturnService
             }
             if(!$requested)
                 throw ValidationException::withMessages(['quantities'=>'Enter at least one positive return quantity.']);
+            $hasLandedCost=DB::table('goods_receipt_landed_cost_allocations')
+                ->whereIn('goods_receipt_line_id',array_keys($requested))->exists();
 
             $warehouseId=$data['company_warehouse_id']??$locked->company_warehouse_id;
             if($warehouseId){
@@ -90,7 +92,8 @@ class PurchaseReturnService
                 'currency_id'=>$order->currency_id,'company_warehouse_id'=>$warehouseId,
                 'returned_on'=>$data['returned_on'],
                 'supplier_reference'=>$data['supplier_reference']??null,
-                'status'=>'posted_pending_credit','financial_status'=>'supplier_credit_pending',
+                'status'=>$hasLandedCost?'pending_landed_cost_review':'posted_pending_credit',
+                'financial_status'=>$hasLandedCost?'landed_cost_review_pending':'supplier_credit_pending',
                 'reason'=>$data['reason'],'created_by'=>$actorId,
             ]);
 
@@ -104,21 +107,26 @@ class PurchaseReturnService
                     'quantity'=>(string)$quantity,
                     'unit_price_snapshot'=>$unitPrice,'supplier_credit_value_snapshot'=>$value,
                 ]);
-                $material=InventoryMaterial::findOrFail($source->inventory_material_id);
-                $this->stock->post($material,[
-                    'type'=>'adjustment_out','direction'=>'out','quantity'=>(string)$quantity,
-                    'company_warehouse_id'=>$warehouseId,
-                    'reference_type'=>'purchase_return_line','reference_id'=>$line->id,
-                    'occurred_on'=>$data['returned_on'],
-                    'notes'=>'Supplier goods return '.$return->id.' from '.$locked->number,
-                    'created_by'=>$actorId,
-                ]);
+                if(!$hasLandedCost){
+                    $material=InventoryMaterial::findOrFail($source->inventory_material_id);
+                    $this->stock->post($material,[
+                        'type'=>'adjustment_out','direction'=>'out','quantity'=>(string)$quantity,
+                        'company_warehouse_id'=>$warehouseId,
+                        'reference_type'=>'purchase_return_line','reference_id'=>$line->id,
+                        'occurred_on'=>$data['returned_on'],
+                        'notes'=>'Supplier goods return '.$return->id.' from '.$locked->number,
+                        'created_by'=>$actorId,
+                    ]);
+                }
             }
             // Do not claim a supplier credit or mutate an unreconciled payable.
             $return->forceFill(['number'=>'PRN-'.str_pad((string)$return->id,7,'0',STR_PAD_LEFT)])->saveQuietly();
             ActivityLog::record('purchases.goods.returned','purchase_return_record',$return->id,
-                'Supplier return posted to physical inventory. Supplier credit not posted.',
-                ['grn'=>$locked->number,'currency_id'=>$order->currency_id]);
+                $hasLandedCost
+                    ?'Supplier return intent awaiting independent original landed-cost GL approval; no inventory quantity was removed.'
+                    :'Supplier return posted to physical inventory. Supplier credit not posted.',
+                ['grn'=>$locked->number,'currency_id'=>$order->currency_id,
+                    'pending_landed_review'=>$hasLandedCost]);
             return $return;
         });
     }
