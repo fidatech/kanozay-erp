@@ -12,7 +12,20 @@ class RawMaterialQualityHoldController extends Controller {
   abort_unless($request->user()->canAny(['inventory.view','laboratory.view','administration.view']),403);
   $layers=InventoryCostLayer::with('material')
    ->where('source_type','goods_receipt_line')->latest('id')->paginate(40);
-  $rows=$layers->getCollection()->map(function($layer)use($holds){
+  $affected=DB::table('inventory_cost_consumptions as consumed')
+   ->join('inventory_stock_movements as movement',
+      'movement.id','=','consumed.inventory_stock_movement_id')
+   ->join('production_order_materials as material_line',
+      'material_line.id','=','movement.reference_id')
+   ->join('production_batches as batch',
+      'batch.production_order_id','=','material_line.production_order_id')
+   ->where('movement.reference_type','production_order_material')
+   ->whereIn('consumed.inventory_cost_layer_id',$layers->getCollection()->pluck('id'))
+   ->select('consumed.inventory_cost_layer_id')
+   ->selectRaw('COUNT(DISTINCT batch.id) as batch_count')
+   ->groupBy('consumed.inventory_cost_layer_id')
+   ->get()->keyBy('inventory_cost_layer_id');
+  $rows=$layers->getCollection()->map(function($layer)use($holds,$affected){
    $line=DB::table('goods_receipt_lines as l')
     ->join('goods_receipts as r','r.id','=','l.goods_receipt_id')
     ->where('l.id',$layer->source_id)->select('r.number','l.id')->first();
@@ -22,7 +35,9 @@ class RawMaterialQualityHoldController extends Controller {
     ->where('inventory_cost_layer_id',$layer->id)->where('status','held')
     ->orderByDesc('id')->first();
    return ['layer'=>$layer,'receipt'=>$line?->number,
-     'sample'=>$sample,'manual_hold'=>$manual,'held'=>$holds->isLayerHeld($layer)];
+     'sample'=>$sample,'manual_hold'=>$manual,
+     'affected_batches'=>(int)($affected->get($layer->id)?->batch_count??0),
+     'held'=>$holds->isLayerHeld($layer)];
   });
   $events=DB::table('quality_material_lot_hold_events as e')
     ->join('quality_material_lot_holds as h','h.id','=','e.quality_material_lot_hold_id')
