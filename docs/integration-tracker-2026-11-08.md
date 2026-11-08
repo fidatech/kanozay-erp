@@ -113,6 +113,18 @@ Added finance-backed fixed-asset capitalization reconciliation linking each asse
 
 **Status: advanced source development; integration incomplete.** No migrations, runtime tests, browser UAT or deployment were performed. Historical HR and PPE records may need documented reconciliation before payroll or depreciation operations can proceed.
 
+## Shareholders and Financial Controls development update
+
+Added original-currency, source-backed shareholder statements combining posted capital contributions, approved capital drawings and profit distributions, including sanitized full CSV export and per-currency activity totals. Posted shareholder capital and profit movements now create corresponding cashbook/bank transactions and cannot be independently reversed through the generic General Ledger reversal command.
+
+Board distribution resolutions now require explicit, independently reviewed per-recipient entitlements, with append-only allocation history, both recipient and aggregate payout ceilings, confirmed retained earnings as of the payout date, and original-currency matching. Ownership % is no longer treated as implicit payout entitlement. Historical ownership can be reviewed as of a selected date using the recorded amendment history, with zero-interest exits and share-class percentage safeguards.
+
+Finance month-close now has a source readiness report and checks for draft GL/payroll, unreconciled bank statement drafts, unposted asset disposals, and shareholder cash movements missing cashbook postings. It cannot close the current/incomplete month; it requires explicit acknowledgement of manually reviewed external source evidence. Independent reopening and closed-period posting restrictions remain.
+
+[Shareholders and Financial Controls development detail](shareholders-financial-controls-development-2026-11-08.md) describes the changes and unresolved board evidence, old cashbook data, controlled reversal, treasury, statutory distribution and external reconciliation policies.
+
+**Status: integration advanced, not production-verified.** New migrations, tests, MySQL schema and browser UAT were deliberately not run. Legacy approved resolutions without a documented allocation and old shareholder postings without cashbook movement need explicit reconciliation before these stricter controls are activated.
+
 ## Acceptance and release gates
 
 1. Passing SQLite feature suite and isolated regression suite on the latest commit.
