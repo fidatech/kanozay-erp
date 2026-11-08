@@ -127,6 +127,17 @@ class WarehouseStockService
         $materials=InventoryMaterial::where('is_active',true)->orderBy('sku')->get();
         $warehouses=CompanyWarehouse::with('branch')->where('is_active',true)->orderBy('name')->get();
         $rows=DB::table('inventory_warehouse_balances')->get();
+        // Positional lot totals are cost-layer provenance, independent of
+        // aggregate warehouse balances. Differences are reconciliation work.
+        $positionRows=DB::table('inventory_cost_layer_locations as p')
+            ->join('inventory_cost_layers as l','l.id','=','p.inventory_cost_layer_id')
+            ->select('l.inventory_material_id','p.location_key','p.quantity')->get();
+        $verified=[];
+        foreach($positionRows as $position){
+            $materialId=$position->inventory_material_id;$location=$position->location_key;
+            $verified[$materialId][$location]=($verified[$materialId][$location]??BigDecimal::zero())
+                ->plus((string)$position->quantity);
+        }
         $byMaterial=[];
         foreach($rows as $row)$byMaterial[$row->inventory_material_id][$row->company_warehouse_id]=$row->quantity;
         $data=[];
@@ -134,9 +145,25 @@ class WarehouseStockService
             $sum=BigDecimal::zero();
             foreach($byMaterial[$m->id]??[] as $amount)$sum=$sum->plus((string)$amount);
             $unassigned=BigDecimal::of((string)$m->on_hand_quantity)->minus($sum);
+            $locations=$verified[$m->id]??[];
+            $verifiedTotal=BigDecimal::zero();
+            foreach($locations as $amount)$verifiedTotal=$verifiedTotal->plus($amount);
+            $locationMismatch=$unassigned->isNegative();
+            $unassignedVerified=$locations['unassigned']??BigDecimal::zero();
+            if($unassignedVerified->isGreaterThan($unassigned))$locationMismatch=true;
+            foreach($byMaterial[$m->id]??[] as $warehouseId=>$physical){
+                $located=$locations['wh:'.$warehouseId]??BigDecimal::zero();
+                if($located->isGreaterThan((string)$physical))$locationMismatch=true;
+            }
+            if($verifiedTotal->isGreaterThan((string)$m->on_hand_quantity))$locationMismatch=true;
             $data[]=['material'=>$m,'warehouses'=>$byMaterial[$m->id]??[],
+                'verified_lots'=>collect($locations)->map(fn($q)=>(string)$q->toScale(6))->all(),
+                'verified_total'=>(string)$verifiedTotal->toScale(6),
+                'unpositioned_physical'=>(string)BigDecimal::of((string)$m->on_hand_quantity)
+                    ->minus($verifiedTotal)->toScale(6),
                 'allocated'=>(string)$sum->toScale(6),'unallocated'=>(string)$unassigned->toScale(6),
-                'reconcile'=>$unassigned->isLessThan(0)?'mismatch':'ok'];
+                'reconcile'=>$locationMismatch?'mismatch':
+                    ($verifiedTotal->isEqualTo((string)$m->on_hand_quantity)?'located':'pending')];
         }
         return compact('warehouses','data');
     }
