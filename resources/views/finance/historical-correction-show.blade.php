@@ -20,7 +20,7 @@
 <a class="btn btn-light" href="{{ route('sales.invoices.show',$case->source_id) }}">Original customer invoice</a>
 @endif</div></div>
 <div class="hfcs-alert">
-<strong>Immutable source evidence:</strong> The original historical document is never edited from this screen. A reviewer different from the requester must approve a correction. Only an invoice already backed by verified finished-goods capitalization can create missing COGS journals. Other exception types are investigation-only and cannot silently create inventory value or GL balances.
+<strong>Immutable source evidence:</strong> The original historical document is never edited from this screen. A reviewer different from the requester must approve a correction. Verified original-source corrections have separate authorization and posting controls: missing invoiced COGS, physically counted unconsumed opening FIFO stock, independently supported supplier short-credit settlements and previously capitalized non-sale dispatch expenses. Unsupported historic values, customer sales without invoices and unresolved cases remain investigation-only.
 </div>
 <section class="hfcs-card">
 <h2>Original source and submitted discrepancy</h2>
