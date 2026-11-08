@@ -94,10 +94,36 @@ class PurchaseOrderController extends Controller {
  }
  public function show(Request $request,PurchaseOrder $order) {
   abort_unless($request->user()->canAny(['administration.view', 'purchases.view']),403);
+  $matchedInvoices=\App\Models\MatchedSupplierInvoice::with(['payable.allocations','payable.credits'])
+    ->where('purchase_order_id',$order->id)->where('status','posted')->orderByDesc('id')->get();
+  $invoiced=BigDecimal::zero();$outstanding=BigDecimal::zero();
+  foreach($matchedInvoices as $invoice){
+   $invoiced=$invoiced->plus((string)$invoice->total);
+   if(!$invoice->payable)continue;
+   $balance=BigDecimal::of((string)$invoice->payable->amount);
+   foreach($invoice->payable->allocations as $allocation)$balance=$balance->minus((string)$allocation->amount);
+   foreach($invoice->payable->credits as $credit)$balance=$balance->minus((string)$credit->amount);
+   if($balance->isPositive())$outstanding=$outstanding->plus($balance);
+  }
+  $advanceRecords=DB::table('supplier_advance_postings')->where('purchase_order_id',$order->id)->get();
+  $unappliedAdvances=BigDecimal::zero();
+  $applicationAmounts=DB::table('supplier_advance_applications')
+    ->whereIn('supplier_advance_posting_id',$advanceRecords->pluck('id'))->get()->groupBy('supplier_advance_posting_id');
+  foreach($advanceRecords as $advance){
+   $left=BigDecimal::of((string)$advance->amount);
+   foreach($applicationAmounts->get($advance->id,collect()) as $application)$left=$left->minus((string)$application->amount);
+   if($left->isPositive())$unappliedAdvances=$unappliedAdvances->plus($left);
+  }
   return view('purchases.show', [
    'order'=>$order->load(['supplier','currency','items.inventoryMaterial','items.receiptLines','expenses','advances','receipts.lines']),
    'materials'=>\App\Models\InventoryMaterial::where('is_active',true)->orderBy('name')->get(),
    'warehouses'=>\App\Models\CompanyWarehouse::where('is_active',true)->orderBy('code')->get(),
+   'matchedInvoices'=>$matchedInvoices,
+   'purchaseFinanceSnapshot'=>[
+    'invoiced'=>(string)$invoiced->toScale(4),
+    'outstanding'=>(string)$outstanding->toScale(4),
+    'unapplied_advances'=>(string)$unappliedAdvances->toScale(4),
+   ],
   ]);
  }
  public function updateDraft(Request $request,PurchaseOrder $order) {
