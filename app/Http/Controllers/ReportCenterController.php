@@ -238,7 +238,7 @@ class ReportCenterController extends Controller
                     ? route('production.orders.show', $r->production_order_id) : null),
             ],
             'delivery-notes'=>[
-                'query'=>SalesDeliveryNote::query()->with('invoice'),
+                'query'=>SalesDeliveryNote::query()->with(['invoice','deliveryProof']),
                 'date'=>'delivery_date','search'=>['number','received_by','reference'],
                 'columns'=>['Delivery note','Original invoice','Delivery date','Status','Received by','Proof reference'],
                 'note'=>'Delivery notes describe logistics documentation and customer-confirmed receipt, not additional inventory issues. Returned and cancelled notes remain visible for audit.',
@@ -246,7 +246,7 @@ class ReportCenterController extends Controller
                     $r->number,$r->invoice?->number??'',
                     $r->delivery_date?->toDateString()??'',
                     $r->status,$r->received_by??'Awaiting receipt',
-                    $r->reference??'See tracking evidence',
+                    $r->deliveryProof?->proof_reference??'No customer receipt evidence',
                 ],route('sales.delivery-notes.show',$r)),
             ],
             'sales-credits'=>[
