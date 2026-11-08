@@ -339,6 +339,13 @@ final class HistoricalBatchCapitalizationService
             foreach($s['lines']->pluck('dispatch_date')->unique() as $date)
                 $period->assertOpenDate((string)$date);
 
+            // The manufacturing override is permitted ONLY during this
+            // same transaction's atomic executor. On ANY failure this
+            // transient posting state and all journals roll back together.
+            DB::table('finance_historical_batch_capitalizations')
+                ->where('id',$record->id)->update([
+                    'status'=>'posting','updated_at'=>now(),
+                ]);
             $cost=app(ManufacturingCostAccountingService::class)->capitalize(
                 (int)$s['batch']->id,[
                     'accounting_date'=>$s['date'],
