@@ -74,6 +74,7 @@ class HistoricalOpeningStockValuationService
                 ->where('id',$layer->source_id)->first();
             if(!$movement || $movement->type!=='opening' ||
                 $movement->direction!=='in' ||
+                (int)($movement->created_by??0)===$actorId ||
                 (int)$movement->inventory_material_id!==(int)$material->id ||
                 !BigDecimal::of((string)$movement->quantity)
                     ->isEqualTo((string)$layer->original_quantity) ||
@@ -115,6 +116,30 @@ class HistoricalOpeningStockValuationService
                     $this->fail('Original opening FIFO quantity exceeds the physical material balance at a listed warehouse.');
                 }
                 $located=$located->plus($quantity);
+            }
+            // A single positioned lot can equal its warehouse balance
+            // while other lots are already allocated to the same stock.
+            // Reconcile the sum of ALL source FIFO lots, not one in isolation.
+            $allLocations=DB::table('inventory_cost_layer_locations as location')
+                ->join('inventory_cost_layers as lot',
+                    'lot.id','=','location.inventory_cost_layer_id')
+                ->where('lot.inventory_material_id',$material->id)
+                ->whereNotNull('location.company_warehouse_id')
+                ->lockForUpdate()
+                ->get(['location.company_warehouse_id','location.quantity'])
+                ->groupBy('company_warehouse_id');
+            foreach($allLocations as $warehouseId=>$locatedLots){
+                $allocated=BigDecimal::zero();
+                foreach($locatedLots as $position){
+                    $allocated=$allocated->plus((string)$position->quantity);
+                }
+                $actual=DB::table('inventory_warehouse_balances')
+                    ->where('inventory_material_id',$material->id)
+                    ->where('company_warehouse_id',$warehouseId)
+                    ->lockForUpdate()->first();
+                if(!$actual || $allocated->isGreaterThan((string)$actual->quantity)){
+                    $this->fail('Combined FIFO lot positions exceed a warehouse physical stock balance. Reconcile all attributed inventory lots before valuing this opening receipt.');
+                }
             }
             if(!$located->isEqualTo($original)){
                 $this->fail('Warehouse positions do not add up to the original opening lot quantity.');
