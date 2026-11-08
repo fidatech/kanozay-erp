@@ -53,6 +53,10 @@ class HistoricalFinanceCorrectionService
                     'customer_id'=>$original->customer_id,
                     'status'=>$original->status,
                     'currency_id'=>$original->currency_id,
+                    'subtotal'=>$original->subtotal,
+                    'total'=>$original->total,
+                    'revenue_journal_id'=>$original->journal_entry_id,
+                    'trade_document_id'=>$original->trade_document_id,
                     'date'=>$date,
                     'lines'=>DB::table('sales_invoice_lines')
                         ->where('sales_invoice_id',$id)->orderBy('id')
@@ -78,7 +82,7 @@ class HistoricalFinanceCorrectionService
                     'lines'=>DB::table('finished_good_dispatch_lines')
                         ->where('finished_good_dispatch_id',$id)->orderBy('id')
                         ->get(['id','production_batch_id','finished_good_id',
-                            'quantity_packages'])->toArray()];
+                            'company_warehouse_id','quantity_packages'])->toArray()];
                 break;
             case 'opening_fifo_unvalued':
                 $reference='FIFO-LOT-'.$id;
@@ -224,6 +228,17 @@ class HistoricalFinanceCorrectionService
             if($source['fingerprint']!==$case->source_fingerprint)
                 $this->fail('Original invoice source attributes changed since independent approval. Posting was blocked.');
             app(FinancePeriodClosingService::class)->assertOpenDate($source['date']);
+            $invoice=DB::table('sales_invoices')
+                ->where('id',$case->source_id)->first();
+            $revenue=DB::table('journal_entries')
+                ->where('id',$invoice->journal_entry_id??0)->first();
+            if(!$invoice || $invoice->status!=='posted' || !$revenue ||
+                $revenue->status!=='posted' || $revenue->reversal_of_id ||
+                (int)$revenue->currency_id!==(int)$invoice->currency_id ||
+                DB::table('journal_entries')
+                    ->where('reversal_of_id',$revenue->id)->exists()){
+                $this->fail('The original sales revenue journal is absent, reversed, unposted or in a different currency. Reconcile the sales invoice before creating related historic COGS.');
+            }
             // Re-use the existing hard-validated original-cost pathway. It
             // checks batch capitalization date, exact warehouse dispatch,
             // original currency, lot cost and pre-existing COGS sequencing.
