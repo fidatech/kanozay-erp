@@ -8,7 +8,7 @@
 .fp-scroll{overflow:auto}.fp-box table{min-width:780px;font-size:12px}.fp-box td,.fp-box th{padding:10px}
 @media(max-width:850px){.fp-grid{grid-template-columns:1fr}}
 </style>
-<div class="heading"><div><h1>Finance Period Close & Reopening</h1><p>Monthly accounting locks, balanced GL snapshots and independent reopening authorization.</p></div><a class="btn btn-light" href="{{ route('finance.journals.index') }}">General journal</a></div>
+<div class="heading"><div><h1>Finance Period Close & Reopening</h1><p>Monthly accounting locks, balanced GL snapshots and independent reopening authorization.</p></div><div class="actions"><a class="btn btn-light" href="{{ route('finance.historical-corrections.index') }}">Historical corrections</a><a class="btn btn-light" href="{{ route('finance.journals.index') }}">General journal</a></div></div>
 @if(session('success'))<p class="notice">{{ session('success') }}</p>@endif
 @if($errors->any())<p class="notice notice-warning">{{ implode(' ', $errors->all()) }}</p>@endif
 <section class="fp-box">
