@@ -78,7 +78,7 @@ class ManufacturingCostAccountingService
      * frozen production batch cost snapshot.
      */
     private function assertMaterialSources(ProductionBatch $batch,object $policy,
-        string $date,string $expectedAmount):void
+        string $date,string $physicalReceiptDate,string $expectedAmount):void
     {
         $lineIds=DB::table('production_order_materials')
             ->where('production_order_id',$batch->production_order_id)->pluck('id');
@@ -89,8 +89,9 @@ class ManufacturingCostAccountingService
         if($movements->isEmpty())$this->reject('No source material stock issues exist for this batch.');
         $checkedLots=[];$total=BigDecimal::zero();
         foreach($movements as $movement){
-            if((string)$movement->occurred_on>$date){
-                $this->reject('An input material movement was posted after the requested capitalization date.');
+            if((string)$movement->occurred_on>$date ||
+                (string)$movement->occurred_on>$physicalReceiptDate){
+                $this->reject('An input material issue cannot post after the completed finished-goods receipt or the batch capitalization date.');
             }
             $rows=DB::table('inventory_cost_consumptions')
                 ->where('inventory_stock_movement_id',$movement->id)->get();
@@ -108,8 +109,9 @@ class ManufacturingCostAccountingService
                     $layer->source_type!=='goods_receipt_line'){
                     $this->reject('Opening, unverified or mismatched FIFO source layers require their own posted GL opening-value reconciliation before capitalization.');
                 }
-                if((string)$layer->received_on>$date){
-                    $this->reject('An input FIFO lot was received after the batch capitalization date.');
+                if((string)$layer->received_on>$date ||
+                    (string)$layer->received_on>(string)$movement->occurred_on){
+                    $this->reject('An input FIFO lot was received after the recorded material issue or batch capitalization date.');
                 }
                 if(!isset($checkedLots[$layer->id])){
                     $checkedLots[$layer->id]=true;
@@ -261,7 +263,8 @@ class ManufacturingCostAccountingService
                 ->where('production_batch_id',$batchId)->where('status','submitted')->exists()){
                 $this->reject('Review all pending production overhead allocations before costing the finished batch.');
             }
-            $this->assertMaterialSources($batch,$policy,$data['accounting_date'],(string)$material);
+            $this->assertMaterialSources($batch,$policy,$data['accounting_date'],
+                (string)$receipt->occurred_on,(string)$material);
             $overheads=DB::table('production_overhead_allocations as allocation')
                 ->join('journal_lines as line','line.id','=','allocation.source_journal_line_id')
                 ->join('journal_entries as journal','journal.id','=','line.journal_entry_id')
