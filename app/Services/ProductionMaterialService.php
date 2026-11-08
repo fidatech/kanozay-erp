@@ -37,8 +37,9 @@ class ProductionMaterialService
                 }
                 try{
                     app(QualityMaterialHoldService::class)->assertAvailable($material,$required);
+                    app(InventoryLotLocationService::class)->assertReservable($material,$required);
                 }catch(ValidationException $e){
-                    $this->reject('Incoming QC hold prevents reservation of material '.$material->sku.'.');
+                    $this->reject('Verified warehouse FIFO lots or incoming QC release are insufficient for '.$material->sku.'. Reconcile source locations before reservation.');
                 }
             }
 
