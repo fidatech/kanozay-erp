@@ -61,7 +61,16 @@
 @if($row->treatment==='normal_process_loss')
 <span class="pwr-normal">{{ $t('production_waste_normal') }}</span>
 @elseif($row->treatment==='abnormal_loss')
-<span class="pwr-alert">{{ $t('production_waste_abnormal') }}</span>
+@if($row->batch_expense_journal && $row->abnormal_cost!==null)
+ <span class="pwr-normal">Abnormal loss expensed with manufacturing journal {{ $row->batch_expense_journal }}</span>
+@elseif($row->abnormal_cost!==null)
+ <span style="color:#9a681e;font-weight:700">FIFO source value independently approved; waiting for WIP/FG journal</span>
+@else
+ <span class="pwr-alert">{{ $t('production_waste_abnormal') }}</span>
+@endif
+@if($row->abnormal_cost!==null)
+ <div class="muted">{{ \App\Support\ReportingLabels::decimal($row->abnormal_cost) }} {{ $row->cost_currency }} · {{ $row->cost_approval_reference }}</div>
+@endif
 @elseif($row->treatment==='rework_required')
 <span class="pwr-alert">{{ $t('production_waste_rework') }}</span>
 @else
