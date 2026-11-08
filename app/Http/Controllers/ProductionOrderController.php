@@ -220,6 +220,27 @@ class ProductionOrderController extends Controller {
             'Recorded issued-material loss classified with independent financial evidence. No additional stock issue or unsupported GL journal was created.');
     }
 
+    public function resolveWasteRework(Request $request, ProductionOrder $order,
+        \App\Models\ProductionMaterialWaste $waste,
+        \App\Services\ProductionWasteFinancialReviewService $service)
+    {
+        abort_unless($request->user()->can('administration.update') ||
+            ($request->user()->can('finance.update') &&
+             $request->user()->can('manufacturing.view')),403);
+        abort_unless((int)$waste->materialLine->production_order_id===(int)$order->id,404);
+        $data=$request->validate([
+            'physical_rework_completed_on'=>['required','date','before_or_equal:today'],
+            'qc_reinspection_reference'=>['required','string','min:4','max:180'],
+            'approved_loss_policy_reference'=>['required','string','min:4','max:180'],
+            'finance_approval_reference'=>['required','string','min:4','max:180'],
+            'resolution_notes'=>['required','string','min:20','max:3000'],
+            'confirm_reinspected'=>['accepted'],
+        ]);
+        $service->resolveRework($waste->id,$data,$request->user()->id);
+        return back()->with('success',
+            'Independent rework financial disposition recorded with source evidence. Fresh QC inspection is still required; no stock or GL was added automatically.');
+    }
+
     public function cancel(Request $request, ProductionOrder $order, ProductionMaterialService $service) {
         abort_unless($request->user()->can('inventory.update') && $request->user()->can('administration.update'), 403);
         $service->cancel($order);
