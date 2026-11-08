@@ -127,7 +127,7 @@ document.addEventListener('DOMContentLoaded',()=>{
  const recipient=document.getElementById('sh-distribution-payee');
  const account=document.getElementById('sh-distribution-account');
  if(!resolution||!recipient||!account)return;
- const approved=@json($allocations->where('resolution_status','approved')->map(fn($a)=>['resolution'=>(int)$a->shareholder_resolution_id,'shareholder'=>(int)$a->shareholder_id])->values());
+ const approved=@json($approvedAllocationOptions);
  const sync=()=>{
    const selected=Number(resolution.value);
    const currency=resolution.selectedOptions[0]?.dataset?.currency||'';
