@@ -45,6 +45,12 @@ class ProductionCostAllocationService
       'production_batch_id'=>'This batch has already been dispatched. Historical production unit-cost inputs cannot be revised after a sale.',
     ]);
    }
+   if(DB::table('production_batch_cost_postings')
+      ->where('production_batch_id',$batch->id)->exists()){
+    throw ValidationException::withMessages([
+      'production_batch_id'=>'This batch is already financially capitalized. Its overhead source allocations are frozen; use an independently reviewed correcting accounting document.',
+    ]);
+   }
    $line=JournalLine::whereKey($data['source_journal_line_id'])->lockForUpdate()->firstOrFail();
    $account=$line->account;
    $journal=DB::table('journal_entries')->where('id',$line->journal_entry_id)->first();
@@ -95,6 +101,12 @@ class ProductionCostAllocationService
       throw ValidationException::withMessages([
         'decision'=>'Do not approve production overhead after a batch was rejected or dispatched. Use a separately reviewed accounting correction if needed.',
       ]);
+    }
+    if(DB::table('production_batch_cost_postings')
+      ->where('production_batch_id',$batch->id)->exists()){
+       throw ValidationException::withMessages([
+        'decision'=>'Batch inventory has already been capitalized. Additional overhead approval would conflict with the frozen WIP/finished-goods journal.',
+       ]);
     }
     $line=JournalLine::whereKey($row->source_journal_line_id)->lockForUpdate()->firstOrFail();
     // Excludes this submitted row, which already reserves its source amount.
