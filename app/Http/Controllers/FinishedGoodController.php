@@ -34,7 +34,7 @@ class FinishedGoodController extends Controller
             'good' => $good,
             'movements' => $good->movements()->with('batch.order')->latest('id')->paginate(25),
             'dispatchLines' => $good->dispatchLines()->with(['dispatch', 'batch.order'])->latest('id')->paginate(25, ['*'], 'dispatch_page'),
-            'returnLines' => SalesCreditNoteLine::with('creditNote')->where('finished_good_id', $good->id)->latest('id')->paginate(25, ['*'], 'return_page'),
+            'returnLines' => SalesCreditNoteLine::with(['creditNote','quarantine'])->where('finished_good_id', $good->id)->latest('id')->paginate(25, ['*'], 'return_page'),
             'availableBatches' => $batches->filter(fn ($batch) => $batch->available_packages > 0),
         ]);
     }
