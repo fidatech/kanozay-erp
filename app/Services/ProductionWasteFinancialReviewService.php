@@ -66,6 +66,14 @@ class ProductionWasteFinancialReviewService
                 'reviewed_by'=>$actorId,
                 'created_at'=>now(),'updated_at'=>now(),
             ]);
+            DB::table('production_waste_financial_review_events')->insert([
+                'production_waste_financial_review_id'=>$id,
+                'previous_treatment'=>null,'new_treatment'=>$data['treatment'],
+                'previous_approval_reference'=>null,
+                'approval_reference'=>trim($data['approval_reference']),
+                'evidence_notes'=>trim($data['review_notes']),
+                'reviewed_by'=>$actorId,'created_at'=>now(),'updated_at'=>now(),
+            ]);
             ActivityLog::record('manufacturing.material_waste.financially_reviewed',
                 'production_material_waste',$wasteId,
                 'Issued material loss classified for financial treatment; no stock or journal was posted.',[
@@ -75,6 +83,88 @@ class ProductionWasteFinancialReviewService
                 ]);
             return DB::table('production_waste_financial_reviews')
                 ->where('id',$id)->first();
+        });
+    }
+
+    /**
+     * Rework must finish before QC approval. An independent second reviewer
+     * confirms the rework and authorizes absorption of any remaining normal
+     * process loss under a signed company policy. No GL or stock mutation.
+     */
+    public function resolveRework(int $wasteId,array $data,int $actorId):object
+    {
+        return DB::transaction(function()use($wasteId,$data,$actorId){
+            $waste=ProductionMaterialWaste::whereKey($wasteId)
+                ->lockForUpdate()->firstOrFail();
+            $review=DB::table('production_waste_financial_reviews')
+                ->where('production_material_waste_id',$wasteId)
+                ->lockForUpdate()->first();
+            if(!$review || $review->treatment!=='rework_required'){
+                throw ValidationException::withMessages([
+                    'rework'=>'Only a documented, still-open rework classification can be resolved.',
+                ]);
+            }
+            if((int)$review->reviewed_by===$actorId ||
+               (int)$waste->recorded_by===$actorId){
+                throw ValidationException::withMessages([
+                    'rework'=>'The original loss recorder and the first rework reviewer cannot certify its subsequent completion. Use an independent authorized finance reviewer.',
+                ]);
+            }
+            if($data['physical_rework_completed_on']<
+                substr((string)$waste->created_at,0,10)){
+                throw ValidationException::withMessages([
+                    'physical_rework_completed_on'=>'Physical rework cannot predate the original recorded material loss.',
+                ]);
+            }
+            $orderId=$waste->materialLine->production_order_id;
+            $order=DB::table('production_orders')->where('id',$orderId)
+                ->lockForUpdate()->first();
+            abort_unless($order,404);
+            if(!in_array($order->status,['issued','pending_qc'],true)){
+                throw ValidationException::withMessages([
+                    'rework'=>'Rework must be resolved before independent laboratory acceptance. A previously QC-approved/released batch requires a formal QC correction workflow.',
+                ]);
+            }
+            $batch=DB::table('production_batches')
+                ->where('production_order_id',$orderId)->first();
+            if($batch && ($batch->status!=='pending_qc' ||
+                DB::table('production_batch_cost_postings')
+                    ->where('production_batch_id',$batch->id)->exists() ||
+                DB::table('finished_good_dispatch_lines')
+                    ->where('production_batch_id',$batch->id)->exists())){
+                throw ValidationException::withMessages([
+                    'rework'=>'Physical rework cannot alter a previously accepted, capitalized or dispatched production batch.',
+                ]);
+            }
+            DB::table('production_waste_financial_review_events')->insert([
+                'production_waste_financial_review_id'=>$review->id,
+                'previous_treatment'=>$review->treatment,
+                'new_treatment'=>'normal_process_loss',
+                'previous_approval_reference'=>$review->approval_reference,
+                'approval_reference'=>trim($data['finance_approval_reference']),
+                'qc_reinspection_reference'=>trim($data['qc_reinspection_reference']),
+                'approved_loss_policy_reference'=>trim($data['approved_loss_policy_reference']),
+                'physical_rework_completed_on'=>$data['physical_rework_completed_on'],
+                'evidence_notes'=>trim($data['resolution_notes']),
+                'reviewed_by'=>$actorId,'created_at'=>now(),'updated_at'=>now(),
+            ]);
+            DB::table('production_waste_financial_reviews')
+                ->where('id',$review->id)->update([
+                    'treatment'=>'normal_process_loss',
+                    'approval_reference'=>trim($data['finance_approval_reference']),
+                    'review_notes'=>trim($data['resolution_notes']),
+                    'reviewed_by'=>$actorId,'updated_at'=>now(),
+                ]);
+            ActivityLog::record('manufacturing.material_waste.rework_resolved',
+                'production_material_waste',$wasteId,
+                'Physical rework independently certified before fresh QC acceptance; original issued quantity unchanged.',[
+                    'production_order_id'=>$orderId,
+                    'qc_reinspection_reference'=>$data['qc_reinspection_reference'],
+                    'finance_approval_reference'=>$data['finance_approval_reference'],
+                    'policy_reference'=>$data['approved_loss_policy_reference'],
+                ]);
+            return DB::table('production_waste_financial_reviews')
+                ->where('id',$review->id)->first();
         });
     }
 
