@@ -148,6 +148,7 @@ Route::middleware('auth')->post('/production/orders', [\App\Http\Controllers\Pro
 Route::middleware('auth')->patch('/production/orders/{order}/materials/{materialLine}/inventory', [\App\Http\Controllers\ProductionOrderController::class, 'linkMaterial'])->name('production.orders.materials.link');
 Route::middleware('auth')->post('/production/orders/{order}/reserve', [\App\Http\Controllers\ProductionOrderController::class, 'reserve'])->name('production.orders.reserve');
 Route::middleware('auth')->post('/production/orders/{order}/materials/{materialLine}/waste', [\App\Http\Controllers\ProductionOrderController::class, 'waste'])->name('production.orders.materials.waste');
+Route::middleware('auth')->post('/production/orders/{order}/waste/{waste}/financial-review', [\App\Http\Controllers\ProductionOrderController::class,'reviewWaste'])->name('production.orders.waste.review');
 Route::middleware('auth')->post('/production/orders/{order}/issue', [\App\Http\Controllers\ProductionOrderController::class, 'issue'])->name('production.orders.issue');
 Route::middleware('auth')->post('/production/orders/{order}/cancel', [\App\Http\Controllers\ProductionOrderController::class, 'cancel'])->name('production.orders.cancel');
 Route::middleware('auth')->get('/production/orders/{order}', [\App\Http\Controllers\ProductionOrderController::class, 'show'])->name('production.orders.show');
