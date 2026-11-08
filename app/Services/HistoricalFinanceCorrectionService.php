@@ -22,6 +22,7 @@ class HistoricalFinanceCorrectionService
         'opening_fifo_unvalued'=>'Unvalued FIFO stock lot requiring original-cost reconciliation',
         'landed_cost_unreconciled'=>'Historic GRN landed cost without GL evidence',
         'supplier_return_unreconciled'=>'Historic supplier return / short credit discrepancy',
+        'released_return_missing_cost'=>'Historic QC-released customer return missing inventory/COGS recovery',
     ];
 
     private function fail(string $message):never
@@ -40,6 +41,7 @@ class HistoricalFinanceCorrectionService
             'opening_fifo_unvalued'=>'inventory_cost_layers',
             'landed_cost_unreconciled'=>'goods_receipt_landed_costs',
             'supplier_return_unreconciled'=>'purchase_return_records',
+            'released_return_missing_cost'=>'sales_return_quarantines',
         };
         $original=DB::table($table)->where('id',$id)->first();
         if(!$original)$this->fail('The selected original source document no longer exists.');
@@ -83,6 +85,64 @@ class HistoricalFinanceCorrectionService
                         ->where('finished_good_dispatch_id',$id)->orderBy('id')
                         ->get(['id','production_batch_id','finished_good_id',
                             'company_warehouse_id','quantity_packages'])->toArray()];
+                break;
+            case 'released_return_missing_cost':
+                $reference='RET-QC-'.$id;
+                $date=(string)$original->decided_on;
+                if(!$date)$this->fail('Historic saleable QC return must have its original documented QC approval date.');
+                $credit=DB::table('sales_credit_note_lines')
+                    ->where('id',$original->sales_credit_note_line_id)->first();
+                $note=$credit?DB::table('sales_credit_notes')
+                    ->where('id',$credit->sales_credit_note_id)->first():null;
+                $sale=$credit?DB::table('sales_invoice_lines')
+                    ->where('id',$credit->sales_invoice_line_id)->first():null;
+                $invoice=$sale?DB::table('sales_invoices')
+                    ->where('id',$sale->sales_invoice_id)->first():null;
+                if(!$credit || !$note || !$sale || !$invoice)
+                    $this->fail('The original posted customer credit-note, invoice and QC source records are incomplete.');
+                $currencyId=DB::table('production_batch_cost_postings')
+                    ->where('production_batch_id',$original->production_batch_id)
+                    ->value('currency_id');
+                $warehouseMovements=DB::table('finished_good_warehouse_movements')
+                    ->where('production_batch_id',$original->production_batch_id)
+                    ->where('type','customer_return')
+                    ->where('reference','Quarantined customer return QC '.$id)
+                    ->orderBy('id')
+                    ->get(['id','production_batch_id','source_warehouse_id',
+                        'destination_warehouse_id','quantity_packages','occurred_on',
+                        'reference','created_by'])->toArray();
+                $immutable=[
+                    'qc'=>[
+                        $original->id,$original->sales_credit_note_line_id,
+                        $original->production_batch_id,$original->received_warehouse_id,
+                        $original->released_warehouse_id,$original->quantity_packages,
+                        $original->status,$original->registered_by,$original->decided_by,
+                        $date,$original->quality_reference,$original->decision_notes,
+                    ],
+                    'credit'=>[
+                        $credit->id,$credit->sales_credit_note_id,$credit->sales_invoice_line_id,
+                        $credit->finished_good_id,$credit->production_batch_id,
+                        $credit->quantity_packages,$credit->unit_price,$credit->line_total,
+                        $credit->restocked,
+                    ],
+                    'credit_note'=>[
+                        $note->id,$note->number,$note->sales_invoice_id,
+                        $note->trade_document_id,$note->journal_entry_id,
+                        $note->credit_date,$note->total,$note->currency_code,
+                    ],
+                    'invoice_line'=>[
+                        $sale->id,$sale->sales_invoice_id,$sale->production_batch_id,
+                        $sale->finished_good_id,$sale->dispatch_id,
+                        $sale->quantity_packages,$sale->unit_price,$sale->line_total,
+                    ],
+                    'invoice'=>[
+                        $invoice->id,$invoice->status,$invoice->currency_id,
+                        $invoice->journal_entry_id,$invoice->trade_document_id,
+                        $invoice->invoice_date,$invoice->total,$invoice->customer_id,
+                    ],
+                    'warehouse_restock'=>$warehouseMovements,
+                    'source_batch_cost_currency_id'=>$currencyId,
+                ];
                 break;
             case 'opening_fifo_unvalued':
                 $reference='FIFO-LOT-'.$id;
@@ -154,6 +214,16 @@ class HistoricalFinanceCorrectionService
             if(DB::table('finance_historical_correction_cases')
                 ->where('open_key',$key)->exists()){
                 $this->fail('An unresolved correction case already exists for this source. Add evidence through the existing case.');
+            }
+            if($source['type']==='released_return_missing_cost'){
+                $qc=DB::table('sales_return_quarantines')
+                    ->where('id',$source['id'])->first();
+                if($qc->status!=='released' || !$qc->decided_by || !$qc->decided_on ||
+                    (int)$qc->registered_by===(int)$qc->decided_by)
+                    $this->fail('Only an independently QC-released physical customer return can be submitted for already-missing inventory cost.');
+                if(DB::table('production_return_cost_postings')
+                    ->where('sales_return_quarantine_id',$qc->id)->exists())
+                    $this->fail('This QC-released return already has an original-cost inventory recovery.');
             }
             if($source['type']==='invoice_missing_cogs'){
                 $invoice=DB::table('sales_invoices')->where('id',$source['id'])->first();
@@ -229,6 +299,8 @@ class HistoricalFinanceCorrectionService
                DB::table('finance_supplier_return_credit_disputes')
                    ->where('finance_historical_correction_case_id',$caseId)->exists() ||
                DB::table('finance_historical_batch_capitalizations')
+                   ->where('finance_historical_correction_case_id',$caseId)->exists() ||
+               DB::table('finance_historical_customer_return_cost_recoveries')
                    ->where('finance_historical_correction_case_id',$caseId)->exists()){
                 $this->fail('This case already contains signed source evidence or a historical production cost backfill proposal. It cannot be withdrawn without a dedicated audited amendment workflow.');
             }
