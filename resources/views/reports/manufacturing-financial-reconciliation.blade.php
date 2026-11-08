@@ -9,7 +9,7 @@
 .mfr-filters{display:flex;align-items:end;gap:10px;flex-wrap:wrap}
 .mfr-filters label{display:grid;gap:5px}
 </style>
-<div class="heading"><div><h1>Manufacturing Inventory, COGS and Non-sale Expense Reconciliation</h1>
+<div class="heading"><div><h1>Manufacturing Inventory, COGS, Returns and QC Loss Reconciliation</h1>
 <p>Compare physical finished batches, QC returns and original-currency GL inventory journals.</p>
 </div><div class="actions">
 <a class="btn btn-light" href="{{ route('manufacturing.cost-accounting.index') }}">Manufacturing cost accounting</a>
@@ -17,7 +17,7 @@
 <a class="btn" href="{{ route('reports.manufacturing-financial.index',array_merge(request()->query(),['export'=>'csv'])) }}">Export all matching CSV</a>
 </div></div>
 <p class="mfr-alert"><strong>Review before financial close.</strong>
-This register compares posted WIP/finished-stock capitalization journals, genuine original-currency sales COGS, independently authorized sample/loss/internal-use inventory expenses and returned-goods cost recoveries against physical batch quantities. It highlights missing or reversed source journals and legacy stock mismatches. Amounts are shown by batch and currency without FX conversion.
+This register compares posted WIP/finished-stock capitalization journals, genuine original-currency sales COGS, independently authorized non-sale inventory expenses, physically released QC asset recoveries, and independently approved scrapped-return reclassifications (COGS to loss expense) without inventing stock or customer credits. It highlights missing or reversed source journals and legacy stock mismatches. Amounts are shown by batch and currency without FX conversion.
 The report cannot establish historical inventory value from unrecorded invoices or correct old discrepancies automatically.
 </p>
 <section class="mfr-panel">
@@ -44,7 +44,8 @@ The CSV includes all matching batches and their individual exceptions.</p>
 <th>Physical remaining</th>
 <th>Costed sales / non-sale / QC recoveries</th><th>Costed remaining</th>
 <th>Gross source materials</th><th>Abnormal FIFO loss expense</th>
-<th>Net capitalized inventory</th><th>Recognized COGS</th><th>Non-sale inventory expense</th>
+<th>Net capitalized inventory</th><th>Original gross COGS</th><th>Non-sale inventory expense</th>
+<th>QC scrapped return loss / packages</th><th>Net sales COGS after returns/scrap</th>
 <th>Return recovery</th><th>Remaining asset value</th><th>Audit result</th>
 </tr></thead><tbody>
 @forelse($rows as $row)
@@ -66,6 +67,8 @@ The CSV includes all matching batches and their individual exceptions.</p>
 <td>{{ $row['total_capitalized']??'Not capitalized' }}</td>
 <td>{{ $row['posted_cogs']??'—' }}</td>
 <td>{{ $row['posted_non_sale_expense']??'—' }}</td>
+<td>{{ $row['posted_scrapped_return_loss']??'—' }} / {{ number_format($row['qc_scrapped_packages']) }}</td>
+<td>{{ $row['net_sales_cogs_after_returns_and_scrap']??'—' }}</td>
 <td>{{ $row['returned_cost']??'—' }}</td>
 <td>{{ $row['remaining_asset_value']??'Unverified' }}</td>
 <td>
@@ -80,7 +83,7 @@ The CSV includes all matching batches and their individual exceptions.</p>
 <span class="muted">No financial capitalization recorded; no original invoice dispatch identified</span>
 @endif
 </td></tr>
-@empty<tr><td colspan="14">No production batches match the selected filter.</td></tr>
+@empty<tr><td colspan="16">No production batches match the selected filter.</td></tr>
 @endforelse
 </tbody></table></div>
 {{ $batches->links() }}
