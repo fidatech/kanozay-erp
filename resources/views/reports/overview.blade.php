@@ -67,9 +67,9 @@
 <tbody>
 @forelse($summary['currencies'] as $row)
 <tr><td>{{ $row['currency'] }}</td><td>{{ number_format($row['invoices']) }}</td>
-<td style="font-variant-numeric:tabular-nums">{{ number_format((float)$row['invoice_total'],4) }}</td>
+<td style="font-variant-numeric:tabular-nums">{{ \App\Support\ReportingLabels::decimal($row['invoice_total']) }}</td>
 <td>{{ number_format($row['credits']) }}</td>
-<td style="font-variant-numeric:tabular-nums">{{ number_format((float)$row['credit_total'],4) }}</td></tr>
+<td style="font-variant-numeric:tabular-nums">{{ \App\Support\ReportingLabels::decimal($row['credit_total']) }}</td></tr>
 @empty<tr><td colspan="5">{{ $t('no_records') }}</td></tr>
 @endforelse
 </tbody></table></div>
