@@ -102,6 +102,41 @@ class ProductionBatchService
                 $this->reject('One or more registered QC samples are pending or rejected.');
             }
             if($decision==='approve'){
+                $wasteReview=DB::table('production_material_wastes as waste')
+                    ->join('production_order_materials as line',
+                        'line.id','=','waste.production_order_material_id')
+                    ->leftJoin('production_waste_financial_reviews as review',
+                        'review.production_material_waste_id','=','waste.id')
+                    ->where('line.production_order_id',$batch->production_order_id)
+                    ->where(function($q){
+                        $q->whereNull('review.treatment')
+                          ->orWhere('review.treatment','rework_required');
+                    })->exists();
+                if($wasteReview){
+                    $this->reject('Complete independent loss classification and physical rework disposition before the laboratory approves finished packages.');
+                }
+                $latestRework=DB::table('production_waste_financial_review_events as event')
+                    ->join('production_waste_financial_reviews as review',
+                        'review.id','=','event.production_waste_financial_review_id')
+                    ->join('production_material_wastes as waste',
+                        'waste.id','=','review.production_material_waste_id')
+                    ->join('production_order_materials as item',
+                        'item.id','=','waste.production_order_material_id')
+                    ->where('item.production_order_id',$batch->production_order_id)
+                    ->where('event.previous_treatment','rework_required')
+                    ->where('event.new_treatment','normal_process_loss')
+                    ->orderByDesc('event.created_at')
+                    ->orderByDesc('event.id')
+                    ->select('event.created_at','event.physical_rework_completed_on')
+                    ->first();
+                if($latestRework && !DB::table('quality_samples')
+                    ->where('production_batch_id',$batch->id)
+                    ->where('status','approved')
+                    ->where('created_at','>',$latestRework->created_at)
+                    ->whereDate('collected_on','>=',$latestRework->physical_rework_completed_on)
+                    ->exists()){
+                    $this->reject('The batch requires a new, approved formal laboratory sample collected after its independently certified rework. Earlier QC results cannot authorize repaired stock.');
+                }
                 app(FinishedBatchQualityGate::class)->assertApproved($batch);
             }
             $checks = $batch->checks()->get();
