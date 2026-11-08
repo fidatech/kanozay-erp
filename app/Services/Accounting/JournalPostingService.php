@@ -78,6 +78,12 @@ class JournalPostingService {
    if(DB::table('supplier_advance_applications')->where('journal_entry_id',$original->id)->exists()
    || DB::table('customer_advance_applications')->where('journal_entry_id',$original->id)->exists())
     throw ValidationException::withMessages(['status'=>'Applied customer or supplier advances require a dedicated document-level correction workflow.']);
+   if(DB::table('finance_opening_fifo_valuations')
+        ->where('journal_entry_id',$original->id)->exists()){
+      throw ValidationException::withMessages([
+         'status'=>'A historical FIFO opening valuation journal cannot be reversed independently while its original physical lot remains valued. Reconcile asset, equity and FIFO inventory in a reviewed source correction.',
+      ]);
+   }
    if(DB::table('purchase_return_landed_cost_adjustments')
        ->where('journal_entry_id',$original->id)->exists()){
       throw ValidationException::withMessages([
