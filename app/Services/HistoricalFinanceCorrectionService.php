@@ -196,9 +196,9 @@ class HistoricalFinanceCorrectionService
             if((int)$case->requested_by===$actorId)
                 $this->fail('The requester cannot independently approve or reject the financial correction.');
             $source=$this->source($case->case_type,(int)$case->source_id);
-            if($source['fingerprint']!==$case->source_fingerprint)
-                $this->fail('Original source document changed after this request. Reconcile the source and submit a fresh case.');
             $approved=$data['decision']==='approve';
+            if($approved && $source['fingerprint']!==$case->source_fingerprint)
+                $this->fail('Original source document changed after this request. Reject the stale case and submit a fresh source-fingerprinted correction.');
             DB::table('finance_historical_correction_cases')
                 ->where('id',$caseId)->update([
                     'status'=>$approved?'approved':'rejected',
@@ -210,6 +210,39 @@ class HistoricalFinanceCorrectionService
             $this->log($caseId,$approved?'approved':'rejected',$source,
                 trim($data['review_notes']),$actorId,$data['approval_reference']);
             return DB::table('finance_historical_correction_cases')->where('id',$caseId)->first();
+        });
+    }
+
+    /**
+     * Withdrawal is audit-only; it cannot reverse or bypass any journal.
+     * Requester may withdraw an unreviewed case. An approved case can be
+     * invalidated only by its independent reviewer.
+     */
+    public function withdraw(int $caseId,string $notes,int $actorId):void
+    {
+        DB::transaction(function()use($caseId,$notes,$actorId){
+            $case=DB::table('finance_historical_correction_cases')
+                ->where('id',$caseId)->lockForUpdate()->first();
+            abort_unless($case,404);
+            if($case->status==='submitted'){
+                if((int)$case->requested_by!==$actorId)
+                    $this->fail('Only the original requester may withdraw an unreviewed case.');
+            }elseif($case->status==='approved'){
+                if((int)$case->reviewed_by!==$actorId)
+                    $this->fail('Only the independent reviewer who approved this case can invalidate it before execution.');
+            }else{
+                $this->fail('Only submitted or approved, not-yet-executed cases may be withdrawn.');
+            }
+            DB::table('finance_historical_correction_cases')
+                ->where('id',$caseId)->update([
+                    'status'=>'withdrawn','open_key'=>null,'updated_at'=>now(),
+                ]);
+            $source=[
+                'type'=>$case->case_type,'id'=>$case->source_id,
+                'reference'=>$case->source_reference,
+                'fingerprint'=>$case->source_fingerprint,
+            ];
+            $this->log($caseId,'withdrawn',$source,trim($notes),$actorId);
         });
     }
 
