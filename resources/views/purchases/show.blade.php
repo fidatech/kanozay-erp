@@ -190,9 +190,52 @@ $hasSubtotal=$subtotal->compareTo(\Brick\Math\BigDecimal::zero())>0;
 @if($receipt->status === 'posted' && $receipt->cost_currency_code && $receipt->lines->isNotEmpty() && $receipt->lines->every(fn ($line) => $line->line_subtotal_snapshot !== null))
 <div style="margin:14px 0;padding:14px;border:1px solid #dbe5f0;border-radius:10px">
 <strong>{{ $receipt->number }} — landed-cost components ({{ $receipt->cost_currency_code }})</strong>
-@php($recordedCosts = \App\Models\GoodsReceiptLandedCost::where('goods_receipt_id', $receipt->id)->with('allocations')->get())
+@php($recordedCosts = $landedCostsByReceipt->get($receipt->id,collect()))
 @if($recordedCosts->isNotEmpty())
-<ul>@foreach($recordedCosts as $cost)<li>{{ ucfirst($cost->component) }}: <x-finance-amount :amount="$cost->amount" /> {{ $cost->currency_code }} ({{ $cost->allocations->count() }} allocated lines)</li>@endforeach</ul>
+<div style="display:grid;gap:10px;margin:14px 0">
+@foreach($recordedCosts as $cost)
+@php($postedCost=$landedPostings->get($cost->id))
+<div style="padding:12px;border:1px solid #dae6f1;border-radius:8px">
+<strong>{{ ucfirst($cost->component) }}:</strong>
+<x-finance-amount :amount="$cost->amount" /> {{ $cost->currency_code }}
+({{ $cost->allocations->count() }} allocated GRN lines)
+@if($postedCost)
+<div style="margin-top:6px;color:#176744;font-size:12px">
+<icon name="check-circle" size="xs" inline/>
+Inventory GL capitalization posted: {{ $postedCost->journal_number }} · {{ $postedCost->accounting_date }} · {{ $postedCost->approval_reference }}
+@if($postedCost->journal_status!=='posted')<strong style="color:#a33">Journal needs reconciliation</strong>@endif
+</div>
+@else
+<p class="muted" style="color:#98601f;margin:7px 0">FIFO lot contains this cost allocation, but no matched inventory capitalization journal is posted. The material cannot be consumed or transferred to WIP until reviewed.</p>
+@canany(['finance.update','administration.update'])
+@php($sourceOptions=$landedExpenseCandidatesByAmount->get((string)\Brick\Math\BigDecimal::of((string)$cost->amount)->toScale(2),collect()))
+@if($sourceOptions->isNotEmpty())
+<details>
+<summary style="cursor:pointer">Reconcile posted expense into original-currency inventory</summary>
+<form method="POST" action="{{ route('purchases.orders.receipts.landed-costs.capitalize',[$order,$receipt,$cost]) }}" class="po-form" style="margin-top:12px">
+@csrf
+<label>Exact posted source expense debit
+<select name="source_expense_journal_line_id" required>
+<option value="">Choose unreversed expense debit</option>
+@foreach($sourceOptions as $expenseSource)
+<option value="{{ $expenseSource->id }}">{{ $expenseSource->journal_number }} · {{ $expenseSource->entry_date }} · {{ $expenseSource->ledger_code }} · {{ $receipt->cost_currency_code }} {{ $expenseSource->debit }}</option>
+@endforeach
+</select></label>
+<label>Accounting date<input name="accounting_date" type="date" value="{{ now()->toDateString() }}" max="{{ now()->toDateString() }}" required></label>
+<label>Signed approval reference<input name="approval_reference" type="text" minlength="4" maxlength="180" required placeholder="Finance review approval"></label>
+<label>Evidence review notes<textarea name="evidence_notes" rows="2" minlength="20" maxlength="3000" required placeholder="Verify original expense debit, source document, GRN and approved manufacturing raw-inventory ledger" style="min-height:65px"></textarea></label>
+<label style="grid-column:1/-1;display:flex;gap:8px;align-items:center"><input type="checkbox" name="confirm_source_expense" value="1" required style="width:auto"> I verified the source expense debit and original purchase currency.</label>
+<div><button type="submit" class="btn" onclick="return confirm('Post one balanced expense-to-inventory journal for this exact GRN component? No stock receipt will be created.')">Post approved capitalization</button></div>
+</form>
+</details>
+@else
+<p class="muted">No unused, same-currency, exact-amount posted expense debit found among recent eligible entries. Finance must record its independently evidenced expense journal first. Shared or partially allocated expense lines require a separate reviewed journal.</p>
+@endif
+@endcanany
+@endif
+</div>
+@endforeach
+</div>
 @endif
 @can('inventory.update')
 @if($recordedCosts->count() < 6)
@@ -209,7 +252,7 @@ $hasSubtotal=$subtotal->compareTo(\Brick\Math\BigDecimal::zero())>0;
 </form>
 @endif
 @endcan
-<p class="muted">Amounts are allocated using frozen GRN line purchase values. This does not update stock valuation or financial accounts.</p>
+<p class="muted">Amounts are allocated to original FIFO layers using frozen GRN purchase values. The allocation changes the source-layer valuation but does not itself post a GL journal. Finance must independently match and post the original expense debit into the approved inventory asset ledger before the allocated lot can be consumed. A second goods receipt is never created.</p>
 </div>
 @endif
 @endforeach
