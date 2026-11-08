@@ -122,6 +122,7 @@ class ManufacturingCostAccountingService
                         $this->reject('A consumed source receipt line is missing.');
                     }
                     if($layer->original_cost===null ||
+                        $receiptLine->line_subtotal_snapshot===null ||
                         BigDecimal::of((string)$layer->original_cost)->isNegative()){
                         $this->reject('Original FIFO receipt has no verified nonnegative source purchase valuation.');
                     }
