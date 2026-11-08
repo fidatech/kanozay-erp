@@ -41,6 +41,7 @@ class EmployeeAttendanceController extends Controller
         ]);
         DB::transaction(function () use ($data, $request) {
             $employee = EmployeeProfile::whereKey($data['employee_profile_id'])->where('is_active', true)->firstOrFail();
+            $this->assertPayrollOpen($employee->id,$data['attendance_date']);
             if (EmployeeAttendance::where('employee_profile_id', $employee->id)->whereDate('attendance_date', $data['attendance_date'])->exists()) {
                 throw ValidationException::withMessages(['attendance_date' => 'Attendance for this employee and day already exists. Use the correction form.']);
             }
@@ -59,6 +60,7 @@ class EmployeeAttendanceController extends Controller
         ]);
         DB::transaction(function () use ($entry, $data, $request) {
             $locked = EmployeeAttendance::whereKey($entry->id)->lockForUpdate()->firstOrFail();
+            $this->assertPayrollOpen($locked->employee_profile_id,$locked->attendance_date->toDateString());
             if ($locked->status === $data['status']) throw ValidationException::withMessages(['status' => 'Choose a different status for the correction.']);
             $before = $locked->status;
             $locked->update([
@@ -68,5 +70,18 @@ class EmployeeAttendanceController extends Controller
             ActivityLog::record('hr.attendance.corrected', 'employee_attendance', $locked->id, 'Attendance corrected', ['from' => $before, 'to' => $data['status'], 'reason' => $data['correction_reason']]);
         });
         return back()->with('success', 'Attendance corrected with an audit record.');
+    }
+    private function assertPayrollOpen(int $employeeId,string $date):void
+    {
+        $period=\Carbon\CarbonImmutable::parse($date)->startOfMonth()->toDateString();
+        if(DB::table('payroll_lines as line')
+            ->join('payroll_periods as pay','pay.id','=','line.payroll_period_id')
+            ->where('line.employee_profile_id',$employeeId)
+            ->where('pay.period_start',$period)
+            ->whereIn('pay.status',['approved','paid'])->exists()){
+            throw ValidationException::withMessages([
+                'attendance_date'=>'Payroll for this employee and month is already posted. Record a separate authorized payroll correction before changing historical attendance.',
+            ]);
+        }
     }
 }
