@@ -39,6 +39,7 @@ Route::middleware('auth')->post('/operations/{module}/{page}', [\App\Http\Contro
 Route::middleware('auth')->put('/operations/{module}/{page}/{record}', [\App\Http\Controllers\OperationalRegisterController::class,'update'])->name('operations.update');
 Route::middleware('auth')->post('/operations/{module}/{page}/{record}/transition', [\App\Http\Controllers\OperationalRegisterController::class,'transition'])->name('operations.transition');
 Route::middleware('auth')->get('/inventory/warehouse-stock', [\App\Http\Controllers\WarehouseStockController::class,'index'])->name('inventory.warehouse-stock.index');
+Route::middleware('auth')->get('/inventory/warehouse-valuation', [\App\Http\Controllers\WarehouseStockController::class,'valuation'])->name('inventory.warehouse-valuation.index');
 Route::middleware('auth')->post('/inventory/materials/{material}/catalog', [\App\Http\Controllers\InventoryMaterialController::class,'assignCatalog'])->name('inventory.materials.catalog');
 Route::middleware('auth')->post('/production/finished-goods/{good}/catalog', [\App\Http\Controllers\FinishedGoodController::class,'assignCatalog'])->name('production.finished-goods.catalog');
 Route::middleware('auth')->post('/inventory/warehouse-stock', [\App\Http\Controllers\WarehouseStockController::class,'store'])->name('inventory.warehouse-stock.store');
