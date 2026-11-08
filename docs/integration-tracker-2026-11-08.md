@@ -103,6 +103,16 @@ Every **new** customer return credit enters QC quarantine and saleable stock can
 
 **Status: advanced development, not full integration.** Migrations, automated testing, web UAT and deployment were deferred on user instruction; a committed feature is not represented as a production-verified function.
 
+## HR, payroll and fixed-asset development update
+
+Added optional verified hire/separation dates and protected employee offboarding, with employee payroll eligibility based on actual pay-period employment dates. Replaced the former one-click employee status toggle with evidence-backed employment-date correction. Payroll now requires an independently documented, current per-employee salary/attendance/leave/component review before the salary accrual journal can be posted, and preserves append-only review history. Changes to reviewed evidence invalidate the review. Backdated attendance corrections and approved leave affecting already-posted payroll are blocked pending a controlled adjustment process.
+
+Added finance-backed fixed-asset capitalization reconciliation linking each asset to a unique posted acquisition PPE debit without creating a second accounting entry. Depreciation posting now requires unreversed acquisition evidence and an eligible period. The asset register shows original-currency accumulated depreciation and book values, flags reversed or unmatched capitalizations, and connects disposal postings to the verified source acquisition where available.
+
+[HR, Payroll and Fixed Assets development detail](hr-payroll-fixed-assets-development-2026-11-08.md) describes the changes and remaining employee rehire, salary amendment, opening-ledger and pooled asset-capitalization work.
+
+**Status: advanced source development; integration incomplete.** No migrations, runtime tests, browser UAT or deployment were performed. Historical HR and PPE records may need documented reconciliation before payroll or depreciation operations can proceed.
+
 ## Acceptance and release gates
 
 1. Passing SQLite feature suite and isolated regression suite on the latest commit.
