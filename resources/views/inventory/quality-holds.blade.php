@@ -8,7 +8,7 @@
 @if($errors->any())<p class="notice notice-warning" role="alert">{{ $errors->first() }}</p>@endif
 <section class="qh-panel">
 <p class="qh-note">An incoming-material lot with required QC specifications is held until its collected sample passes all specifications frozen at collection time. An unreviewed or rejected sample also holds the lot. A quality manager can place an additional manual hold, which requires another authorized person to clear it with documented evidence. Supplier returns remain possible against source lots. Clearing a manual hold does not bypass missing or failed laboratory results.</p>
-<div class="qh-wrap"><table><thead><tr><th>Raw material</th><th>Receipt</th><th>Lot valuation status</th><th>Remaining quantity</th><th>QC sample</th><th>Manual restriction</th><th>Material release</th><th>Review action</th></tr></thead><tbody>
+<div class="qh-wrap"><table><thead><tr><th>Raw material</th><th>Receipt</th><th>Lot valuation status</th><th>Remaining quantity</th><th>QC sample</th><th>Manual restriction</th><th>Material release</th><th>Downstream batches</th><th>Review action</th></tr></thead><tbody>
 @forelse($rows as $r)
 <tr><td>{{ $r['layer']->material?->sku }}<br>{{ $r['layer']->material?->name }}</td><td>{{ $r['receipt']?:'Unlinked source' }}</td>
 <td>{{ $r['layer']->original_cost===null?'Unvalued':($r['layer']->currency_code??'Unknown') }}</td>
@@ -19,6 +19,11 @@
 <div style="max-width:220px">{{ $r['manual_hold']->reference }}</div>
 @else<span class="muted">No manual hold</span>@endif</td>
 <td>@if($r['held'])<strong style="color:#a23131">HELD — cannot issue</strong>@else <strong style="color:#168257">QC clear / no active restriction</strong>@endif</td>
+<td>
+@if($r['affected_batches']>0)
+<a href="{{ route('manufacturing.traceability.source-lot',$r['layer']) }}">{{ $r['affected_batches'] }} affected batch(es)</a>
+@else <span class="muted">No recorded usage</span>@endif
+</td>
 <td>
 @canany(['laboratory.update','administration.update'])
 @if(!$r['manual_hold'])
@@ -41,7 +46,7 @@
 @endcanany
 </td>
 </tr>
-@empty<tr><td colspan="8">No receipt lots recorded.</td></tr>@endforelse
+@empty<tr><td colspan="9">No receipt lots recorded.</td></tr>@endforelse
 </tbody></table></div>{{ $layers->links() }}
 </section>
 <section class="qh-panel" style="margin-top:15px">
