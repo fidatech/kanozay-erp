@@ -78,6 +78,15 @@ class JournalPostingService {
    if(DB::table('supplier_advance_applications')->where('journal_entry_id',$original->id)->exists()
    || DB::table('customer_advance_applications')->where('journal_entry_id',$original->id)->exists())
     throw ValidationException::withMessages(['status'=>'Applied customer or supplier advances require a dedicated document-level correction workflow.']);
+   if(DB::table('production_batch_cost_postings')
+      ->where('issue_journal_id',$original->id)
+      ->orWhere('capitalization_journal_id',$original->id)->exists() ||
+     DB::table('production_invoice_cogs_postings')->where('journal_entry_id',$original->id)->exists() ||
+     DB::table('production_return_cost_postings')->where('journal_entry_id',$original->id)->exists()){
+    throw ValidationException::withMessages([
+      'status'=>'Finished-goods inventory capitalization, original COGS and QC return recovery journals cannot be reversed without an approved source-document and stock/valuation correction workflow.',
+    ]);
+   }
    if(DB::table('shareholder_transactions')->where('journal_entry_id',$original->id)->exists())
     throw ValidationException::withMessages(['status'=>'Posted shareholder capital or drawing entries require a controlled shareholder document correction, not a standalone GL reversal.']);
    if(DB::table('shareholder_profit_distributions')->where('journal_entry_id',$original->id)->exists())
