@@ -233,15 +233,28 @@ class FinanceCloseReadinessService
                 'item.id','=','waste.production_order_material_id')
             ->leftJoin('production_waste_financial_reviews as treatment',
                 'treatment.production_material_waste_id','=','waste.id')
+            ->leftJoin('production_abnormal_waste_cost_reviews as value',
+                'value.production_material_waste_id','=','waste.id')
+            ->leftJoin('production_batches as batch',
+                'batch.production_order_id','=','item.production_order_id')
+            ->leftJoin('production_batch_cost_postings as posted',
+                'posted.production_batch_id','=','batch.id')
             ->whereDate('waste.created_at','>=',$begin)
             ->whereDate('waste.created_at','<=',$end)
             ->where(function($q){
                 $q->whereNull('treatment.id')
-                  ->orWhereIn('treatment.treatment',['abnormal_loss','rework_required']);
+                  ->orWhere('treatment.treatment','rework_required')
+                  ->orWhere(function($part){
+                      $part->where('treatment.treatment','abnormal_loss')
+                          ->where(function($missing){
+                              $missing->whereNull('value.id')
+                                  ->orWhereNull('posted.id');
+                          });
+                  });
             })->count();
         if($unreviewedOrAbnormalWaste){
             $blockers[]=$unreviewedOrAbnormalWaste.
-                ' recorded material waste line(s) this month are unreviewed, abnormal or awaiting rework. Do not certify finished inventory or expense treatment before source evidence is reconciled.';
+                ' recorded material waste line(s) this month lack independent classification, remain in rework, or have abnormal FIFO costs not yet expensed in an approved batch posting.';
         }
 
         $bankAccounts=DB::table('financial_accounts')
