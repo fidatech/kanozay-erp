@@ -54,19 +54,45 @@ class EmployeeProfileController extends Controller
         return redirect()->route('workspace.page', ['hr', 'employees'])->with('success', 'Employee profile added. Payroll rules have not been applied.');
     }
 
+    /**
+     * Employment dates are evidence, not a shortcut to offboarding.
+     * Deactivation belongs to the approved employee exit workflow,
+     * which reconciles advances and returned equipment first.
+     */
     public function update(Request $request, EmployeeProfile $employee)
     {
         abort_unless($request->user()->can('hr.update'), 403);
-        $data = $request->validate(['is_active' => ['required', 'boolean']]);
-        DB::transaction(function () use ($employee, $data) {
-            $employee->forceFill(['is_active' => (bool) $data['is_active']])->save();
-            ActivityLog::record('hr.employee.updated', 'employee_profile', $employee->id, 'Updated employee profile', [
-                'employee_number' => $employee->employee_number,
-                'is_active' => $employee->is_active,
-            ]);
+        $data = $request->validate([
+            'hired_on'=>['required','date','before_or_equal:today'],
+            'evidence_reference'=>['required','string','min:3','max:180'],
+            'reason'=>['required','string','min:10','max:1000'],
+        ]);
+        DB::transaction(function () use ($employee,$data) {
+            $locked=EmployeeProfile::whereKey($employee->id)->lockForUpdate()->firstOrFail();
+            if($locked->separated_on && $data['hired_on']>$locked->separated_on->toDateString()) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'hired_on'=>'Hire date cannot follow an approved employee separation.',
+                ]);
+            }
+            if($locked->hired_on?->toDateString()!==$data['hired_on'] &&
+               DB::table('payroll_lines as line')
+                ->join('payroll_periods as period','period.id','=','line.payroll_period_id')
+                ->where('line.employee_profile_id',$locked->id)
+                ->where('period.status','!=','draft')->exists()) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'hired_on'=>'Existing posted payroll references this employee. Employment-date corrections require a controlled payroll reconciliation.',
+                ]);
+            }
+            $previous=$locked->hired_on?->toDateString();
+            $locked->update(['hired_on'=>$data['hired_on']]);
+            ActivityLog::record('hr.employee.employment_date_verified','employee_profile',$locked->id,
+                'Verified employment commencement date with evidence.',[
+                    'previous'=>$previous,'hired_on'=>$data['hired_on'],
+                    'evidence_reference'=>$data['evidence_reference'],
+                    'reason'=>$data['reason'],
+                ]);
         });
-
-        return redirect()->route('workspace.page', ['hr', 'employees'])->with('success', 'Employee profile updated.');
+        return back()->with('success','Employment date verified without altering activation status or prior payroll.');
     }
 
     public function importPreview(Request $request, PayrollWorkbookImportService $importer)
@@ -134,6 +160,7 @@ class EmployeeProfileController extends Controller
             'national_id' => ['nullable', 'string', 'max:100'],
             'taxpayer_id' => ['nullable', 'string', 'max:100'],
             'monthly_salary' => ['required', 'numeric', 'min:0', 'max:999999999999.9999', 'decimal:0,4'],
+            'hired_on'=>['nullable','date','before_or_equal:today'],
             'salary_currency_id' => ['required', Rule::exists('currencies', 'id')->where('is_active', true)],
         ];
     }
