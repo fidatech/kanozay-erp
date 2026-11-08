@@ -113,14 +113,47 @@
 @if(auth()->user()->canAny(['finance.update','administration.update']))
 <form method="POST" class="sh-form" action="{{ route('shareholders.governance.distribute') }}">@csrf
 <input type="hidden" name="submission_token" value="{{ (string)\Illuminate\Support\Str::uuid() }}">
-<label>Approved distribution resolution<select name="shareholder_resolution_id" required><option value="">Select resolution</option>
-@foreach($resolutions as $r)@if($r->status==='approved' && $r->purpose==='distribution')<option value="{{ $r->id }}">{{ $r->number }} · {{ $r->distribution_cap }}</option>@endif @endforeach</select></label>
-<label>Payee shareholder<select name="shareholder_id" required><option value="">Choose shareholder</option>@foreach($shareholders as $s)<option value="{{ $s->id }}">{{ $s->name }}</option>@endforeach</select></label>
-<label>Payout account<select name="financial_account_id" required><option value="">Choose account</option>@foreach($accounts as $a)<option value="{{ $a->id }}">{{ $a->name }}</option>@endforeach</select></label>
+<label>Approved distribution resolution<select name="shareholder_resolution_id" id="sh-distribution-resolution" required><option value="">Select resolution</option>
+@foreach($resolutions as $r)@if($r->status==='approved' && $r->purpose==='distribution')<option value="{{ $r->id }}" data-currency="{{ $r->currency_id }}">{{ $r->number }} · {{ $r->distribution_cap }}</option>@endif @endforeach</select></label>
+<label>Payee shareholder<select name="shareholder_id" id="sh-distribution-payee" required><option value="">Choose authorized shareholder</option>@foreach($shareholders as $s)<option value="{{ $s->id }}">{{ $s->name }}</option>@endforeach</select></label>
+<label>Payout account<select name="financial_account_id" id="sh-distribution-account" required><option value="">Choose matching currency</option>@foreach($accounts as $a)<option value="{{ $a->id }}" data-currency="{{ $a->currency_id }}">{{ $a->name }}</option>@endforeach</select></label>
 <label>Paid on<input type="date" name="paid_on" max="{{ now()->toDateString() }}" value="{{ now()->toDateString() }}" required></label>
 <label>Approved amount<input name="amount" inputmode="decimal" required></label>
-<button class="btn" type="submit" onclick="return confirm('Post approved distribution against retained earnings and cash ledger?')">Pay approved distribution</button>
-</form>@endif
+<button class="btn" type="submit" onclick="return confirm('Post approved distribution against retained earnings, cash and the exact recipient entitlement?')">Pay approved distribution</button>
+</form>
+<script>
+document.addEventListener('DOMContentLoaded',()=>{
+ const resolution=document.getElementById('sh-distribution-resolution');
+ const recipient=document.getElementById('sh-distribution-payee');
+ const account=document.getElementById('sh-distribution-account');
+ if(!resolution||!recipient||!account)return;
+ const approved=@json($allocations->where('resolution_status','approved')->map(fn($a)=>['resolution'=>(int)$a->shareholder_resolution_id,'shareholder'=>(int)$a->shareholder_id])->values());
+ const sync=()=>{
+   const selected=Number(resolution.value);
+   const currency=resolution.selectedOptions[0]?.dataset?.currency||'';
+   const eligible=new Set(approved.filter(a=>a.resolution===selected).map(a=>a.shareholder));
+   for(const option of recipient.options){
+      if(!option.value)continue;
+      const show=eligible.has(Number(option.value));
+      option.disabled=!show;option.hidden=!show;
+   }
+   if(recipient.value&&!eligible.has(Number(recipient.value)))recipient.value='';
+   for(const option of account.options){
+      if(!option.value)continue;
+      const show=option.dataset.currency===currency;
+      option.disabled=!show;option.hidden=!show;
+   }
+   if(account.value&&account.selectedOptions[0]?.disabled)account.value='';
+   if(window.jQuery?.fn?.select2){
+      window.jQuery(recipient).trigger('change.select2');
+      window.jQuery(account).trigger('change.select2');
+   }
+ };
+ resolution.addEventListener('change',sync);
+ sync();
+});
+</script>
+@endif
 @endcanany</section>
 <section class="sh-panel"><h2>Approved payee entitlements</h2>
 <div class="sh-wrap"><table><thead><tr><th>Resolution</th><th>Shareholder</th><th>Authorized amount</th><th>Currency</th><th>Approval evidence</th></tr></thead><tbody>
