@@ -17,8 +17,10 @@ class ProductionCostService
     {
         if ($batch->costs()->exists()) return $batch->costs()->orderBy('currency_code')->get();
 
-        $lineIds = $batch->order->materials()->pluck('id');
+        $materialLines = $batch->order->materials()->get(['id','is_packaging']);
+        $lineIds = $materialLines->pluck('id');
         if ($lineIds->isEmpty()) return collect();
+        $isPackaging=$materialLines->pluck('is_packaging','id');
 
         $movements = InventoryStockMovement::where('reference_type', 'production_order_material')
             ->whereIn('reference_id', $lineIds)->orderBy('id')->get();
@@ -39,10 +41,14 @@ class ProductionCostService
                     'currency_id' => $consumption->currency_id,
                     'currency_code' => $consumption->currency_code,
                     'material_cost' => BigDecimal::zero(),
+                    'ingredient_cost' => BigDecimal::zero(),
+                    'packaging_cost' => BigDecimal::zero(),
                     'consumed_quantity' => BigDecimal::zero(),
                     'unvalued_quantity' => BigDecimal::zero(),
                 ];
                 $totals[$key]['material_cost'] = $totals[$key]['material_cost']->plus((string) $consumption->amount);
+                $category = $isPackaging->get($movement->reference_id) ? 'packaging_cost' : 'ingredient_cost';
+                $totals[$key][$category] = $totals[$key][$category]->plus((string)$consumption->amount);
                 $totals[$key]['consumed_quantity'] = $totals[$key]['consumed_quantity']->plus((string) $consumption->quantity);
             }
         }
@@ -54,6 +60,8 @@ class ProductionCostService
                 'currency_id' => $cost['currency_id'],
                 'currency_code' => $cost['currency_code'],
                 'material_cost' => (string) $cost['material_cost']->toScale(10, RoundingMode::HalfUp),
+                'ingredient_cost' => (string) $cost['ingredient_cost']->toScale(10,RoundingMode::HalfUp),
+                'packaging_cost' => (string) $cost['packaging_cost']->toScale(10,RoundingMode::HalfUp),
                 'consumed_quantity' => (string) $cost['consumed_quantity']->toScale(6, RoundingMode::HalfUp),
                 'unvalued_quantity' => (string) $cost['unvalued_quantity']->toScale(6, RoundingMode::HalfUp),
             ]);
