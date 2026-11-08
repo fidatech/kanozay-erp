@@ -50,9 +50,16 @@ class SalesDeliveryNoteController extends Controller
             ->select('dl.sales_invoice_line_id')->selectRaw('SUM(dl.quantity_packages) as total')
             ->groupBy('dl.sales_invoice_line_id')->pluck('total','sales_invoice_line_id');
 
+        $credited=DB::table('sales_credit_note_lines')
+            ->whereIn('sales_invoice_line_id',$invoice->lines->pluck('id'))
+            ->select('sales_invoice_line_id')
+            ->selectRaw('SUM(quantity_packages) as total')
+            ->groupBy('sales_invoice_line_id')->pluck('total','sales_invoice_line_id');
         $remaining=[];
         foreach($invoice->lines as $line){
-            $remaining[$line->id]=max(0,(int)$line->quantity_packages-(int)($allocated[$line->id]??0));
+            $remaining[$line->id]=max(0,(int)$line->quantity_packages
+                -(int)($allocated[$line->id]??0)
+                -(int)($credited[$line->id]??0));
         }
 
         return $remaining;
@@ -82,12 +89,23 @@ class SalesDeliveryNoteController extends Controller
             }
             $invoice=SalesInvoice::where('status','posted')->whereKey($data['sales_invoice_id'])
                 ->lockForUpdate()->firstOrFail();
+            if($data['delivery_date']<$invoice->invoice_date->toDateString()){
+                throw ValidationException::withMessages([
+                    'delivery_date'=>'Delivery documentation cannot be dated before its posted sales invoice.',
+                ]);
+            }
             $lines=$invoice->lines()->lockForUpdate()->get()->keyBy('id');
             $allocated=DB::table('sales_delivery_note_lines as l')
                 ->join('sales_delivery_notes as d','d.id','=','l.sales_delivery_note_id')
                 ->where('d.sales_invoice_id',$invoice->id)->where('d.status','!=','cancelled')
                 ->select('l.sales_invoice_line_id')->selectRaw('SUM(l.quantity_packages) as total')
                 ->groupBy('l.sales_invoice_line_id')->pluck('total','sales_invoice_line_id');
+
+            $credited=DB::table('sales_credit_note_lines')
+                ->whereIn('sales_invoice_line_id',$lines->keys())
+                ->select('sales_invoice_line_id')
+                ->selectRaw('SUM(quantity_packages) as total')
+                ->groupBy('sales_invoice_line_id')->pluck('total','sales_invoice_line_id');
 
             $requested=[];
             foreach($data['quantities'] as $lineId=>$qty) {
@@ -96,9 +114,11 @@ class SalesDeliveryNoteController extends Controller
                     throw ValidationException::withMessages(['quantities'=>'Delivery includes an invoice line outside the selected invoice.']);
                 }
                 $line=$lines[(int)$lineId];
-                $remaining=(int)$line->quantity_packages-(int)($allocated[$line->id]??0);
+                $remaining=(int)$line->quantity_packages
+                    -(int)($allocated[$line->id]??0)
+                    -(int)($credited[$line->id]??0);
                 if($qty>$remaining){
-                    throw ValidationException::withMessages(['quantities'=>'Delivery quantity exceeds undelivered invoice quantity for the selected line.']);
+                    throw ValidationException::withMessages(['quantities'=>'Delivery quantity exceeds packages remaining after prior delivery notes and credited customer returns.']);
                 }
                 $requested[(int)$lineId]=(int)$qty;
             }
