@@ -186,6 +186,11 @@ class ModulePageController extends Controller
             return app(PurchaseOrderController::class)->index($request);
         }
 
+        if($module==='reports' && $page==='manufacturing-financial'){
+            return app(ManufacturingFinancialReconciliationController::class)->index(
+                $request,app(\App\Services\ManufacturingFinancialReconciliationService::class)
+            );
+        }
         if($module==='reports' && $page==='dispatch-costs'){
             return app(DispatchCostReconciliationController::class)->index(
                 $request,app(\App\Services\DispatchCostReconciliationService::class)
