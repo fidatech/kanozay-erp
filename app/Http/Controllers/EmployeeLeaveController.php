@@ -56,6 +56,23 @@ class EmployeeLeaveController extends Controller
         ]);
         DB::transaction(function () use ($leave, $data, $request) {
             $locked = EmployeeLeaveRequest::whereKey($leave->id)->lockForUpdate()->firstOrFail();
+            if($data['decision']==='approved'){
+                $periods=DB::table('payroll_lines as line')
+                    ->join('payroll_periods as period','period.id','=','line.payroll_period_id')
+                    ->where('line.employee_profile_id',$locked->employee_profile_id)
+                    ->whereIn('period.status',['approved','paid'])
+                    ->pluck('period.period_start');
+                foreach($periods as $periodStart){
+                    $monthEnd=\Carbon\CarbonImmutable::parse($periodStart)->endOfMonth()->toDateString();
+                    $monthStart=\Carbon\CarbonImmutable::parse($periodStart)->startOfMonth()->toDateString();
+                    if($monthStart<=$locked->ends_on->toDateString() &&
+                       $monthEnd>=$locked->starts_on->toDateString()){
+                        throw ValidationException::withMessages([
+                            'decision'=>'This leave overlaps an approved payroll period. Complete a separate finance-reviewed payroll correction before retroactive approval.',
+                        ]);
+                    }
+                }
+            }
             if ($locked->status !== 'pending') throw ValidationException::withMessages(['decision' => 'This leave request has already been decided.']);
             $locked->update([
                 'status' => $data['decision'], 'decision_note' => $data['decision_note'] ?? null,
