@@ -24,6 +24,8 @@ class WarehouseStockService
     /**
      * Allocate legacy/unassigned company-wide stock to a physical warehouse.
      * This does NOT change global on-hand or create a cost-layer entry.
+     * Existing FIFO layer positions must be source-verified first; historical
+     * unpositioned stock will not be silently attributed to an arbitrary lot.
      */
     public function allocate(InventoryMaterial $material, CompanyWarehouse $destination, array $data, User $actor):object
     {
@@ -107,6 +109,12 @@ class WarehouseStockService
                 'created_at'=>now(),'updated_at'=>now(),
             ]);
 
+            // Move the exact FIFO lots from the source pool to the
+            // destination in the same transaction as aggregate balances.
+            // A missing/held legacy position rejects the entire operation.
+            app(InventoryLotLocationService::class)->move(
+                $m, $source?->id, $destination->id, $qty, $id, $data['occurred_on']
+            );
             ActivityLog::record($source?'warehouse.transfer':'warehouse.stock.allocated','inventory_material',$m->id,
                 ($source?'Stock transferred':'Unassigned stock allocated').' for '.$m->sku,
                 ['movement_id'=>$id,'quantity'=>(string)$qty,'source_id'=>$source?->id,'destination_id'=>$destination->id]);
