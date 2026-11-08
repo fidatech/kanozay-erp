@@ -229,6 +229,8 @@ class ManufacturingCostAccountingService
             if($batch->status!=='released' || (int)$batch->accepted_packages<1){
                 $this->reject('Only a QC-released batch with accepted physical packages can be capitalized.');
             }
+            app(ProductionWasteFinancialReviewService::class)
+                ->assertReleasedCostTreatment($batch->production_order_id);
             // A QC hold may be created after physical batch release. Financial
             // capitalization must not silently treat held finished products
             // as an unrestricted, saleable factory asset.
