@@ -235,6 +235,14 @@ class FinanceCloseReadinessService
             $blockers[]=$pendingLandedReturns.
                 ' supplier return request(s) containing landed costs have neither independent GL approval nor physical return posting.';
         }
+        $uncreditedPhysicalSupplierReturns=DB::table('purchase_return_records')
+            ->whereBetween('returned_on',[$begin,$end])
+            ->where('status','posted_pending_credit')
+            ->where('financial_status','supplier_credit_pending')->count();
+        if($uncreditedPhysicalSupplierReturns){
+            $blockers[]=$uncreditedPhysicalSupplierReturns.
+                ' supplier physical return(s) posted this month still lack a source-priced supplier payable inventory credit. Post a fully reconciled debit note or an independently reviewed correction.';
+        }
         $invalidLandedReturns=DB::table('purchase_return_landed_cost_adjustments as adjustment')
             ->join('purchase_return_records as source',
                 'source.id','=','adjustment.purchase_return_record_id')
