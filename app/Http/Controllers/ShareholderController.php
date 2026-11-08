@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
 use App\Support\LocalizedDecimal;
+use App\Services\ShareholderStatementService;
 
 class ShareholderController extends Controller
 {
@@ -68,15 +69,29 @@ class ShareholderController extends Controller
             ->when($filters['to'] ?? null, fn ($q, $date) => $q->whereDate('transaction_date', '<=', $date))
             ->orderBy('transaction_date')->orderBy('id');
 
+        $shareholder->load('currencies');
+        $statementService=app(ShareholderStatementService::class);
+        $allActivity=$statementService->rows($shareholder,$filters);
+        $totals=$statementService->summary($shareholder,$allActivity);
         if (($filters['export'] ?? null) === 'csv') {
-            $rows = $query->get();
-            return response()->streamDownload(function () use ($rows) {
-                $out = fopen('php://output', 'w');
-                fputcsv($out, ['Date', 'Number', 'Type', 'Currency', 'Amount', 'Financial account', 'Reference', 'Journal']);
-                foreach ($rows as $row) fputcsv($out, [$row->transaction_date->toDateString(), $row->number, $row->type, $row->currency?->code, (string) $row->amount, $row->financialAccount?->name, $row->reference, $row->journal?->number]);
+            return response()->streamDownload(function()use($allActivity){
+                $out=fopen('php://output','w');
+                fputcsv($out,['Date','Document','Category','Currency','Amount','Financial account','Approval/reference','Posted GL journal']);
+                foreach($allActivity as $row){
+                    $cells=[
+                        $row['occurred_on'],$row['number'],$row['type'],
+                        $row['currency_code'],$row['amount'],$row['financial_account'],
+                        $row['reference'],$row['journal_number'],
+                    ];
+                    // Prevent formula execution if the CSV is opened in Excel.
+                    fputcsv($out,array_map(fn($cell)=>
+                        preg_match('/^\\s*[=+@\\-]/u',(string)$cell)?"'".$cell:(string)$cell,$cells));
+                }
                 fclose($out);
-            }, 'shareholder-'.$shareholder->id.'-statement.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
+            },'shareholder-'.$shareholder->id.'-statement.csv',
+              ['Content-Type'=>'text/csv; charset=UTF-8']);
         }
+        $recentActivity=array_reverse(array_slice($allActivity,-75));
 
         $transactions = $query->paginate(30)->withQueryString();
         $accounts = FinancialAccount::where('is_active', true)
@@ -84,7 +99,10 @@ class ShareholderController extends Controller
             ->with('currency')->orderBy('name')->get();
 
         return view('shareholders.show', [
-            'shareholder' => $shareholder->load('currencies'),
+            'shareholder' => $shareholder,
+            'statementTotals'=>$totals,
+            'recentActivity'=>$recentActivity,
+            'activityCount'=>count($allActivity),
             'transactions' => $transactions,
             'accounts' => $accounts,
             'idempotencyKey' => (string) Str::uuid(),
