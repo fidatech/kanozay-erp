@@ -137,6 +137,21 @@ class PurchaseReturnLandedCostAdjustmentService
             if(!$total->isPositive() || $total->isGreaterThan('9999999999999999.9999')){
                 $this->reject('Supplier return contains no positive, verifiable original-currency landed-cost value.');
             }
+            $asset=BigDecimal::zero();
+            foreach(DB::table('journal_lines as line')
+                ->join('journal_entries as entry',
+                    'entry.id','=','line.journal_entry_id')
+                ->where('entry.status','posted')
+                ->where('entry.currency_id',$return->currency_id)
+                ->whereDate('entry.entry_date','<=',$date)
+                ->where('line.ledger_account_id',$inventoryId)
+                ->get(['line.debit','line.credit']) as $gl){
+                $asset=$asset->plus((string)$gl->debit)
+                    ->minus((string)$gl->credit);
+            }
+            if($asset->isLessThan($total)){
+                $this->reject('Posted original-currency raw inventory GL asset balance is insufficient to support this returned landed-cost credit. Reconcile supplier receipt, WIP and previous issues first.');
+            }
             DocumentSequence::firstOrCreate(['document_type'=>'supplier_return_landed_cost'],[
                 'prefix'=>'SRL-','next_number'=>1,'padding'=>7,'is_active'=>true,
             ]);
