@@ -50,6 +50,18 @@ class HistoricalFinanceCorrectionController extends Controller
                 'sale.dispatch_id','=','dispatch.id')
             ->whereNull('sale.id')->distinct()
             ->orderByDesc('dispatch.id')->limit(20)->pluck('dispatch.id');
+        $unvaluedFifo=DB::table('inventory_cost_layers')
+            ->whereNull('original_cost')->where('remaining_quantity','>',0)
+            ->orderByDesc('id')->limit(20)->pluck('id');
+        $unreconciledLanded=DB::table('goods_receipt_landed_costs as cost')
+            ->leftJoin('goods_receipt_landed_cost_postings as posted',
+                'posted.goods_receipt_landed_cost_id','=','cost.id')
+            ->whereNull('posted.id')->orderByDesc('cost.id')
+            ->limit(20)->pluck('cost.id');
+        $pendingSupplierCredits=DB::table('purchase_return_records')
+            ->whereIn('financial_status',
+                ['supplier_credit_pending','landed_cost_review_pending'])
+            ->orderByDesc('id')->limit(20)->pluck('id');
 
         return view('finance.historical-corrections',[
             'cases'=>$cases,'filters'=>$filters,
@@ -58,6 +70,9 @@ class HistoricalFinanceCorrectionController extends Controller
                 'invoice_missing_cogs'=>$openCogs,
                 'batch_uncapitalized'=>$openBatches,
                 'standalone_dispatch'=>$orphanDispatches,
+                'opening_fifo_unvalued'=>$unvaluedFifo,
+                'landed_cost_unreconciled'=>$unreconciledLanded,
+                'supplier_return_unreconciled'=>$pendingSupplierCredits,
             ],
         ]);
     }
