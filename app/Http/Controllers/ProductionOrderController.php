@@ -2,6 +2,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ProductionOrder;
+use App\Models\ActivityLog;
 use App\Support\LocalizedDecimal;
 use App\Services\ProductionMaterialService;
 use App\Services\ProductionWasteService;
@@ -26,6 +27,7 @@ class ProductionOrderController extends Controller {
     public function store(Request $request) {
         abort_unless($request->user()->canAny(['administration.update', 'manufacturing.create']), 403);
         $data = $request->validate([
+            'submission_token'=>['nullable','uuid'],
             'production_recipe_id' => ['required', Rule::exists('production_recipes', 'id')->where('status', 'approved')],
             'package_count' => ['required', 'integer', 'min:1', 'max:100000'],
             'notes' => ['nullable', 'string', 'max:2000'],
@@ -33,9 +35,16 @@ class ProductionOrderController extends Controller {
         $order = DB::transaction(function () use ($request, $data) {
             $recipe = ProductionRecipe::whereKey($data['production_recipe_id'])->lockForUpdate()->firstOrFail();
             abort_unless($recipe->status === 'approved', 422, 'Recipe must be approved.');
+            if(!empty($data['submission_token']) &&
+                ProductionOrder::where('submission_token',$data['submission_token'])->exists()){
+                throw ValidationException::withMessages([
+                    'submission_token'=>'This production plan has already been submitted. Refresh before creating another.',
+                ]);
+            }
             $lines = $recipe->lines()->get();
             abort_if($lines->isEmpty(), 422, 'Approved recipe has no material lines.');
             $order = ProductionOrder::create([
+                'submission_token'=>$data['submission_token']??null,
                 'number' => 'PO-PENDING-'.bin2hex(random_bytes(8)),
                 'production_recipe_id' => $recipe->id,
                 'package_count' => $data['package_count'],
@@ -66,6 +75,9 @@ class ProductionOrderController extends Controller {
             $order->update(['number' => 'PRD-'.str_pad((string) $order->id, 6, '0', STR_PAD_LEFT)]);
             // Freeze independently approved routing at the moment the plan is created.
             app(\App\Services\ProductionWorkStepService::class)->initializeOrder($order);
+            ActivityLog::record('production.order.created','production_order',$order->id,
+                'Approved recipe snapshotted into a new production plan.',
+                ['recipe_id'=>$recipe->id,'package_count'=>$order->package_count,'material_lines'=>$lines->count()]);
             return $order;
         });
         return redirect()->route('production.orders.show', $order)->with('success', 'Production plan created. No stock has been reserved or consumed.');
