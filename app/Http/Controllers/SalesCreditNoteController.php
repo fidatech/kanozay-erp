@@ -43,12 +43,16 @@ class SalesCreditNoteController extends Controller
         $data['lines'] = array_values(array_filter($data['lines'], fn ($line) => (int) $line['quantity_packages'] > 0));
         if (! $data['lines']) throw ValidationException::withMessages(['lines' => 'Enter at least one returned package quantity.']);
         foreach ($data['lines'] as $line) {
-            if (! empty($line['restock'])) abort_unless($request->user()->can('inventory.update'), 403);
+            if (filter_var($line['restock']??false,FILTER_VALIDATE_BOOLEAN)) {
+                throw ValidationException::withMessages([
+                    'lines'=>'Returned products must pass independent QC quarantine review before restocking.',
+                ]);
+            }
         }
         if(!empty($data['refund_source_account_id']) &&
             !$request->user()->canAny(['finance.update','administration.update']))abort(403);
         $note = $service->post($invoice->id, $data, (int) $request->user()->id);
-        return redirect()->route('sales.credit-notes.show', $note)->with('success', 'Credit note posted. Customer receivable and approved return quantities were updated.');
+        return redirect()->route('sales.credit-notes.show', $note)->with('success', 'Credit note posted. Returned packages are quarantined until an independent QC disposition; saleable inventory was not increased.');
     }
 
     public function show(Request $request, SalesCreditNote $creditNote)
