@@ -23,7 +23,7 @@
 </div>
 </div>
 <div class="hfc-note"><strong>Source-linked historical accounting requires independent evidence and financial approval.</strong>
-Supported corrections include original invoice COGS, approved manufacturing/warehouse issue costs, independently reviewed FIFO and supplier credit exceptions, and already QC-released physical customer returns with genuine credit notes but missing factory COGS asset recovery. Historical return recovery never creates another credit note, refund, QC decision or physical restock. Unknown original costs and closed accounting periods remain blocked. All monetary postings retain the original source currency.</div>
+Supported corrections include original invoice COGS, source-backed manufacturing/warehouse costs, independently reviewed FIFO and supplier credit exceptions, QC-released customer asset recovery, and documented historical quarantine or independently signed scrapped-return loss reclassification against genuine existing sale COGS. Historical return recovery never creates another credit note, refund, QC decision or physical restock. Unknown original costs and closed accounting periods remain blocked. All monetary postings retain the original source currency.</div>
 <section class="hfc-sheet">
 <h2>Recorded historical correction cases</h2>
 <form method="GET" action="{{ route('finance.historical-corrections.index') }}" class="hfc-grid" style="margin-bottom:13px">
