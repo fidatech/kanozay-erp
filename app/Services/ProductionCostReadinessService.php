@@ -27,8 +27,15 @@ class ProductionCostReadinessService {
       'item.id','=','waste.production_order_material_id')
    ->leftJoin('production_waste_financial_reviews as review',
       'review.production_material_waste_id','=','waste.id')
+   ->leftJoin('production_abnormal_waste_cost_reviews as approved_cost',
+      'approved_cost.production_material_waste_id','=','waste.id')
+   ->leftJoin('currencies as source_currency',
+      'source_currency.id','=','approved_cost.currency_id')
    ->whereIn('item.production_order_id',$batches->pluck('production_order_id'))
-   ->select('item.production_order_id','review.treatment')->get()
+   ->select('item.production_order_id','review.treatment',
+      'approved_cost.id as approved_cost_id',
+      'approved_cost.source_cost_amount',
+      'source_currency.code as source_currency_code')->get()
    ->groupBy('production_order_id');
   $result=collect();
   foreach($batches as $batch){
@@ -38,18 +45,29 @@ class ProductionCostReadinessService {
    $pending=$overheadRows->where('status','submitted')->count();
    $wasteRows=$wastes->get($batch->production_order_id,collect());
    $unreviewedWaste=$wasteRows->filter(fn($item)=>$item->treatment===null)->count();
-   $unresolvedWaste=$wasteRows->whereIn('treatment',['abnormal_loss','rework_required'])->count();
+   $unresolvedWaste=$wasteRows->filter(fn($row)=>
+     $row->treatment==='rework_required' ||
+     ($row->treatment==='abnormal_loss' && !$row->approved_cost_id))->count();
    $hasUnvalued=$costs->isEmpty() || $costs->contains(function($c){
      return $c->material_cost===null ||
        BigDecimal::of((string)$c->unvalued_quantity)->isGreaterThan(0);
    });
    $currencyCodes=$costs->pluck('currency_code')->filter()
     ->merge($overheadRows->where('status','approved')->pluck('currency_code'))
+    ->merge($wasteRows->pluck('source_currency_code')->filter())
     ->unique()->values();
    if($currencyCodes->isEmpty())$currencyCodes=collect([null]);
    $mixedCurrency=$currencyCodes->count()>1;
    foreach($currencyCodes as $code){
     $material=BigDecimal::zero();$overheadTotal=BigDecimal::zero();
+    $abnormalTotal=BigDecimal::zero();
+    foreach($wasteRows as $waste){
+     if($waste->treatment==='abnormal_loss' &&
+       $waste->approved_cost_id &&
+       $waste->source_currency_code===$code){
+      $abnormalTotal=$abnormalTotal->plus((string)$waste->source_cost_amount);
+     }
+    }
     $hasMaterialCurrency=false;
     foreach($costs->where('currency_code',$code) as $cost){
      if($cost->material_cost!==null){
@@ -61,16 +79,17 @@ class ProductionCostReadinessService {
      if($allocation->status==='approved'&&$allocation->currency_code===$code)
       $overheadTotal=$overheadTotal->plus((string)$allocation->amount);
     }
+    $eligibleValue=$material->plus($overheadTotal)->minus($abnormalTotal);
     $complete=$batch->status==='released' &&
       $batch->accepted_packages>0 && $hasMaterialCurrency &&
       !$hasUnvalued && !$mixedCurrency && $pending===0 &&
-      $unreviewedWaste===0 && $unresolvedWaste===0;
+      $unreviewedWaste===0 && $unresolvedWaste===0 && $eligibleValue->isPositive();
     $costPerPackage=$complete?
-      (string)$material->plus($overheadTotal)
+      (string)$eligibleValue
        ->dividedBy((string)$batch->accepted_packages,8,RoundingMode::HalfUp):null;
     $warning=match(true){
       $unreviewedWaste>0=>'Recorded material waste requires independent finance classification',
-      $unresolvedWaste>0=>'Abnormal production waste or unresolved rework requires a separate approved cost disposition',
+      $unresolvedWaste>0=>'Abnormal production waste without exact FIFO approval, or unresolved rework',
       $sourcePosting!==null=>'Posted to original-currency WIP and finished goods GL; review source evidence',
       $hasUnvalued=>'Missing or unvalued material source costs',
       $mixedCurrency=>'Multiple source currencies; no combined cost',
@@ -87,6 +106,7 @@ class ProductionCostReadinessService {
      'currency'=>$code??'Unvalued',
      'material_cost'=>$hasMaterialCurrency?(string)$material->toScale(4,RoundingMode::HalfUp):null,
      'approved_overhead'=>(string)$overheadTotal->toScale(4,RoundingMode::HalfUp),
+     'abnormal_waste_source_cost'=>(string)$abnormalTotal->toScale(4,RoundingMode::HalfUp),
      'pending_overheads'=>$pending,
      'unreviewed_waste'=>$unreviewedWaste,
      'unresolved_waste'=>$unresolvedWaste,
