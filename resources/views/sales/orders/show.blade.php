@@ -1,6 +1,6 @@
 @extends('layouts.kanozay')
 @section('content')
-<div class="heading"><div><h1>{{ $order->number }}</h1><p>Confirmed sales order · {{ ucfirst($order->status) }}</p></div><a class="btn btn-light" href="{{ route('sales.orders.index') }}">Back to orders</a></div>
+<div class="heading"><div><h1>{{ $order->number }}</h1><p>Accepted customer order · {{ ucfirst($order->status) }}</p></div><a class="btn btn-light" href="{{ route('sales.orders.index') }}">Back to orders</a></div>
 @if(session('success'))<div class="card" role="status" style="padding:14px;margin-bottom:12px">{{ session('success') }}</div>@endif
 @if($errors->any())<div class="card" role="alert" style="padding:14px;color:#b42318;margin-bottom:12px">{{ $errors->first() }}</div>@endif
 <div class="card" style="padding:22px"><div class="form-grid"><div><strong>Customer</strong><div>{{ $order->customer->name }}</div></div><div><strong>Quotation</strong><div><a href="{{ route('sales.quotations.show', $order->quotation) }}">{{ $order->quotation->number }}</a></div></div><div><strong>Order date</strong><div>{{ $order->order_date->format('Y-m-d') }}</div></div><div><strong>Total</strong><div>{{ $order->currency_code }} {{ rtrim(rtrim((string)$order->total,'0'),'.') }}</div></div></div>
