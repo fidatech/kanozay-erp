@@ -50,7 +50,20 @@ class ShareholderGovernanceController extends Controller {
       :BigDecimal::of((string)$row->new_percentage);
   }
   foreach($classTotals as $class=>$total)$classTotals[$class]=(string)$total->toScale(4);
+  $allocations=DB::table('shareholder_distribution_allocations as a')
+    ->join('shareholders as s','s.id','=','a.shareholder_id')
+    ->join('shareholder_resolutions as r','r.id','=','a.shareholder_resolution_id')
+    ->leftJoin('currencies as c','c.id','=','r.currency_id')
+    ->select('a.*','s.name as shareholder_name','r.number as resolution_number',
+      'r.status as resolution_status','c.code as currency_code')
+    ->orderByDesc('a.id')->limit(300)->get();
+  $approvedAllocationOptions=$allocations->where('resolution_status','approved')
+    ->map(fn($row)=>[
+      'resolution'=>(int)$row->shareholder_resolution_id,
+      'shareholder'=>(int)$row->shareholder_id,
+    ])->values()->all();
   return view('shareholders.governance',[
+   'approvedAllocationOptions'=>$approvedAllocationOptions,
    'ownershipAsOf'=>$asOf,
    'ownershipSnapshot'=>$ownershipSnapshot,
    'ownershipClassTotals'=>$classTotals,
@@ -61,13 +74,7 @@ class ShareholderGovernanceController extends Controller {
     ->select('o.*','s.name as shareholder_name')->orderBy('o.share_class')->orderBy('s.name')->get(),
    'changes'=>DB::table('shareholder_ownership_changes')->orderByDesc('id')->limit(100)->get(),
    'resolutions'=>DB::table('shareholder_resolutions')->orderByDesc('id')->get(),
-   'allocations'=>DB::table('shareholder_distribution_allocations as a')
-    ->join('shareholders as s','s.id','=','a.shareholder_id')
-    ->join('shareholder_resolutions as r','r.id','=','a.shareholder_resolution_id')
-    ->leftJoin('currencies as c','c.id','=','r.currency_id')
-    ->select('a.*','s.name as shareholder_name','r.number as resolution_number',
-      'r.status as resolution_status','c.code as currency_code')
-    ->orderByDesc('a.id')->limit(300)->get(),
+   'allocations'=>$allocations,
    'distributions'=>DB::table('shareholder_profit_distributions as d')
     ->join('shareholders as s','s.id','=','d.shareholder_id')
     ->join('shareholder_resolutions as r','r.id','=','d.shareholder_resolution_id')
