@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ActivityLog;
+use App\Support\LocalizedDecimal;
 use App\Models\FinishedGood;
 use App\Models\GoodsReceiptLine;
 use App\Models\InventoryMaterial;
@@ -66,6 +67,10 @@ class LaboratoryQualityController extends Controller
  public function specification(Request $request)
  {
   $this->authorizeAction($request,'manage');
+  $request->merge([
+   'minimum'=>LocalizedDecimal::normalize($request->input('minimum')),
+   'maximum'=>LocalizedDecimal::normalize($request->input('maximum')),
+  ]);
   $data=$request->validate([
    'subject_type'=>['required',Rule::in(['material','finished_good'])],
    'subject_id'=>['required','integer','min:1'],
@@ -137,9 +142,28 @@ class LaboratoryQualityController extends Controller
      throw ValidationException::withMessages(['goods_receipt_line_id'=>'Only posted receipt lines can be inspected.']);
     $receiptLineId=$line->id;$subjectType='material';$subjectId=$line->inventory_material_id;
    }
-   if(!DB::table('quality_specifications')->where('subject_type',$subjectType)
-    ->where('subject_id',$subjectId)->where('is_active',true)->exists())
+   $current=DB::table('quality_specifications')
+    ->where('subject_type',$subjectType)->where('subject_id',$subjectId)
+    ->where('is_active',true)->orderBy('id')->lockForUpdate()->get();
+   if($current->isEmpty())
     throw ValidationException::withMessages(['source_type'=>'Approve a test specification for this material or product first.']);
+   $latest=DB::table('quality_samples')
+    ->where($batchId?'production_batch_id':'goods_receipt_line_id',$batchId??$receiptLineId)
+    ->orderByDesc('id')->lockForUpdate()->first();
+   if($latest && in_array($latest->status,['registered','in_testing'],true))
+    throw ValidationException::withMessages(['source_type'=>'This source has a pending sample. Complete its review before collecting another.']);
+   if($latest && $latest->status==='approved'){
+    // A new sample must be justified by an explicit hold; otherwise a
+    // duplicate may silently replace an independently approved disposition.
+    $held=$receiptLineId && DB::table('quality_material_lot_holds as h')
+      ->join('inventory_cost_layers as l','l.id','=','h.inventory_cost_layer_id')
+      ->where('l.source_type','goods_receipt_line')->where('l.source_id',$receiptLineId)
+      ->where('h.status','held')->exists();
+    if(!$held)
+     throw ValidationException::withMessages(['source_type'=>'Already approved source: open an authorized lot hold before collecting a replacement sample.']);
+   }
+   if($latest && mb_strlen(trim((string)($data['notes']??'')))<10)
+    throw ValidationException::withMessages(['notes'=>'For a repeat sample, document the retest reason (at least 10 characters).']);
    $id=DB::table('quality_samples')->insertGetId([
     'number'=>'TMP-'.Str::uuid(),'submission_token'=>$data['submission_token'],
     'source_type'=>$data['source_type'],'production_batch_id'=>$batchId,
@@ -149,6 +173,12 @@ class LaboratoryQualityController extends Controller
    ]);
    DB::table('quality_samples')->where('id',$id)
     ->update(['number'=>'QC-'.str_pad((string)$id,7,'0',STR_PAD_LEFT)]);
+   foreach($current as $specification){
+    DB::table('quality_sample_required_specifications')->insert([
+      'quality_sample_id'=>$id,'quality_specification_id'=>$specification->id,
+      'created_at'=>now(),'updated_at'=>now(),
+    ]);
+   }
    ActivityLog::record('quality.sample.registered','quality_sample',$id,'Laboratory sample registered.');
   });
   return back()->with('success','Laboratory sample registered.');
@@ -165,11 +195,19 @@ class LaboratoryQualityController extends Controller
    $line=GoodsReceiptLine::findOrFail($sample->goods_receipt_line_id);
    $subjectType='material';$subjectId=$line->inventory_material_id;
   }
+  $requirements=DB::table('quality_sample_required_specifications')
+   ->where('quality_sample_id',$sampleId)->pluck('quality_specification_id');
+  $legacyRequirements=$requirements->isEmpty();
+  // For pre-migration samples a historical specification set was never
+  // frozen. Keep a visible legacy marker and require active tests on review.
   $specs=DB::table('quality_specifications')
-   ->where('subject_type',$subjectType)->where('subject_id',$subjectId)->get();
+   ->where('subject_type',$subjectType)->where('subject_id',$subjectId)
+   ->when($legacyRequirements,fn($q)=>$q->where('is_active',true))
+   ->when(!$legacyRequirements,fn($q)=>$q->whereIn('id',$requirements))
+   ->orderBy('test_name')->get();
   $results=DB::table('quality_sample_results')->where('quality_sample_id',$sampleId)->get()
    ->keyBy('quality_specification_id');
-  return compact('sample','specs','results');
+  return compact('sample','specs','results','legacyRequirements');
  }
 
  public function show(Request $request,int $sample)
@@ -181,6 +219,7 @@ class LaboratoryQualityController extends Controller
  public function result(Request $request,int $sample)
  {
   $this->authorizeAction($request,'test');
+  $request->merge(['observed_value'=>LocalizedDecimal::normalize($request->input('observed_value'))]);
   $data=$request->validate([
    'quality_specification_id'=>['required','integer','exists:quality_specifications,id'],
    'observed_value'=>['nullable','numeric','decimal:0,6'],
@@ -237,13 +276,15 @@ class LaboratoryQualityController extends Controller
    if((int)$s->created_by===$request->user()->id)
     throw ValidationException::withMessages(['decision'=>'Independent review is required.']);
    $detail=$this->details($sample);
-   $required=$detail['specs']->where('is_active',true);
+   // For new samples, requirements are frozen at collection time.
+   // Revisions published later cannot rewrite the evidence reviewed here.
+   $required=$detail['specs'];
    if($required->isEmpty() || $required->count()!==$detail['results']->whereIn('quality_specification_id',$required->pluck('id'))->count())
-    throw ValidationException::withMessages(['decision'=>'Record a result for every currently approved specification.']);
+    throw ValidationException::withMessages(['decision'=>'Record a result for every specification assigned to this sample.']);
    if(DB::table('quality_sample_results')->where('quality_sample_id',$sample)
      ->where('tested_by',$request->user()->id)->exists())
     throw ValidationException::withMessages(['decision'=>'The tester cannot independently review their own sample.']);
-   $hasFailure=$detail['results']->contains('outcome','fail');
+   $hasFailure=$detail['results']->whereIn('quality_specification_id',$required->pluck('id'))->contains('outcome','fail');
    if($hasFailure && $data['decision']==='approved')
     throw ValidationException::withMessages(['decision'=>'Failed laboratory tests cannot be approved.']);
    DB::table('quality_samples')->where('id',$sample)->update([
