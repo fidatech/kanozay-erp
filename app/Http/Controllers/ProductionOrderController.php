@@ -189,6 +189,7 @@ class ProductionOrderController extends Controller {
     public function waste(Request $request, ProductionOrder $order, ProductionOrderMaterial $materialLine, ProductionWasteService $service) {
         abort_unless($request->user()->can('manufacturing.update'), 403);
         abort_unless($materialLine->production_order_id === $order->id, 404);
+        $request->merge(['quantity'=>LocalizedDecimal::normalize($request->input('quantity'))]);
         $data = $request->validate([
             'submission_token' => ['required', 'uuid'],
             'quantity' => ['required', 'regex:/^(?:0|[1-9][0-9]{0,13})(?:\\.[0-9]{1,6})?$/'],
