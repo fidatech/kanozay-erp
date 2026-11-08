@@ -101,6 +101,9 @@ class ProductionBatchService
                 ->where('production_batch_id',$batch->id)->where('status','!=','approved')->exists()){
                 $this->reject('One or more registered QC samples are pending or rejected.');
             }
+            if($decision==='approve'){
+                app(FinishedBatchQualityGate::class)->assertApproved($batch);
+            }
             $checks = $batch->checks()->get();
             if ($checks->isEmpty()) {
                 $this->reject('Record at least one laboratory test before making a QC decision.');
@@ -165,6 +168,10 @@ class ProductionBatchService
             if ($good->on_hand_packages > PHP_INT_MAX - $batch->accepted_packages) {
                 $this->reject('Finished goods balance exceeds the supported range.');
             }
+            // A formal laboratory sample or its specification requirements
+            // can change after the initial QC decision. Reconfirm the last
+            // verified laboratory disposition at physical warehouse release.
+            app(FinishedBatchQualityGate::class)->assertApproved($batch);
             // QC can change between material issue and finished-product
             // release. Never release packages whose input FIFO sources have
             // since become held or whose posted usage cannot be traced.
