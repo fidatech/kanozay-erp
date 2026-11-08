@@ -24,6 +24,8 @@ class ShareholderStatementService
         };
         $capital=DB::table('shareholder_transactions as tx')
             ->join('journal_entries as entry','entry.id','=','tx.journal_entry_id')
+            ->leftJoin('journal_entries as reversal','reversal.reversal_of_id','=','entry.id')
+            ->whereNull('reversal.id')
             ->join('currencies as currency','currency.id','=','tx.currency_id')
             ->leftJoin('financial_accounts as account','account.id','=','tx.financial_account_id')
             ->where('tx.shareholder_id',$shareholder->id)
@@ -38,6 +40,8 @@ class ShareholderStatementService
         $profit=DB::table('shareholder_profit_distributions as distribution')
             ->join('journal_entries as entry',
                 'entry.id','=','distribution.journal_entry_id')
+            ->leftJoin('journal_entries as reversal','reversal.reversal_of_id','=','entry.id')
+            ->whereNull('reversal.id')
             ->join('shareholder_resolutions as resolution',
                 'resolution.id','=','distribution.shareholder_resolution_id')
             ->join('currencies as currency','currency.id','=','distribution.currency_id')
