@@ -27,7 +27,9 @@ class SupplierAdvanceService
    if($existing){
     if((int)$existing->purchase_order_id===$order->id &&
         BigDecimal::of((string)$existing->amount)->isEqualTo((string)$data['amount']) &&
-        (int)$existing->source_account_id===(int)$data['source_account_id'])
+        (int)$existing->source_account_id===(int)$data['source_account_id'] &&
+        $existing->paid_on===$data['paid_on'] &&
+        $existing->reference===$data['reference'])
      return $existing;
     throw ValidationException::withMessages(['submission_token'=>'Token is already used for another advance.']);
    }
@@ -113,7 +115,9 @@ class SupplierAdvanceService
    if($existing){
     if((int)$existing->supplier_advance_posting_id===$advanceId &&
       (int)$existing->trade_document_id===(int)$data['trade_document_id'] &&
-      BigDecimal::of((string)$existing->amount)->isEqualTo((string)$data['amount']))return $existing;
+      BigDecimal::of((string)$existing->amount)->isEqualTo((string)$data['amount']) &&
+      $existing->applied_on===$data['applied_on'] &&
+      $existing->approval_reference===$data['approval_reference'])return $existing;
     throw ValidationException::withMessages(['submission_token'=>'Advance application token belongs to another settlement.']);
    }
    $advance=DB::table('supplier_advance_postings')->where('id',$advanceId)->lockForUpdate()->first();
