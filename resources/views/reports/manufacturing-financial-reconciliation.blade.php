@@ -42,7 +42,8 @@ The CSV includes all matching batches and their individual exceptions.</p>
 <th>QC accepted / warehouse received / dispatched / QC returned</th>
 <th>Physical remaining</th>
 <th>Costed sales / QC recoveries</th><th>Costed remaining</th>
-<th>Capitalized inventory</th><th>Recognized COGS</th>
+<th>Gross source materials</th><th>Abnormal FIFO loss expense</th>
+<th>Net capitalized inventory</th><th>Recognized COGS</th>
 <th>Return recovery</th><th>Remaining asset value</th><th>Audit result</th>
 </tr></thead><tbody>
 @forelse($rows as $row)
@@ -58,6 +59,8 @@ The CSV includes all matching batches and their individual exceptions.</p>
 <td>{{ number_format($row['costed_sales']) }} /
 {{ number_format($row['costed_recoveries']) }}</td>
 <td>@if($row['remaining_costed']!==null){{ number_format($row['remaining_costed']) }}@else<span class="muted">Not capitalized</span>@endif</td>
+<td>{{ $row['gross_material_source_cost']??'Unverified' }}</td>
+<td>{{ $row['abnormal_waste_expensed']??'Unverified' }}</td>
 <td>{{ $row['total_capitalized']??'Not capitalized' }}</td>
 <td>{{ $row['posted_cogs']??'—' }}</td>
 <td>{{ $row['returned_cost']??'—' }}</td>
@@ -74,7 +77,7 @@ The CSV includes all matching batches and their individual exceptions.</p>
 <span class="muted">No financial capitalization recorded; no original invoice dispatch identified</span>
 @endif
 </td></tr>
-@empty<tr><td colspan="11">No production batches match the selected filter.</td></tr>
+@empty<tr><td colspan="13">No production batches match the selected filter.</td></tr>
 @endforelse
 </tbody></table></div>
 {{ $batches->links() }}
