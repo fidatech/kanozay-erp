@@ -161,6 +161,20 @@ Added the **Manufacturing Inventory and COGS Reconciliation** report and CSV, co
 
 **Status: substantial GL source development, not production-verifiable completion.** No migrations, automated tests, lint, real-browser UAT or MySQL deployment were performed on user instruction.
 
+## Manufacturing, finished-goods assets and COGS financial integration
+
+Implemented a controlled original-currency manufacturing cost ledger policy: independently approved raw inventory asset, WIP asset, finished-goods asset and COGS expense accounts. Physical production cost snapshots alone remain advisory until finance verifies each consumed FIFO material's original GRN, posted supplier inventory debit and current QC disposition.
+
+For a one-currency, fully verified released batch, the finance workflow can now post two balanced, source-linked journals: debit WIP/credit raw material and approved original overhead expense, then debit finished goods/credit WIP. GL asset sufficiency, source journal dates, unvalued or opening FIFO quantities, mixed source currencies, unreconciled landed costs and missing supplier billing block unsupported capitalization.
+
+New sales invoices now atomically post an original-currency COGS journal for each physically dispatched finished-good batch. The batch must already be capitalized; a GL or COGS failure rolls back the invoice and stock. Per-line COGS journals and cost currency are visible to authorized finance/reporting users. Independent release of a quarantined return now posts finished inventory asset recovery and reverses that original COGS; scrap and held returns do not restore an asset. Finance may reconcile missing COGS on historic invoices only if original posted capitalization already existed by the invoice date.
+
+Added cost accounting navigation and forms, protected COGS/asset journals against standalone GL reversal, froze overhead after capitalization, showed posted-vs-advisory manufacturing readiness and extended monthly financial close checks for missing WIP, finished inventory, COGS and return recovery postings. Corrected posted journal balance checks to compare **each currency independently**.
+
+[Manufacturing-to-GL Cost and COGS Integration](manufacturing-gl-cogs-integration-2026-11-08.md) details the implemented financial workflow and outstanding historic inventory, mixed-currency, landed costs, business-policy and corrections dependencies.
+
+**Status: source integration advanced; migration and runtime verification still deferred.** Costing policies and historic source evidence need signed factory approval. Live deployment must not be attempted until staging migrations, original-cost audit and controlled acceptance are complete.
+
 ## Acceptance and release gates
 
 1. Passing SQLite feature suite and isolated regression suite on the latest commit.
