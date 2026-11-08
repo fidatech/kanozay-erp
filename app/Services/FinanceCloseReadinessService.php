@@ -129,11 +129,41 @@ class FinanceCloseReadinessService
                 'dispatch.id','=','item.finished_good_dispatch_id')
             ->leftJoin('sales_invoice_lines as invoiced',
                 'invoiced.dispatch_id','=','dispatch.id')
+            ->leftJoin('finance_historical_dispatch_cost_settlements as expense_case',
+                function($join){
+                    $join->on('expense_case.finished_good_dispatch_id','=','dispatch.id')
+                        ->where('expense_case.status','=','posted');
+                })
+            ->leftJoin('finance_historical_dispatch_cost_lines as costed_expense',
+                function($join){
+                    $join->on('costed_expense.finance_historical_dispatch_cost_settlement_id','=','expense_case.id')
+                        ->on('costed_expense.finished_good_dispatch_line_id','=','item.id');
+                })
             ->whereBetween('dispatch.dispatch_date',[$begin,$end])
-            ->whereNull('invoiced.id')->count();
+            ->whereNull('invoiced.id')
+            ->whereNull('costed_expense.id')->count();
         if($orphanDispatches){
             $blockers[]=$orphanDispatches.
-                ' physical finished-goods dispatch line(s) have no linked customer invoice and COGS cost trail. Reconcile legacy standalone dispatches.';
+                ' physical finished-goods dispatch line(s) have neither an invoiced COGS cost trail nor an independently posted non-sale expense journal. Reconcile legacy standalone dispatches.';
+        }
+        $invalidHistoricalDispatchExpense=DB::table('finance_historical_dispatch_cost_lines as cost')
+            ->join('finance_historical_dispatch_cost_settlements as settlement',
+                'settlement.id','=','cost.finance_historical_dispatch_cost_settlement_id')
+            ->leftJoin('journal_entries as journal','journal.id','=','cost.journal_entry_id')
+            ->leftJoin('journal_entries as reverse','reverse.reversal_of_id','=','journal.id')
+            ->where('settlement.status','posted')
+            ->whereBetween('settlement.posting_date',[$begin,$end])
+            ->where(function($query){
+                $query->whereNull('journal.id')
+                    ->orWhere('journal.status','!=','posted')
+                    ->orWhereNotNull('journal.reversal_of_id')
+                    ->orWhereNotNull('reverse.id')
+                    ->orWhereColumn('journal.currency_id','!=','cost.currency_id')
+                    ->orWhereColumn('journal.entry_date','!=','settlement.posting_date');
+            })->count();
+        if($invalidHistoricalDispatchExpense){
+            $blockers[]=$invalidHistoricalDispatchExpense.
+                ' source-linked non-sale dispatch expense line(s) lack a valid original-currency posted GL journal.';
         }
         $invalidProductionJournals=DB::table('production_batch_cost_postings as cost')
             ->join('journal_entries as wip','wip.id','=','cost.issue_journal_id')
