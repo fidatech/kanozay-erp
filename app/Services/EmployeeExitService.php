@@ -44,6 +44,16 @@ class EmployeeExitService
    if($remaining->isGreaterThan(0))
     throw ValidationException::withMessages(['decision'=>'Employee has an outstanding salary advance. Collect or formally reconcile it before separation.']);
   }
+  $separationMonth=\Carbon\CarbonImmutable::parse($data['last_working_on'])->startOfMonth()->toDateString();
+  if(DB::table('payroll_lines as line')
+    ->join('payroll_periods as period','period.id','=','line.payroll_period_id')
+    ->where('line.employee_profile_id',$employee->id)
+    ->where('period.period_start','>',$separationMonth)
+    ->whereIn('period.status',['approved','paid'])->exists()){
+    throw ValidationException::withMessages([
+        'decision'=>'This employee has posted salary after the requested separation month. Reconcile payroll before recording the departure date.',
+    ]);
+  }
   if($employee->hired_on && $data['last_working_on']<$employee->hired_on->toDateString())
    throw ValidationException::withMessages(['decision'=>'Separation cannot predate the employee hire date.']);
   $employee->update([
