@@ -15,4 +15,5 @@ class SalesCreditNoteLine extends Model
         static::deleting(fn () => throw new LogicException('Credit note lines cannot be deleted.'));
     }
     public function invoiceLine() { return $this->belongsTo(SalesInvoiceLine::class, 'sales_invoice_line_id'); }
+    public function quarantine() { return $this->hasOne(SalesReturnQuarantine::class,'sales_credit_note_line_id'); }
 }
