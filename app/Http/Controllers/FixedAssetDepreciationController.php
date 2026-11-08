@@ -8,6 +8,8 @@ use App\Models\FixedAssetDepreciationPolicy;
 use App\Models\LedgerAccount;
 use App\Services\FixedAssetDepreciationService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Brick\Math\BigDecimal;
 use Illuminate\Validation\Rule;
 
 class FixedAssetDepreciationController extends Controller
@@ -15,8 +17,28 @@ class FixedAssetDepreciationController extends Controller
     public function index(Request $request)
     {
         abort_unless($request->user()->canAny(['maintenance.view','finance.view','administration.view']),403);
+        $assets=FixedAsset::with('currency')->orderBy('asset_tag')->get();
+        $accumulated=DB::table('fixed_asset_depreciation_entries')
+            ->whereIn('fixed_asset_id',$assets->pluck('id'))
+            ->select('fixed_asset_id')->selectRaw('SUM(amount) as total')
+            ->groupBy('fixed_asset_id')->pluck('total','fixed_asset_id');
+        $capitalizations=DB::table('fixed_asset_capitalizations')
+            ->whereIn('fixed_asset_id',$assets->pluck('id'))
+            ->pluck('acquisition_journal_id','fixed_asset_id');
+        $bookValues=[];
+        foreach($assets as $asset){
+            $remaining=BigDecimal::of((string)$asset->acquisition_cost)
+                ->minus((string)($accumulated[$asset->id]??'0'));
+            $bookValues[$asset->id]=[
+                'accumulated'=>(string)BigDecimal::of((string)($accumulated[$asset->id]??'0'))->toScale(4),
+                'book_value'=>$remaining->isNegative()?null:(string)$remaining->toScale(4),
+                'overdepreciated'=>$remaining->isNegative(),
+                'capitalized'=>$capitalizations->has($asset->id),
+            ];
+        }
         return view('assets.depreciation',[
-            'assets'=>FixedAsset::with('currency')->orderBy('asset_tag')->get(),
+            'assets'=>$assets,
+            'bookValues'=>$bookValues,
             'policies'=>FixedAssetDepreciationPolicy::with(['expenseLedger','accumulatedLedger'])->get()->keyBy('fixed_asset_id'),
             'entries'=>FixedAssetDepreciationEntry::with(['asset','journal'])->latest('period_month')->latest('id')->paginate(25),
             'expenseAccounts'=>LedgerAccount::where('type','expense')->where('is_group',false)->where('is_active',true)->orderBy('code')->get(),
