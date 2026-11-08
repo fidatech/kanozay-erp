@@ -158,42 +158,104 @@ final class HistoricalBatchCapitalizationService
             ])->get();
 
         if($lines->isEmpty() || $lines->count()>100)
-            $this->fail('This recovery path requires 1 to 100 fully invoiced, physically dispatched batch lines.');
-        $count=0;$dispatchIds=[];$invoiceLines=[];
+            $this->fail('This correction requires 1 to 100 fully source-linked historical physical dispatch lines.');
+        if(DB::table('sales_credit_note_lines')->where('production_batch_id',$batch->id)->exists() ||
+            DB::table('sales_return_quarantines')->where('production_batch_id',$batch->id)->exists())
+            $this->fail('Historic customer credits, returned goods or quarantine changes require a separate inventory and COGS correction before this batch can be reconstructed.');
+
+        $count=0;$saleCount=0;$dispatchIds=[];$invoiceLines=[];$nonSale=[];
         foreach($lines as $row){
-            if(!$row->invoice_line_id || !$row->sales_invoice_id ||
-                $row->dispatch_date<$date ||
+            if($row->dispatch_date<$date ||
                 (int)$row->finished_good_id!==(int)$batch->finished_good_id ||
-                (int)$row->invoiced_good_id!==(int)$row->finished_good_id ||
-                (int)$row->invoiced_batch_id!==(int)$batch->id ||
-                (int)$row->linked_dispatch_id!==(int)$row->dispatch_id ||
-                (int)$row->invoiced_packages!==(int)$row->quantity_packages ||
                 (int)$row->quantity_packages<1)
-                $this->fail('The original dispatched batch, invoice line, package quantity and date must reconcile exactly. Undocumented standalone dispatches are excluded.');
+                $this->fail('Original physical dispatch, batch, accepted product, quantity or date mismatch.');
             if(isset($dispatchIds[$row->dispatch_id]) ||
                 DB::table('finished_good_dispatch_lines')
                     ->where('finished_good_dispatch_id',$row->dispatch_id)->count()!==1)
-                $this->fail('Each original invoice must link to a single exact physical dispatch line without ambiguous shared-batch dispatches.');
+                $this->fail('Historical recovery needs one unambiguous original physical batch line per dispatch document.');
             $dispatchIds[$row->dispatch_id]=true;
-            $this->originalInvoice($row,(string)$row->dispatch_date);
-            if(DB::table('production_invoice_cogs_postings')
-                ->where('sales_invoice_line_id',$row->invoice_line_id)->exists() ||
-                DB::table('finance_historical_dispatch_cost_lines')
-                ->where('finished_good_dispatch_line_id',$row->physical_line_id)->exists())
-                $this->fail('The old dispatch already has COGS or non-sale GL cost recognition. Duplicate costing is prohibited.');
-            if(DB::table('sales_credit_note_lines')
-                ->where('sales_invoice_line_id',$row->invoice_line_id)->exists() ||
-                DB::table('sales_return_quarantines')
-                ->where('production_batch_id',$batch->id)->exists())
-                $this->fail('A customer credit or returned/quarantined product needs separate source-level COGS/return accounting and is excluded from this backfill.');
+            if($row->invoice_line_id){
+                if(!$row->sales_invoice_id ||
+                    (int)$row->invoiced_good_id!==(int)$row->finished_good_id ||
+                    (int)$row->invoiced_batch_id!==(int)$batch->id ||
+                    (int)$row->linked_dispatch_id!==(int)$row->dispatch_id ||
+                    (int)$row->invoiced_packages!==(int)$row->quantity_packages)
+                    $this->fail('Previously invoiced dispatch and original sale line do not match physical item, batch and quantity.');
+                $this->originalInvoice($row,(string)$row->dispatch_date);
+                if(DB::table('production_invoice_cogs_postings')
+                    ->where('sales_invoice_line_id',$row->invoice_line_id)->exists())
+                    $this->fail('One source customer invoice was already financially costed. Double COGS recovery is prohibited.');
+                $invoiceLines[]=(int)$row->invoice_line_id;
+                $saleCount++;
+            }else{
+                $signed=DB::table('finance_historical_dispatch_dispositions as purpose')
+                    ->join('finance_historical_correction_cases as review',
+                        'review.id','=','purpose.finance_historical_correction_case_id')
+                    ->where('purpose.finished_good_dispatch_id',$row->dispatch_id)
+                    ->select('purpose.*','review.status as review_status',
+                        'review.case_type as review_type','review.source_id as reviewed_source_id',
+                        'review.source_date as reviewed_source_date',
+                        'review.source_reference as reviewed_source_reference',
+                        'review.source_fingerprint as reviewed_source_fingerprint',
+                        'review.requested_by as original_requested_by',
+                        'review.reviewed_by as original_approved_by')->first();
+                if(!$signed || $signed->review_type!=='standalone_dispatch' ||
+                    $signed->review_status!=='approved' ||
+                    (int)$signed->reviewed_source_id!==(int)$row->dispatch_id ||
+                    (string)$signed->reviewed_source_date!==(string)$row->dispatch_date ||
+                    (int)$signed->original_requested_by===(int)$signed->original_approved_by ||
+                    (int)$signed->original_requested_by===(int)$signed->reviewed_by ||
+                    !in_array($signed->business_purpose,[
+                        'promotional_sample','production_loss','internal_consumption',
+                    ],true))
+                    $this->fail('Every non-sale dispatch needs a separate approved historical case and independently documented sampling, loss or internal-use disposition. Sales and unresolved classification cannot be expensed.');
+                $original=app(HistoricalFinanceCorrectionService::class)
+                    ->source('standalone_dispatch',(int)$row->dispatch_id);
+                if(!hash_equals((string)$signed->reviewed_source_fingerprint,
+                        (string)$original['fingerprint']))
+                    $this->fail('An original non-sale dispatch changed after its independent purpose review.');
+                if(DB::table('finance_historical_dispatch_cost_settlements')
+                    ->where('finished_good_dispatch_id',$row->dispatch_id)->exists() ||
+                    DB::table('finance_historical_dispatch_cost_lines')
+                    ->where('finished_good_dispatch_line_id',$row->physical_line_id)->exists())
+                    $this->fail('This non-sale physical dispatch already has an expense proposal or source cost journal. An audited amendment is required.');
+                $nonSale[(int)$row->physical_line_id]=[
+                    'disposition_id'=>(int)$signed->id,
+                    'case_id'=>(int)$signed->finance_historical_correction_case_id,
+                    'dispatch_id'=>(int)$row->dispatch_id,
+                    'purpose'=>$signed->business_purpose,
+                    'document'=>$signed->supporting_document_reference,
+                    'evidence'=>$signed->source_evidence,
+                    'financial_action'=>$signed->remaining_financial_action,
+                    'purpose_reviewer'=>(int)$signed->reviewed_by,
+                    'source_requester'=>(int)$signed->original_requested_by,
+                    'source_reviewer'=>(int)$signed->original_approved_by,
+                    'source_reference'=>$signed->reviewed_source_reference,
+                    'source_fingerprint'=>$signed->reviewed_source_fingerprint,
+                ];
+            }
             $count+=(int)$row->quantity_packages;
-            $invoiceLines[]=(int)$row->invoice_line_id;
         }
         if($count>(int)$batch->accepted_packages)
-            $this->fail('Original physical dispatch count exceeds the QC-accepted production batch packages.');
+            $this->fail('All documented historical physical dispatches exceed the accepted batch stock quantity.');
         if(DB::table('sales_invoice_lines')->where('production_batch_id',$batch->id)
             ->whereNotIn('id',$invoiceLines)->exists())
-            $this->fail('Additional invoice lines without a corresponding source dispatch must be reconciled before historical capitalization.');
+            $this->fail('Additional customer invoice lines exist without a unique matching original physical dispatch.');
+        $allocations=[];
+        $charged=BigDecimal::zero();$usedQty=0;
+        foreach($lines as $row){
+            $qty=(int)$row->quantity_packages;
+            $usedQty+=$qty;
+            $costed=$usedQty===(int)$batch->accepted_packages
+                ? $amount->minus($charged)
+                : $amount->multipliedBy((string)$qty)
+                    ->dividedBy((string)$batch->accepted_packages,4,RoundingMode::HalfUp);
+            if(!$costed->isPositive() ||
+                $costed->isGreaterThan($amount->minus($charged)))
+                $this->fail('Original source cost is insufficient to allocate a positive value to every dispatched batch line.');
+            $charged=$charged->plus($costed);
+            $allocations[(int)$row->physical_line_id]=(string)$costed->toScale(4);
+        }
 
         $period=app(FinancePeriodClosingService::class);
         $period->assertOpenDate($date);
@@ -219,7 +281,7 @@ final class HistoricalBatchCapitalizationService
             ->get(['w.id','review.treatment','abnormal.currency_id',
                 'abnormal.source_cost_amount','abnormal.expense_ledger_id'])->toArray();
 
-        $signature=hash('sha256',json_encode([
+        $signatureSources=[
             'case'=>$case->source_fingerprint,
             'batch'=>$batch->id,'date'=>$date,'currency'=>$currencyId,
             'expected_amount'=>(string)$amount,
@@ -232,12 +294,18 @@ final class HistoricalBatchCapitalizationService
             'receipt'=>[$receipt->first()->id,$receipt->first()->occurred_on,
                 $receipt->first()->quantity_packages],
             'lines'=>$lines->toArray(),'overheads'=>$overheads,'waste'=>$waste,
-        ],JSON_UNESCAPED_UNICODE|JSON_PRESERVE_ZERO_FRACTION));
+        ];
+        // Preserve fingerprints of old fully-invoiced proposals. New
+        // mixed-source plans also bind all independently signed dispositions.
+        if($nonSale)$signatureSources['signed_non_sale']=$nonSale;
+        $signature=hash('sha256',json_encode(
+            $signatureSources,JSON_UNESCAPED_UNICODE|JSON_PRESERVE_ZERO_FRACTION));
         return [
             'case'=>$case,'batch'=>$batch,
             'lines'=>$lines,'date'=>$date,'currency_id'=>$currencyId,
             'amount'=>(string)$amount,'packages'=>$count,
-            'signature'=>$signature,
+            'sale_count'=>$saleCount,'non_sale'=>$nonSale,
+            'allocations'=>$allocations,'signature'=>$signature,
         ];
     }
 
