@@ -27,7 +27,7 @@ class ManufacturingFinancialReconciliationController extends Controller
                 $out=fopen('php://output','w');
                 fwrite($out,"\xEF\xBB\xBF");
                 fputcsv($out,['Batch','Product','Status','Original currency','Accepted packages',
-                    'Gross physical dispatches','QC restocked packages',
+                    'Warehouse received packages','Gross physical dispatches','QC restocked packages',
                     'Packages costed to COGS','Costed QC returns',
                     'Physical remaining packages','Financial remaining packages',
                     'Capitalized value','Posted COGS','Returned inventory cost',
@@ -36,7 +36,7 @@ class ManufacturingFinancialReconciliationController extends Controller
                     foreach($service->rows($batches) as $row){
                         $fields=[
                             $row['batch'],$row['product'],$row['status'],$row['currency'],
-                            $row['accepted'],$row['dispatched'],$row['qc_returns'],
+                            $row['accepted'],$row['received'],$row['dispatched'],$row['qc_returns'],
                             $row['costed_sales'],$row['costed_recoveries'],
                             $row['net_physical'],$row['remaining_costed'],
                             $row['total_capitalized'],$row['posted_cogs'],
