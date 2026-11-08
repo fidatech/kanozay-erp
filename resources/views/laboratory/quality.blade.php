@@ -42,6 +42,88 @@
 @forelse($specs as $s)<tr><td>{{ $s->id }}</td><td>{{ $s->subject_type }} #{{ $s->subject_id }}</td><td>{{ $s->test_name }}</td><td>{{ $s->method??'—' }}</td><td>{{ $s->kind==='numeric'?($s->minimum??'—').' to '.($s->maximum??'—').' '.$s->unit:'Pass / fail' }}</td><td>{{ $s->version }}</td></tr>
 @empty<tr><td colspan="6">No approved quality specifications.</td></tr>@endforelse
 </tbody></table></div></section>
+@if($page==='nonconformances')
+<section class="qc-panel">
+<h2>Nonconformance investigations and corrective action</h2>
+<p class="qc-note">A nonconformance investigation records a quality deviation, corrective action and independent verification. Opening or closing one does not release a rejected sample or change physical stock. For suspicious incoming materials, also place a manual hold in <a href="{{ route('inventory.quality-holds.index') }}">Incoming QC holds</a>.</p>
+@canany(['laboratory.create','laboratory.update','administration.update'])
+<h3>Open a nonconformance</h3>
+<form action="{{ route('laboratory.nonconformances.store') }}" method="POST" class="qc-form">
+@csrf
+<input type="hidden" name="submission_token" value="{{ old('submission_token',(string)\Illuminate\Support\Str::uuid()) }}">
+<label>Laboratory sample<select name="quality_sample_id">
+<option value="">No sample / select a lot</option>
+@foreach($ncrRecentSamples as $registered)
+<option value="{{ $registered->id }}">{{ $registered->number }} · {{ $registered->source_type }} · {{ $registered->status }}</option>
+@endforeach
+</select></label>
+<label>Incoming FIFO lot (optional)<select name="inventory_cost_layer_id">
+<option value="">No incoming lot</option>
+@foreach($ncrLots as $layer)
+<option value="{{ $layer->id }}">Lot #{{ $layer->id }} · {{ $layer->material?->sku }} · GRN line #{{ $layer->source_id }}</option>
+@endforeach
+</select></label>
+<label>Severity<select name="severity" required>
+<option value="minor">Minor</option><option value="major">Major</option><option value="critical">Critical</option>
+</select></label>
+<label>Opened on<input type="date" name="opened_on" value="{{ now()->toDateString() }}" max="{{ now()->toDateString() }}" required></label>
+<label>Target review date<input type="date" name="due_on"></label>
+<label style="grid-column:span 2">Observed deviation / incident
+<textarea name="description" rows="2" minlength="15" maxlength="5000" required placeholder="Describe the actual product or process deviation with source evidence"></textarea></label>
+<button class="btn" type="submit">Open NCR</button>
+</form>
+@endcanany
+</section>
+<section class="qc-panel">
+<h2>Investigations and independent closures</h2>
+<div class="qc-wrap"><table style="min-width:1100px"><thead>
+<tr><th>NCR / severity</th><th>Source</th><th>Raised</th><th>Due</th><th>Status</th><th>Investigation / verification</th></tr></thead><tbody>
+@forelse($nonconformances as $record)
+<tr>
+<td><strong>{{ $record->number }}</strong><p>{{ ucfirst($record->severity) }}</p></td>
+<td>{{ $record->sample_number??'No sample' }}<br>
+@if($record->inventory_cost_layer_id)
+Lot #{{ $record->inventory_cost_layer_id }} · {{ $record->material_sku }}
+@endif
+<p>{{ $record->description }}</p></td>
+<td>{{ $record->opened_on }}</td>
+<td>@if($record->due_on && $record->status!=='closed' && $record->due_on<now()->toDateString())
+<strong style="color:#a63131">{{ $record->due_on }} · Overdue</strong>
+@else{{ $record->due_on??'Not specified' }}@endif</td>
+<td>{{ ucfirst($record->status) }}</td>
+<td>
+@if($record->root_cause)<strong>Root cause:</strong> {{ $record->root_cause }}<br>
+<strong>Corrective action:</strong> {{ $record->corrective_action }}<br>@endif
+@if($record->status==='closed')
+<strong>Independent verification:</strong> {{ $record->verification_evidence }}
+<br><small>Closed {{ $record->closed_at }}</small>
+@else
+@canany(['laboratory.create','laboratory.update','administration.update'])
+<details style="margin:6px 0"><summary>Record corrective investigation</summary>
+<form action="{{ route('laboratory.nonconformances.investigate',$record->id) }}" method="POST" style="display:grid;gap:7px;padding:8px">
+@csrf
+<textarea name="root_cause" required minlength="15" maxlength="5000" placeholder="Verified root cause">{{ $record->root_cause }}</textarea>
+<textarea name="corrective_action" required minlength="15" maxlength="5000" placeholder="Corrective action and supporting evidence">{{ $record->corrective_action }}</textarea>
+<button class="btn" type="submit">Save investigation</button>
+</form></details>
+@endcanany
+@if($record->status==='investigating')
+@canany(['laboratory.update','administration.update'])
+<details style="margin:6px 0"><summary>Independent closure</summary>
+<form action="{{ route('laboratory.nonconformances.close',$record->id) }}" method="POST" style="display:grid;gap:7px;padding:8px">
+@csrf
+<textarea name="verification_evidence" minlength="15" maxlength="5000" required placeholder="Evidence corrective action was verified independently"></textarea>
+<button type="submit" class="btn btn-light">Verify and close NCR</button>
+</form></details>
+@endcanany
+@endif
+@endif
+</td></tr>
+@empty<tr><td colspan="6">No nonconformance cases recorded.</td></tr>@endforelse
+</tbody></table></div>
+<p class="muted">Showing up to 150 recent investigations, with open investigations listed before closed records. Sample and inventory disposition remain independently controlled.</p>
+</section>
+@endif
 @canany(['laboratory.create','administration.update'])
 <section class="qc-panel"><h2>Register a source-linked sample</h2>
 <form class="qc-form" method="POST" action="{{ route('laboratory.samples.store') }}">@csrf
