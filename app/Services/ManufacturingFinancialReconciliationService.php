@@ -60,6 +60,15 @@ class ManufacturingFinancialReconciliationService
                 'settlement.finished_good_dispatch_id',
                 'settlement.finance_historical_dispatch_disposition_id')
             ->get()->groupBy('production_batch_cost_posting_id');
+        $scrapped=DB::table('finance_historical_customer_return_disposition_reviews as scrap')
+            ->join('production_invoice_cogs_postings as original',
+                'original.id','=','scrap.production_invoice_cogs_posting_id')
+            ->whereIn('original.production_batch_cost_posting_id',$posted->pluck('id'))
+            ->where('scrap.treatment','scrap_cogs_reclass')
+            ->where('scrap.status','posted')
+            ->select('scrap.*',
+                'original.production_batch_cost_posting_id as cost_batch_id')
+            ->get()->groupBy('cost_batch_id');
         $sourceIds=$cogs->flatten()->pluck('id');
         $returns=DB::table('production_return_cost_postings')
             ->whereIn('production_invoice_cogs_posting_id',$sourceIds)
@@ -104,6 +113,7 @@ class ManufacturingFinancialReconciliationService
             $physical=0;$sold=0;$recovered=0;$restoredCost=BigDecimal::zero();
             $costedCost=BigDecimal::zero();
             $nonSaleQty=0;$nonSaleCost=BigDecimal::zero();
+            $scrappedQty=0;$scrappedCost=BigDecimal::zero();
             foreach($dispatches->get($batch->id,collect()) as $movement){
                 $physical+=(int)$movement->quantity_packages;
             }
@@ -268,6 +278,45 @@ class ManufacturingFinancialReconciliationService
                         $issues[]='A posted non-sale batch expense fails original currency, purpose-specific expense debit or finished-inventory credit GL reconciliation.';
                     }
                 }
+                foreach($scrapped->get($capital->id,collect()) as $loss){
+                    $quarantine=DB::table('sales_return_quarantines')
+                        ->where('id',$loss->sales_return_quarantine_id)->first();
+                    $sale=DB::table('sales_invoice_lines')
+                        ->where('id',$loss->sales_invoice_line_id)->first();
+                    $costSource=DB::table('production_invoice_cogs_postings')
+                        ->where('id',$loss->production_invoice_cogs_posting_id)->first();
+                    $expense=DB::table('ledger_accounts')
+                        ->where('id',$loss->loss_ledger_id)->first();
+                    $journal=DB::table('journal_entries')
+                        ->where('id',$loss->journal_entry_id)->first();
+                    if(!$quarantine || $quarantine->status!=='scrapped' ||
+                        (int)$quarantine->production_batch_id!==(int)$batch->id ||
+                        (int)$quarantine->quantity_packages!==(int)$loss->quantity_packages ||
+                        (string)$quarantine->decided_on!==(string)$loss->posting_date ||
+                        $quarantine->released_warehouse_id!==null ||
+                        !$sale || (int)$sale->production_batch_id!==(int)$batch->id ||
+                        !$costSource ||
+                        (int)$costSource->sales_invoice_line_id!==(int)$sale->id ||
+                        !$expense || $expense->type!=='expense' ||
+                        !$policy || (int)$loss->cogs_ledger_id!==(int)$policy->cogs_ledger_id ||
+                        (int)$loss->loss_ledger_id===(int)$policy->cogs_ledger_id ||
+                        (int)$loss->currency_id!==(int)$capital->currency_id ||
+                        !$journal || (int)$journal->currency_id!==(int)$capital->currency_id ||
+                        (string)$journal->entry_date!==(string)$loss->posting_date ||
+                        !$this->journalIsValid((int)$loss->journal_entry_id) ||
+                        !$this->decimal($loss->original_invoice_cogs)
+                            ->isEqualTo((string)$costSource->amount) ||
+                        !$this->ledgerNet((int)$loss->journal_entry_id,
+                            (int)$loss->loss_ledger_id)
+                            ->isEqualTo((string)$loss->source_loss_amount) ||
+                        !$this->ledgerNet((int)$loss->journal_entry_id,
+                            (int)$policy->cogs_ledger_id)
+                            ->isEqualTo($this->decimal($loss->source_loss_amount)->negated())){
+                        $issues[]='The source-priced QC-scrapped customer credit cannot be reconciled to an independently signed original-cost loss debit and sale COGS credit, without a warehouse inventory movement.';
+                    }
+                    $scrappedQty+=(int)$loss->quantity_packages;
+                    $scrappedCost=$scrappedCost->plus((string)$loss->source_loss_amount);
+                }
                 if($invoices->get($batch->id,collect())->count()!==$postings->count()){
                     $issues[]='Some sales invoice lines do not have exactly one original-currency COGS posting.';
                 }
@@ -276,6 +325,9 @@ class ManufacturingFinancialReconciliationService
             $netCosted=$sold+$nonSaleQty-$recovered;
             $bookPackages=$capital?($originalPackages-$netCosted):null;
             $remaining=$amount?->minus($costedCost)->minus($nonSaleCost)->plus($restoredCost);
+            $netCogs=$capital?$costedCost->minus($restoredCost)->minus($scrappedCost):null;
+            if($netCogs && $netCogs->isNegative())
+                $issues[]='Original customer sales COGS after already QC-released return credits and separately reclassified scrapped-return expense is negative; verify original source cost allocations.';
             if($netPhysical<0 || ($capital && $bookPackages<0)){
                 $issues[]='Physical or costed finished-goods stock is negative.';
             }
@@ -299,6 +351,7 @@ class ManufacturingFinancialReconciliationService
                 'accepted'=>$originalPackages,'received'=>$received,'dispatched'=>$physical,
                 'qc_returns'=>$returnQty,'costed_sales'=>$sold,
                 'costed_non_sale'=>$nonSaleQty,
+                'qc_scrapped_packages'=>$scrappedQty,
                 'costed_recoveries'=>$recovered,'net_physical'=>$netPhysical,
                 'remaining_costed'=>$bookPackages,
                 'gross_material_source_cost'=>$capital?(string)$this->decimal($capital->material_amount)->toScale(4):null,
@@ -306,6 +359,8 @@ class ManufacturingFinancialReconciliationService
                 'total_capitalized'=>$amount?(string)$amount->toScale(4):null,
                 'posted_cogs'=>$capital?(string)$costedCost->toScale(4):null,
                 'posted_non_sale_expense'=>$capital?(string)$nonSaleCost->toScale(4):null,
+                'posted_scrapped_return_loss'=>$capital?(string)$scrappedCost->toScale(4):null,
+                'net_sales_cogs_after_returns_and_scrap'=>$netCogs?(string)$netCogs->toScale(4):null,
                 'returned_cost'=>$capital?(string)$restoredCost->toScale(4):null,
                 'remaining_asset_value'=>$remaining?(string)$remaining->toScale(4):null,
                 'issues'=>array_values(array_unique($issues)),
