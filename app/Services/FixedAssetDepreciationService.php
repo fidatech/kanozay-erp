@@ -62,6 +62,7 @@ class FixedAssetDepreciationService
         return DB::transaction(function()use($asset,$month,$userId) {
             $asset=FixedAsset::whereKey($asset->id)->lockForUpdate()->firstOrFail();
             if($asset->status!=='active')throw ValidationException::withMessages(['asset'=>'Inactive assets cannot be depreciated.']);
+            app(FixedAssetCapitalizationService::class)->assertReconciled($asset);
             $policy=FixedAssetDepreciationPolicy::where('fixed_asset_id',$asset->id)->lockForUpdate()->first();
             if(!$policy)throw ValidationException::withMessages(['policy'=>'Approve a depreciation policy before posting.']);
 
