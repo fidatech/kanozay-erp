@@ -14,7 +14,7 @@
 <a href="{{ route('production.orders.index') }}" class="btn btn-light">Production orders</a></div>
 @if(session('success'))<p class="notice">{{ session('success') }}</p>@endif
 @if($errors->any())<p class="notice notice-warning">{{ implode(' ', $errors->all()) }}</p>@endif
-<div class="ws-warning">Approved routing instructions are captured when the production order is created and cannot be rewritten mid-batch. An order with routed stages must complete every stage after materials have been issued and before the production batch is submitted to QC. Orders without approved routing preserve the existing manufacturing workflow; adding routing later does not retroactively alter their plans.</div>
+<div class="ws-warning">Starting a routed operation now checks whether the assigned machine is already running another work step or is in a recorded downtime interval. Elapsed time is calendar time between start and completion; it is not a verified payroll or labor-hour posting. Approved routing instructions are captured when the production order is created and cannot be rewritten mid-batch. An order with routed stages must complete every stage after materials have been issued and before the production batch is submitted to QC. Orders without approved routing preserve the existing manufacturing workflow; adding routing later does not retroactively alter their plans.</div>
 <section class="ws-panel"><h2>Production orders with routed work steps</h2>
 <div class="ws-wrap"><table><thead><tr><th>Order</th><th>Recipe</th><th>State</th><th>Routed stages</th><th>Progress</th></tr></thead><tbody>
 @forelse($orders as $order)
@@ -24,11 +24,13 @@
 @empty<tr><td colspan="5">No production orders available.</td></tr>@endforelse
 </tbody></table></div></section>
 <section class="ws-panel"><h2>Routed operations and actual completion</h2>
-<div class="ws-wrap"><table><thead><tr><th>Order</th><th>Step</th><th>Operation</th><th>Machine</th><th>Planned time</th><th>Status</th><th>Instructions</th><th>Actual work</th></tr></thead><tbody>
+<div class="ws-wrap"><table><thead><tr><th>Order</th><th>Step</th><th>Operation</th><th>Machine</th><th>Planned time</th><th>Elapsed time</th><th>Status</th><th>Instructions</th><th>Actual work</th></tr></thead><tbody>
 @forelse($steps as $step)<tr>
 <td><a href="{{ route('production.orders.show',$step->production_order_id) }}">{{ $step->order_number }}</a><br><small>{{ ucfirst($step->order_status) }}</small></td>
 <td>{{ $step->step }}</td><td>{{ $step->operation }}</td>
 <td>{{ $step->equipment_code??'Not allocated' }}</td><td>{{ $step->estimated_minutes??'—' }} min</td>
+@php($elapsed=$step->started_at && $step->completed_at?\Carbon\Carbon::parse($step->started_at)->diffInMinutes(\Carbon\Carbon::parse($step->completed_at)):null)
+<td>{{ $elapsed===null?'—':number_format((float)$elapsed,1).' min' }}</td>
 <td><span class="ws-status">{{ ucfirst(str_replace('_',' ',$step->status)) }}</span></td>
 <td>{{ $step->instructions }}</td>
 <td>
@@ -49,6 +51,6 @@
 @endif
 </td>
 </tr>
-@empty<tr><td colspan="8">No approved routing was captured for these orders.</td></tr>@endforelse
+@empty<tr><td colspan="9">No approved routing was captured for these orders.</td></tr>@endforelse
 </tbody></table></div>{{ $steps->links() }}</section>
 @endsection
