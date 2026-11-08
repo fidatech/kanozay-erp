@@ -51,6 +51,26 @@
   <div style="border-top:1px solid #667085;padding-top:8px">Prepared by</div><div style="border-top:1px solid #667085;padding-top:8px">Customer signature</div>
  </div>
 </div>
+<section class="card no-print" style="max-width:900px;margin:18px auto;padding:22px">
+<h2>Physical delivery and logistics progress</h2>
+<p class="muted">Invoice posting already dispatches selected finished-good batches from stock. Delivery notes document where those invoiced packages went; they do not post another inventory movement or revenue journal.</p>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:15px 0">
+@foreach(['Documented in active notes'=>'documented','Customer receipt confirmed'=>'delivered','Returned in transit'=>'returned','Cancelled-note packages'=>'cancelled'] as $description=>$property)
+<div style="border:1px solid #dce6f1;border-radius:8px;padding:12px"><div class="muted">{{ $description }}</div><strong style="font-size:20px">{{ number_format($logistics[$property]) }}</strong></div>
+@endforeach
+</div>
+<div class="table-wrap"><table><thead><tr><th>Delivery note</th><th>Document date</th><th>Packages</th><th>Latest logistics status</th><th>Customer receipt evidence</th></tr></thead><tbody>
+@forelse($deliveryNotes as $note)
+<tr><td><a href="{{ route('sales.delivery-notes.show',$note) }}">{{ $note->number }}</a></td>
+<td>{{ $note->delivery_date?->format('Y-m-d') }}</td>
+<td>{{ $note->lines->sum('quantity_packages') }}</td>
+<td>{{ ucfirst($note->status) }}</td>
+<td>{{ $note->received_by ? $note->received_by.' · '.$note->delivered_at?->format('Y-m-d H:i') : 'Not confirmed' }}</td></tr>
+@empty<tr><td colspan="5">No delivery-note documentation has been issued for this invoice.</td></tr>
+@endforelse
+</tbody></table></div>
+<p class="muted">Customer-credit returns and their quarantine decisions remain separate from delivery-note status. Cancelling a delivery note never restores already invoiced inventory.</p>
+</section>
 <style>
 @page{size:A4;margin:12mm}
 @media print{body{background:#fff!important}.no-print,.top,.rail,.sidebar,.topbar,nav{display:none!important}.content,.main,.invoice-sheet{width:100%!important;max-width:none!important;margin:0!important;padding:0!important;box-shadow:none!important;border:0!important}.invoice-sheet{break-inside:avoid}.invoice-sheet table{font-size:11pt}.invoice-sheet tr{break-inside:avoid}a{color:inherit;text-decoration:none}.invoice-sheet[dir="rtl"]{direction:rtl}.invoice-sheet[dir="rtl"] header>div:last-child{text-align:left!important}.invoice-sheet[dir="rtl"] th{text-align:right!important}}
