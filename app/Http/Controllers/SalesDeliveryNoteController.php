@@ -6,6 +6,7 @@ use App\Models\ActivityLog;
 use App\Models\SalesDeliveryNote;
 use App\Models\SalesInvoice;
 use App\Models\SalesInvoiceLine;
+use App\Support\LocalizedDecimal;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -68,6 +69,7 @@ class SalesDeliveryNoteController extends Controller
     public function store(Request $request)
     {
         $this->authorizeAction($request,'create');
+        $request->merge(['quantities'=>LocalizedDecimal::quantities($request->input('quantities'))]);
         $data=$request->validate([
             'submission_token'=>['required','uuid'],
             'sales_invoice_id'=>['required','integer','exists:sales_invoices,id'],
