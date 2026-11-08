@@ -295,6 +295,35 @@ class FinanceCloseReadinessService
         // reconciliation exception. Only the validated COGS executor
         // can resolve invoice cases automatically; arbitrary historic GL
         // journals do not silently close other exception categories.
+        $openingAudit=DB::table('finance_opening_fifo_valuations as valued')
+            ->join('journal_entries as journal',
+                'journal.id','=','valued.journal_entry_id')
+            ->join('inventory_cost_layers as source',
+                'source.id','=','valued.inventory_cost_layer_id')
+            ->whereBetween('valued.posting_date',[$begin,$end])
+            ->select('valued.original_cost','valued.currency_id','valued.journal_entry_id',
+                'valued.posting_date','source.original_cost as layer_cost',
+                'source.currency_id as layer_currency_id',
+                'journal.status','journal.entry_date','journal.currency_id as journal_currency_id',
+                'journal.reversal_of_id')->get();
+        $invalidOpenings=0;
+        foreach($openingAudit as $row){
+            if($row->status!=='posted' || $row->reversal_of_id ||
+                DB::table('journal_entries')
+                    ->where('reversal_of_id',$row->journal_entry_id)->exists() ||
+                (int)$row->currency_id!==(int)$row->layer_currency_id ||
+                (int)$row->currency_id!==(int)$row->journal_currency_id ||
+                (string)$row->entry_date!==(string)$row->posting_date ||
+                $row->layer_cost===null ||
+                !BigDecimal::of((string)$row->layer_cost)
+                    ->isEqualTo((string)$row->original_cost)){
+                $invalidOpenings++;
+            }
+        }
+        if($invalidOpenings){
+            $blockers[]=$invalidOpenings.
+                ' source-linked opening FIFO valuation(s) for this month have reversed/unposted journals or mismatched asset cost and currency.';
+        }
         $openHistorical=DB::table('finance_historical_correction_cases')
             ->whereBetween('source_date',[$begin,$end])
             ->whereIn('status',['submitted','approved'])->count();
