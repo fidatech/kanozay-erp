@@ -63,6 +63,139 @@ I am not the requester and independently checked the original source documentati
 <button class="btn" type="submit" onclick="return confirm('Record this independent finance decision? No original stock or GL value will change.')">Save independent finance review</button>
 </form></section>
 @endif
+@if($case->case_type==='customer_return_disposition')
+<section class="hfcs-card">
+<h2>Historical customer credit — QC quarantine or signed scrapped-return loss</h2>
+<p class="hfcs-alert"><strong>Quarantined</strong> means a documented physical hold with NO finished-stock asset, loss entry or COGS reversal. Only a later independently signed QC disposition can establish a genuine loss. <strong>Scrapped</strong> means the original customer returned units were independently condemned, have never been put back into the saleable warehouse, and their genuine ORIGINAL manufacturing COGS may be reclassified from sales COGS to a separately approved damaged-returns loss expense. This is an expense-category reclassification, not a second loss or extra warehouse movement.</p>
+@if($historicalDispositionQc)
+<div class="hfcs-grid">
+<div><small>Original customer invoice</small><div>
+@if($historicalDispositionInvoice)
+<a href="{{ route('sales.invoices.show',$historicalDispositionInvoice->sales_invoice_id) }}">{{ $historicalDispositionInvoice->invoice_number }}</a>
+@else Missing or unverified @endif</div></div>
+<div><small>Genuine posted credit note</small><div>{{ $historicalDispositionCredit?->credit_number??'Missing' }}</div></div>
+<div><small>Original credit date</small><div>{{ $historicalDispositionCredit?->credit_date??'Unknown' }}</div></div>
+<div><small>Original customer credit author</small><div>#{{ $historicalDispositionCredit?->credit_author_id??'Unknown' }}</div></div>
+<div><small>QC inventory disposition</small><div><strong>{{ ucfirst($historicalDispositionQc->status) }}</strong></div></div>
+<div><small>Original source quantity</small><div>{{ number_format($historicalDispositionQc->quantity_packages) }} packages</div></div>
+<div><small>QC registrar / independent inspector</small><div>#{{ $historicalDispositionQc->registered_by }} / #{{ $historicalDispositionQc->decided_by??'Awaiting independent QC' }}</div></div>
+<div><small>Original QC scrap date</small><div>{{ $historicalDispositionQc->decided_on??'Pending physical QC' }}</div></div>
+<div><small>Signed QC disposition reference</small><div>{{ $historicalDispositionQc->quality_reference??'Unresolved' }}</div></div>
+<div><small>Approved physical receiving location</small><div>#{{ $historicalDispositionQc->received_warehouse_id??'Not assigned' }}</div></div>
+<div><small>Original manufacturing COGS</small><div>
+@if($historicalDispositionCOGS)
+{{ $historicalDispositionCOGS->amount }} {{ $historicalDispositionCOGS->currency_code }}
+@else <strong>Unknown / not posted — scrap reclassification blocked</strong> @endif
+</div></div>
+</div>
+@if($historicalDispositionQc->decision_notes)
+<p><strong>Signed QC decision:</strong> {{ $historicalDispositionQc->decision_notes }}</p>
+@endif
+@endif
+@if($historicalDispositionPlan)
+<h3>Separately reviewed source financial disposition</h3>
+<div class="hfcs-grid">
+<div><small>Finance treatment</small><div><strong>{{ str_replace('_',' ',ucfirst($historicalDispositionPlan->treatment)) }}</strong></div></div>
+<div><small>Plan status</small><div><strong>{{ ucfirst($historicalDispositionPlan->status) }}</strong></div></div>
+<div><small>Original QC/credit date</small><div>{{ $historicalDispositionPlan->source_date }}</div></div>
+<div><small>Original GL posting date</small><div>{{ $historicalDispositionPlan->posting_date??'No journal for quarantine hold' }}</div></div>
+<div><small>Original source COGS</small><div>{{ $historicalDispositionPlan->original_invoice_cogs??'Not valued for quarantine' }}</div></div>
+<div><small>Approved lost packages cost</small><div>{{ $historicalDispositionPlan->source_loss_amount??'No loss recognized' }} {{ $historicalDispositionPlan->currency_code??'' }}</div></div>
+<div><small>Loss expense ledger</small><div>{{ $historicalDispositionPlan->loss_ledger_code ? $historicalDispositionPlan->loss_ledger_code.' · '.$historicalDispositionPlan->loss_ledger_name : 'None; quarantine is not an expense' }}</div></div>
+<div><small>Posted reclassification</small><div>{{ $historicalDispositionPlan->journal_number??'No GL posted' }} {{ $historicalDispositionPlan->journal_status ? '('.$historicalDispositionPlan->journal_status.')' : '' }}</div></div>
+</div>
+<p><strong>Signed QC/customer source evidence:</strong> {{ $historicalDispositionPlan->evidence_reference }}</p>
+<p style="white-space:pre-wrap">{{ $historicalDispositionPlan->reconciliation_notes }}</p>
+@if($historicalDispositionPlan->status==='submitted' &&
+(auth()->user()->can('finance.update') || auth()->user()->can('administration.update')) &&
+(int)$historicalDispositionPlan->submitted_by!==auth()->id() &&
+(int)$case->requested_by!==auth()->id() &&
+(int)$case->reviewed_by!==auth()->id() &&
+(int)$historicalDispositionQc->registered_by!==auth()->id() &&
+(int)($historicalDispositionQc->decided_by??0)!==auth()->id() &&
+(int)($historicalDispositionCredit?->credit_author_id??0)!==auth()->id())
+<h3>Independent original customer credit/QC finance decision</h3>
+<form method="POST" action="{{ route('finance.historical-corrections.return-disposition-review',$case->id) }}" class="hfcs-form">
+@csrf
+<label>Decision<select name="decision" required>
+<option value="">Choose independent documented decision</option>
+<option value="approve">Approve {{ $historicalDispositionPlan->treatment==='quarantine_hold' ? 'documentary quarantine hold (NO GL)' : 'original-currency COGS-to-approved-loss reclassification' }}</option>
+<option value="reject">Reject unsupported customer/QC/financial source</option>
+</select></label>
+<label>Independent signed finance reference
+<input name="approval_reference" required minlength="4" maxlength="180"></label>
+<label>Verify original customer invoice, posted credit-note ledger, QC disposition, original COGS, missing physical restock, source currency and exact account
+<textarea name="approval_notes" rows="5" required minlength="60" maxlength="5000"></textarea></label>
+<label style="display:flex;align-items:center;gap:8px">
+<input type="checkbox" name="confirm_independent_disposition_review" value="1" required style="width:auto">
+I independently verified the original credit, QC stage, account mapping and source evidence; I am not a prior involved reviewer.
+</label>
+<button class="btn" type="submit">{{ $historicalDispositionPlan->treatment==='quarantine_hold' ? 'Approve documentary quarantine hold without GL' : 'Record independent QC scrap expense review' }}</button>
+</form>
+@endif
+@if($historicalDispositionPlan->status==='approved' &&
+$historicalDispositionPlan->treatment==='scrap_cogs_reclass' &&
+(auth()->user()->can('finance.update') || auth()->user()->can('administration.update')) &&
+(int)$historicalDispositionPlan->submitted_by!==auth()->id() &&
+(int)$historicalDispositionPlan->approved_by!==auth()->id() &&
+(int)$case->requested_by!==auth()->id() &&
+(int)$case->reviewed_by!==auth()->id() &&
+(int)$historicalDispositionQc->registered_by!==auth()->id() &&
+(int)($historicalDispositionQc->decided_by??0)!==auth()->id() &&
+(int)($historicalDispositionCredit?->credit_author_id??0)!==auth()->id())
+<h3>Execute independently approved scrapped customer loss treatment</h3>
+<form method="POST" action="{{ route('finance.historical-corrections.return-scrap-post',$case->id) }}" class="hfcs-form">
+@csrf
+<p class="hfcs-alert">Original-date entry: Dr separately approved scrapped-return loss expense / Cr original factory sales COGS, in the factory batch's frozen source currency. Original COGS must already be a real posted GL source; there is NO finished-inventory asset entry. Only approved, open original accounting dates can be used. The source case and expense reclassification either commit together or roll back.</p>
+<label style="display:flex;align-items:center;gap:8px">
+<input type="checkbox" name="confirm_source_loss_reclass" value="1" required style="width:auto">
+I verified source loss and prior cost treatment; I am not adding or removing physical packages, booking a second customer credit or creating a second expense.
+</label>
+<button class="btn" type="submit" onclick="return confirm('Reclassify the verified existing original COGS to an independently approved scrapped-returns expense with NO finished-stock entries?')">Post original customer QC scrap COGS reclassification</button>
+</form>
+@endif
+@elseif($case->status==='approved' && $historicalDispositionQc &&
+in_array($historicalDispositionQc->status,['quarantined','scrapped'],true) &&
+(auth()->user()->can('finance.update') || auth()->user()->can('administration.update')) &&
+(int)$case->requested_by!==auth()->id() &&
+(int)$case->reviewed_by!==auth()->id() &&
+(int)$historicalDispositionQc->registered_by!==auth()->id() &&
+(int)($historicalDispositionQc->decided_by??0)!==auth()->id() &&
+(int)($historicalDispositionCredit?->credit_author_id??0)!==auth()->id())
+<h3>Submit signed original customer QC disposition for separate finance review</h3>
+<p class="hfcs-alert">{{ $historicalDispositionQc->status==='quarantined'
+? 'Document the original customer credit and physical QC hold. There is no saleable asset and NO expense or journal will be posted. After a new independent QC decision, submit a fresh correction case against the changed source.'
+: 'Source-priced original QC scrap is an expense reclassification ONLY if the real manufacturing sale COGS is already posted, the original scrap date is in an OPEN month and no earlier release/restock or scrap loss already consumed the source COGS.' }}</p>
+<form method="POST" action="{{ route('finance.historical-corrections.return-disposition-submit',$case->id) }}" class="hfcs-form">
+@csrf
+@if($historicalDispositionQc->status==='scrapped')
+<label>Independently approved scrapped customer return loss expense account
+<select name="loss_ledger_id" required><option value="">Choose original-currency scrapped-returns expense account</option>
+@foreach($historicalDispositionLedgers as $ledger)
+<option value="{{ $ledger->id }}" @selected(old('loss_ledger_id')==$ledger->id)>{{ $ledger->code }} · {{ $ledger->name }}</option>
+@endforeach
+</select></label>
+@endif
+<label>Original signed customer credit / independent QC evidence reference
+<input name="evidence_reference" required minlength="4" maxlength="180" value="{{ old('evidence_reference') }}"></label>
+<label>Finance reconciliation of original credit, physical quarantine/scrap, factory cost and approved COGS treatment
+<textarea name="reconciliation_notes" rows="5" required minlength="60" maxlength="5000">{{ old('reconciliation_notes') }}</textarea></label>
+<label style="display:flex;align-items:center;gap:8px">
+<input type="checkbox" name="confirm_no_saleable_stock" value="1" required style="width:auto">
+The source QC record has no saleable release/warehouse restock; this form cannot create or amend any physical inventory quantity.
+</label>
+<label style="display:flex;align-items:center;gap:8px">
+<input type="checkbox" name="confirm_no_duplicate_loss" value="1" required style="width:auto">
+I verified the genuine customer credit and source COGS position without assigning the same lost goods a duplicate asset, refund or expense.
+</label>
+<button class="btn" type="submit">{{ $historicalDispositionQc->status==='quarantined' ? 'Submit QC hold documentation (NO GL)' : 'Submit original-currency signed scrap loss proposal' }}</button>
+</form>
+@else
+<p class="hfcs-alert">Source disposition is unavailable or this finance case is not independently approved. Missing original customer, QC or COGS evidence must remain unresolved; quarantined goods never become a loss merely because a customer was credited.</p>
+@endif
+</section>
+@endif
+
 @if($case->case_type==='released_return_missing_cost')
 <section class="hfcs-card">
 <h2>Previously QC-released customer return — missing original inventory cost</h2>
