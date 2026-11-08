@@ -3,7 +3,12 @@
 <div class="heading">
  <div><h1><i class="fa-solid fa-scale-balanced"></i> Raw-material valuation</h1>
  <p>Remaining FIFO cost layers. Values stay in their captured transaction currencies; amounts in different currencies are not combined.</p></div>
+ <div class="actions">
  <a class="btn btn-light" href="{{ route('inventory.materials.index') }}">Back to materials</a>
+ @canany(['finance.view','finance.update','administration.view','reports.view'])
+ <a class="btn btn-light" href="{{ route('finance.historical-corrections.index',['type'=>'opening_fifo_unvalued']) }}">Opening-stock source corrections</a>
+ @endcanany
+ </div>
 </div>
 <div class="card" style="padding:22px">
  <form method="GET" class="filters" style="display:flex;gap:10px;align-items:end;margin-bottom:18px">
@@ -26,6 +31,6 @@
    @empty<tr><td colspan="7" class="empty">No remaining cost layers match this filter.</td></tr>@endforelse
   </tbody>
  </table></div>
- <p class="muted" style="margin-top:16px">Unvalued quantities include opening stock without a cost snapshot and physical balances recorded before valuation tracking. Reconcile these quantities against verified source documents before using inventory value in financial statements.</p>
+ <p class="muted" style="margin-top:16px">Unvalued quantities include opening stock without a cost snapshot and physical balances recorded before valuation tracking. An unconsumed opening lot may be costed only through independent finance evidence and its posted source-currency asset/equity journal. Consumed, unlocated, already-capitalized and unsupported old lots remain blocked. Never record the same physical opening quantity twice.</p>
 </div>
 @endsection
