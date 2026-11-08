@@ -11,6 +11,7 @@ use App\Models\InventoryStockMovement;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 
 class InventoryCostService
@@ -59,6 +60,81 @@ class InventoryCostService
             'value_display' => $row['is_valued'] ? $this->formatDecimal((string) $row['value']->toScale(4, RoundingMode::HalfUp)) : null,
             'is_valued' => $row['is_valued'],
         ], $rows));
+    }
+
+    /**
+     * Present each remaining lot by its verified warehouse position.
+     * A missing location receives its own unreconciled row, never a
+     * guessed warehouse. Cost totals are apportioned within each source
+     * currency and retain all ten source decimal places.
+     */
+    public function locationValuationRows(Collection $layers): array
+    {
+        if($layers->isEmpty())return [];
+        $positions=DB::table('inventory_cost_layer_locations')
+            ->whereIn('inventory_cost_layer_id',$layers->pluck('id'))->get()
+            ->groupBy('inventory_cost_layer_id');
+        $warehouses=\App\Models\CompanyWarehouse::whereIn('id',
+            $positions->flatten()->pluck('company_warehouse_id')->filter()->unique()
+        )->get()->keyBy('id');
+        $rows=[];
+        foreach($layers as $layer){
+            $remaining=BigDecimal::of((string)$layer->remaining_quantity);
+            if(!$remaining->isPositive())continue;
+            $locations=[];$totalPositioned=BigDecimal::zero();
+            foreach($positions->get($layer->id,collect()) as $position){
+                $qty=BigDecimal::of((string)$position->quantity);
+                if(!$qty->isPositive())continue;
+                $totalPositioned=$totalPositioned->plus($qty);
+                $locations[]=[
+                    'location'=>$position->company_warehouse_id===null
+                        ?'Unassigned pool'
+                        :($warehouses->get($position->company_warehouse_id)?->name??'Unverified warehouse'),
+                    'quantity'=>$qty,'status'=>'Located',
+                ];
+            }
+            $misplaced=$totalPositioned->isGreaterThan($remaining);
+            $unlocated=$remaining->minus($totalPositioned);
+            if($unlocated->isPositive()){
+                $locations[]=[
+                    'location'=>'Location not reconciled',
+                    'quantity'=>$unlocated,'status'=>'Reconciliation required',
+                ];
+            }
+            if($locations===[]){
+                $locations[]=['location'=>'Location not reconciled',
+                    'quantity'=>$remaining,'status'=>'Reconciliation required'];
+            }
+
+            $valued=$layer->original_cost!==null && $layer->currency_id!==null &&
+                $layer->currency_code!==null;
+            $cost=$valued?$this->remainingLayerCost($layer):null;
+            $distributed=BigDecimal::zero();
+            foreach($locations as $index=>$location){
+                $last=$index===count($locations)-1;
+                $value=null;
+                if($valued && !$misplaced){
+                    $value=$last
+                        ?$cost->minus($distributed)
+                        :$cost->multipliedBy($location['quantity'])
+                            ->dividedBy($remaining,10,RoundingMode::HalfUp);
+                    $distributed=$distributed->plus($value);
+                }
+                $rows[]=[
+                    'layer_id'=>$layer->id,
+                    'material'=>$layer->material,
+                    'source'=>$layer->source_type.' #'.$layer->source_id,
+                    'received_on'=>$layer->received_on?->toDateString(),
+                    'location'=>$location['location'],
+                    'quantity'=>(string)$location['quantity']->toScale(6),
+                    'currency_code'=>$layer->currency_code,
+                    'value'=>$value===null?null:(string)$value->toScale(10,RoundingMode::HalfUp),
+                    'status'=>$misplaced?'Location mismatch':
+                        (!$valued?'Unvalued':$location['status']),
+                ];
+            }
+        }
+        return $rows;
     }
 
     public function receiveGoodsReceiptLine(int $lineId, int $actorId): InventoryCostLayer
