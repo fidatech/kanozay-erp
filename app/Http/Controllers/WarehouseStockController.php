@@ -86,6 +86,22 @@ class WarehouseStockController extends Controller
         }
         return redirect()->route('inventory.warehouse-stock.index')->with('success','Warehouse movement recorded without changing company-wide stock totals.');
     }
+    public function valuation(Request $request, \App\Services\InventoryCostService $costing)
+    {
+        abort_unless($request->user()->canAny(['inventory.view','administration.view']),403);
+        $filters=$request->validate(['currency'=>['nullable','regex:/^[A-Za-z]{3}$/']]);
+        $currency=strtoupper((string)($filters['currency']??''));
+        $layers=InventoryCostLayer::with('material')
+            ->where('remaining_quantity','>',0)
+            ->when($currency!=='',fn($query)=>$query->where('currency_code',$currency))
+            ->orderBy('received_on')->orderBy('id')->paginate(40)->withQueryString();
+        return view('inventory.warehouse-valuation',[
+            'rows'=>$costing->locationValuationRows($layers->getCollection()),
+            'layers'=>$layers,
+            'currencyFilter'=>$currency,
+        ]);
+    }
+
     public function assignLegacy(Request $request, InventoryLotLocationService $service)
     {
         abort_unless(
