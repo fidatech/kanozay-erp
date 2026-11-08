@@ -20,20 +20,21 @@
 @media(max-width:850px){.report-center .report-filters{grid-template-columns:1fr 1fr}.report-center .report-filters .search-filter{grid-column:1/-1}}
 @media(max-width:560px){.report-center .report-filters{grid-template-columns:1fr}.report-center .report-filters .search-filter{grid-column:auto}}
 </style>
+@php($t=fn(string $key)=>\App\Support\ReportingLabels::text($key))
 <div class="report-center">
-<div class="report-head"><div><h1><i class="fa-solid fa-chart-column"></i> {{ $title }}</h1><p>Reports & Analytics / {{ $title }}</p></div>
-<a class="btn" href="{{ route('workspace.page', ['reports', $report] + array_filter(['search'=>$filters['search']??null,'from'=>$dateColumn ? ($filters['from']??null) : null,'to'=>$dateColumn ? ($filters['to']??null) : null]) + ['export'=>'csv']) }}"><i class="fa-solid fa-file-csv"></i> Export CSV</a></div>
+<div class="report-head"><div><h1><i class="fa-solid fa-chart-column"></i> {{ $title }}</h1><p>{{ \App\Support\ErpInterfaceLabels::module('reports') }} / {{ $title }}</p></div>
+<a class="btn" href="{{ route('workspace.page', ['reports', $report] + array_filter(['search'=>$filters['search']??null,'from'=>$dateColumn ? ($filters['from']??null) : null,'to'=>$dateColumn ? ($filters['to']??null) : null]) + ['export'=>'csv']) }}"><i class="fa-solid fa-file-csv"></i> {{ $t('export_csv') }}</a></div>
 <section class="panel" style="padding:19px">
 <form class="report-filters" method="GET" action="{{ route('workspace.page',['reports',$report]) }}">
-<label class="search-filter">Search records<input name="search" type="search" maxlength="100" value="{{ $filters['search']??'' }}" placeholder="Reference, code or description"></label>
+<label class="search-filter">{{ $t('search_records') }}<input name="search" type="search" maxlength="100" value="{{ $filters['search']??'' }}" placeholder="{{ $t('search_hint') }}"></label>
 @if($dateColumn)
-<label>From<input name="from" type="date" value="{{ $filters['from']??'' }}"></label>
-<label>To<input name="to" type="date" value="{{ $filters['to']??'' }}"></label>
+<label>{{ $t('from') }}<input name="from" type="date" value="{{ $filters['from']??'' }}"></label>
+<label>{{ $t('to') }}<input name="to" type="date" value="{{ $filters['to']??'' }}"></label>
 @endif
-<div class="report-actions"><button type="submit" class="btn"><i class="fa-solid fa-filter"></i> Filter</button><a class="outline" href="{{ route('workspace.page',['reports',$report]) }}">Reset</a></div>
+<div class="report-actions"><button type="submit" class="btn"><i class="fa-solid fa-filter"></i> {{ $t('filter') }}</button><a class="outline" href="{{ route('workspace.page',['reports',$report]) }}">{{ $t('reset') }}</a></div>
 </form>
-<div class="report-note"><i class="fa-solid fa-circle-info"></i> {{ $note }}</div>
-<div class="report-head" style="margin:12px 0"><h2 style="margin:0;font-size:15px">Report register</h2><span class="report-count">{{ number_format($records->total()) }} matching records</span></div>
+<div class="report-note"><strong>{{ $t('reporting_note') }}:</strong> {{ $note }}</div>
+<div class="report-head" style="margin:12px 0"><h2 style="margin:0;font-size:15px">{{ $t('report_register') }}</h2><span class="report-count">{{ number_format($records->total()) }} {{ $t('matching_records') }}</span></div>
 <div class="report-table">
 <table><thead><tr>@foreach($columns as $column)<th scope="col">{{ $column }}</th>@endforeach</tr></thead>
 <tbody>
@@ -42,7 +43,7 @@
 <td>@if($index===0 && !empty($record['url']))<a href="{{ $record['url'] }}">{{ $value }}</a>@else {{ $value }} @endif</td>
 @endforeach</tr>
 @empty
-<tr><td colspan="{{ count($columns) }}" style="padding:32px;text-align:center;color:#7188a1">No records match these filters.</td></tr>
+<tr><td colspan="{{ count($columns) }}" style="padding:32px;text-align:center;color:#7188a1">{{ $t('no_filter_matches') }}</td></tr>
 @endforelse
 </tbody></table></div>
 {{ $records->links() }}
