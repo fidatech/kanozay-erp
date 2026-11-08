@@ -45,6 +45,11 @@ class PurchaseReturnService
 
             $duplicate=PurchaseReturnRecord::where('submission_token',$data['submission_token'])->first();
             if($duplicate){
+                if($duplicate->status==='cancelled'){
+                    throw ValidationException::withMessages([
+                        'submission_token'=>'This return submission token was cancelled. Start a new return request with a fresh token and source evidence.',
+                    ]);
+                }
                 if($duplicate->goods_receipt_id===$locked->id &&
                     $duplicate->returned_on->toDateString()===$data['returned_on'] &&
                     $duplicate->reason===$data['reason']){
