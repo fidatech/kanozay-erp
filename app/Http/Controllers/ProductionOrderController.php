@@ -2,6 +2,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ProductionOrder;
+use App\Support\LocalizedDecimal;
 use App\Services\ProductionMaterialService;
 use App\Services\ProductionWasteService;
 use App\Models\ProductionRecipe;
@@ -157,6 +158,7 @@ class ProductionOrderController extends Controller {
 
     public function issue(Request $request, ProductionOrder $order, ProductionMaterialService $service) {
         abort_unless($request->user()->can('inventory.update') && $request->user()->can('administration.update'), 403);
+        $request->merge(['actual_quantities'=>LocalizedDecimal::quantities($request->input('actual_quantities'))]);
         $data = $request->validate([
             'occurred_on' => ['required', 'date', 'before_or_equal:today'],
             'actual_quantities' => ['required', 'array', 'min:1'],
