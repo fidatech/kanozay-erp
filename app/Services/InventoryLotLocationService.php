@@ -155,6 +155,42 @@ class InventoryLotLocationService
     }
 
     /**
+     * A production reservation needs physically attributable, released lots.
+     * Reservations remain global until the work-order warehouse is chosen;
+     * we refuse unknown legacy locations instead of reserving phantom stock.
+     */
+    public function assertReservable(InventoryMaterial $material, BigDecimal $requested): void
+    {
+        $layers=InventoryCostLayer::where('inventory_material_id',$material->id)
+            ->where('remaining_quantity','>',0)->orderBy('received_on')->orderBy('id')
+            ->lockForUpdate()->get();
+        $positions=DB::table('inventory_cost_layer_locations')
+            ->whereIn('inventory_cost_layer_id',$layers->pluck('id'))
+            ->lockForUpdate()->get()->groupBy('inventory_cost_layer_id');
+        $released=BigDecimal::zero();
+        foreach($layers as $layer){
+            $placed=BigDecimal::zero();
+            foreach($positions->get($layer->id,collect()) as $position){
+                $placed=$placed->plus((string)$position->quantity);
+            }
+            if(!$placed->isEqualTo((string)$layer->remaining_quantity)){
+                throw ValidationException::withMessages([
+                    'production_order'=>'Material '.$material->sku.' has unverified lot positions. Reconcile its warehouse source before reserving for production.',
+                ]);
+            }
+            if(!app(QualityMaterialHoldService::class)->isLayerHeld($layer)){
+                $released=$released->plus((string)$layer->remaining_quantity);
+            }
+        }
+        $free=$released->minus((string)$material->reserved_quantity);
+        if($free->isLessThan($requested)){
+            throw ValidationException::withMessages([
+                'production_order'=>'Insufficient location-verified, QC-released FIFO stock for '.$material->sku.'.',
+            ]);
+        }
+    }
+
+    /**
      * Explicitly attribute a legacy layer's remaining quantity to one
      * physical warehouse or the unassigned pool. Never manufacture a lot or
      * increase stock, and never attribute beyond either available balance.
