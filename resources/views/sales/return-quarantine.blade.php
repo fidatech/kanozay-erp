@@ -10,7 +10,7 @@
 <div class="heading"><div><h1>Sales Returns — Quarantine & QC Disposition</h1><p>Separate physically returned goods from approved saleable warehouse stock.</p></div><a class="btn btn-light" href="{{ route('workspace.page',['sales','returns']) }}">Sales returns register</a></div>
 @if(session('success'))<p class="notice">{{ session('success') }}</p>@endif
 @if($errors->any())<p class="notice notice-warning">{{ implode(' ', $errors->all()) }}</p>@endif
-<div class="rq-callout">A customer credit note registers non-saleable quarantine without increasing on-hand inventory. Independent QC decides saleable release or scrap. Saleable release now also requires the original COGS evidence and posts a matching finished-goods asset recovery in the factory cost currency. Historical returns without their original cost journal must be reconciled by finance before saleable release; scrapped returns do not restore inventory value.</div>
+<div class="rq-callout">A customer credit note registers non-saleable quarantine without increasing on-hand inventory. Independent QC decides saleable release or scrap. Saleable release now also requires the original COGS evidence and posts a matching finished-goods asset recovery in the factory cost currency. Historical released stock without its original cost journal needs finance reconciliation. A signed scrapped return never restores finished inventory and can only reclassify genuine previously posted sale COGS to an independently approved loss expense. Held QC returns create no asset and no new expense.</div>
 <section class="rq-panel"><form method="GET" action="{{ route('sales.returns.quarantine.index') }}" style="display:flex;gap:10px">
 <select name="status"><option value="">All return statuses</option>
 @foreach(['quarantined'=>'Awaiting QC','released'=>'Released to stock','scrapped'=>'Scrapped'] as $id=>$name)
@@ -41,6 +41,7 @@
 </td>
 @if($mayViewCosts)
 @php($recovery=$returnCosts->get($q->id))
+@php($disposition=$returnDispositions->get($q->id))
 <td>
 @if($q->status==='released' && $recovery?->journal_status==='posted')
 <strong style="color:#167b51">{{ $recovery->currency_code }} <x-finance-amount :amount="$recovery->amount" /></strong>
@@ -51,9 +52,26 @@
   'type'=>'released_return_missing_cost','source_id'=>$q->id
 ]) }}">Investigate original credit/QC/COGS evidence</a></div>
 @elseif($q->status==='scrapped')
-<span class="muted">No saleable asset recovery; source COGS remains expensed</span>
+@if($disposition?->treatment==='scrap_cogs_reclass' && $disposition?->status==='posted' && $disposition?->journal_status==='posted')
+<strong style="color:#167b51">Original COGS reclassified to approved scrap loss: {{ $disposition->source_loss_amount }} {{ $disposition->currency_code }}</strong>
+<div class="muted">GL {{ $disposition->journal_number }} · Dr loss expense / Cr source COGS · No finished-stock asset</div>
 @else
-<span class="muted">QC held; asset not recovered</span>
+<span class="muted">No saleable asset restored; original sales COGS remains an expense.</span>
+<div>{{ $disposition?->status==='approved' ? 'Original source loss reclassification approved; awaiting separate finance executor.' : 'Independent source loss review is pending or has not been submitted.' }}</div>
+<div><a href="{{ route('finance.historical-corrections.index',[
+  'type'=>'customer_return_disposition','source_id'=>$q->id
+]) }}">Review original customer credit, QC scrap and COGS loss treatment</a></div>
+@endif
+@else
+@if($disposition?->treatment==='quarantine_hold' && $disposition?->status==='held')
+<strong class="muted">Independently reviewed: quarantine hold only</strong>
+<div>No inventory asset, expense or GL journal posted. Await independent QC disposition.</div>
+@else
+<span class="muted">QC held; no saleable inventory or loss recognized</span>
+<div><a href="{{ route('finance.historical-corrections.index',[
+  'type'=>'customer_return_disposition','source_id'=>$q->id
+]) }}">Document original customer credit and QC quarantine hold</a></div>
+@endif
 @endif
 </td>
 @endif
