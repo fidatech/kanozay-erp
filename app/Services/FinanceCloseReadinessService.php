@@ -228,6 +228,22 @@ class FinanceCloseReadinessService
                 ' landed-cost capitalization(s) refer to missing, reversed or nonposted inventory GL journals.';
         }
 
+        $unreviewedOrAbnormalWaste=DB::table('production_material_wastes as waste')
+            ->join('production_order_materials as item',
+                'item.id','=','waste.production_order_material_id')
+            ->leftJoin('production_waste_financial_reviews as treatment',
+                'treatment.production_material_waste_id','=','waste.id')
+            ->whereDate('waste.created_at','>=',$begin)
+            ->whereDate('waste.created_at','<=',$end)
+            ->where(function($q){
+                $q->whereNull('treatment.id')
+                  ->orWhereIn('treatment.treatment',['abnormal_loss','rework_required']);
+            })->count();
+        if($unreviewedOrAbnormalWaste){
+            $blockers[]=$unreviewedOrAbnormalWaste.
+                ' recorded material waste line(s) this month are unreviewed, abnormal or awaiting rework. Do not certify finished inventory or expense treatment before source evidence is reconciled.';
+        }
+
         $bankAccounts=DB::table('financial_accounts')
             ->where('type','bank')->where('is_active',true)->get(['id','name']);
         foreach($bankAccounts as $account){
