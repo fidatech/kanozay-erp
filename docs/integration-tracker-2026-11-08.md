@@ -63,6 +63,14 @@ Committed after the earlier progress update:
 
 **Important development boundaries:** database migrations and newly authored pages/services have not been executed or validated in a UAT environment at user direction. These are committed code changes, not a declaration of runtime correctness, full phase acceptance or production readiness. Legacy data reconciliation, correction/reversal of financial source documents, bank statement matching, tax/policy sign-off and large-volume integration remain outstanding.
 
+## Purchasing and inventory development update
+
+Development work has moved to purchasing/inventory, with warehouse-scoped physical stock counts, editable/cancellable draft POs, receipt/return source controls, better GRN audit and QC visibility, customer/supplier payable snapshots and localized numeric entry committed.
+
+See [Purchasing and Inventory Development Update](purchasing-inventory-development-2026-11-08.md) for implemented flows and unresolved cross-module development.
+
+**Phase remains INTEGRATION INCOMPLETE.** Warehouse-specific FIFO lot attribution, complex supplier return credits across several invoices, independently invoiced landed costs and full manufacturing/GL reconciliation remain to be developed or reviewed. Testing was deferred at the user's direction; it is not represented as passing.
+
 ## Acceptance and release gates
 
 1. Passing SQLite feature suite and isolated regression suite on the latest commit.
