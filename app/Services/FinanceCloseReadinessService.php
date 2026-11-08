@@ -124,6 +124,80 @@ class FinanceCloseReadinessService
             $blockers[]=$missingReturnCost.
                 ' saleable returned-lot recovery transaction(s) have no associated inventory asset/COGS reversal journal.';
         }
+        // A previously released physical return may have been credited to the
+        // customer and restocked before its factory COGS was reversed. Such a
+        // source correction is valid for financial close ONLY when its exact
+        // original-currency, independent-QC asset restoration remains posted.
+        $historicReturns=DB::table('finance_historical_customer_return_cost_recoveries as plan')
+            ->leftJoin('sales_return_quarantines as qc',
+                'qc.id','=','plan.sales_return_quarantine_id')
+            ->leftJoin('production_return_cost_postings as restored',
+                'restored.sales_return_quarantine_id','=','plan.sales_return_quarantine_id')
+            ->leftJoin('journal_entries as journal',
+                'journal.id','=','restored.journal_entry_id')
+            ->leftJoin('finance_historical_correction_cases as correction',
+                'correction.id','=','plan.finance_historical_correction_case_id')
+            ->where('plan.status','posted')
+            ->whereBetween('plan.posting_date',[$begin,$end])
+            ->select('plan.*','qc.status as qc_status',
+                'qc.decided_on','qc.quantity_packages as qc_quantity',
+                'qc.registered_by as qc_registered_by',
+                'qc.decided_by as qc_decided_by',
+                'restored.id as restored_id',
+                'restored.production_invoice_cogs_posting_id as source_cogs_id',
+                'restored.quantity_packages as restored_quantity',
+                'restored.amount as restored_amount',
+                'restored.journal_entry_id as restored_journal_id',
+                'journal.status as journal_status',
+                'journal.currency_id as journal_currency_id',
+                'journal.entry_date as journal_date',
+                'journal.reversal_of_id as journal_reversal',
+                'correction.status as case_status')->get();
+        $invalidHistoricalReturns=0;
+        foreach($historicReturns as $plan){
+            $valid=$plan->restored_id && $plan->qc_status==='released' &&
+                $plan->case_status==='resolved' &&
+                $plan->journal_status==='posted' &&
+                !$plan->journal_reversal &&
+                $plan->posted_by && $plan->approved_by &&
+                $plan->submitted_by && $plan->qc_decided_by &&
+                $plan->qc_registered_by &&
+                (int)$plan->approved_by!==(int)$plan->posted_by &&
+                (int)$plan->submitted_by!==(int)$plan->approved_by &&
+                (int)$plan->qc_decided_by!==(int)$plan->qc_registered_by &&
+                (int)$plan->source_cogs_id===(int)$plan->production_invoice_cogs_posting_id &&
+                (int)$plan->restored_quantity===(int)$plan->quantity_packages &&
+                (int)$plan->qc_quantity===(int)$plan->quantity_packages &&
+                (int)$plan->restored_journal_id===(int)$plan->journal_entry_id &&
+                (int)$plan->journal_currency_id===(int)$plan->currency_id &&
+                (string)$plan->journal_date===(string)$plan->posting_date &&
+                (string)$plan->decided_on===(string)$plan->original_qc_date &&
+                (string)$plan->original_qc_date===(string)$plan->posting_date &&
+                BigDecimal::of((string)($plan->restored_amount??'0'))
+                    ->isEqualTo((string)$plan->recoverable_original_cost);
+            if($valid && DB::table('journal_entries')
+                    ->where('reversal_of_id',$plan->journal_entry_id)->exists())
+                $valid=false;
+            if($valid){
+                $asset=BigDecimal::zero();$expense=BigDecimal::zero();
+                foreach(DB::table('journal_lines')
+                    ->where('journal_entry_id',$plan->journal_entry_id)
+                    ->get(['ledger_account_id','debit','credit']) as $line){
+                    if((int)$line->ledger_account_id===(int)$plan->finished_inventory_ledger_id)
+                        $asset=$asset->plus((string)$line->debit)->minus((string)$line->credit);
+                    if((int)$line->ledger_account_id===(int)$plan->cogs_ledger_id)
+                        $expense=$expense->plus((string)$line->debit)->minus((string)$line->credit);
+                }
+                if(!$asset->isEqualTo((string)$plan->recoverable_original_cost) ||
+                    !$expense->isEqualTo(
+                        BigDecimal::of((string)$plan->recoverable_original_cost)->negated()
+                    ))$valid=false;
+            }
+            if(!$valid)$invalidHistoricalReturns++;
+        }
+        if($invalidHistoricalReturns)
+            $blockers[]=$invalidHistoricalReturns.
+                ' originally QC-released historical customer return(s) have incomplete, reversed or mismatched source-currency finished-asset/COGS recovery journals.';
         $orphanDispatches=DB::table('finished_good_dispatch_lines as item')
             ->join('finished_good_dispatches as dispatch',
                 'dispatch.id','=','item.finished_good_dispatch_id')
