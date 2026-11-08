@@ -184,9 +184,11 @@ class ProductionWasteFinancialReviewService
                 ]);
             }
             if($entry->treatment==='abnormal_loss'){
-                throw ValidationException::withMessages([
-                    'waste'=>'An abnormal production loss cannot be included automatically in saleable finished-goods inventory. A reviewed FIFO source-cost allocation and separate expense recognition are required before capitalization.',
-                ]);
+                // Abnormal loss can proceed only when a separate authorized
+                // FIFO valuation identifies the precise source quantity,
+                // cost and independent expense ledger. The journal is posted
+                // atomically with the manufacturing capitalization.
+                continue;
             }
             if($entry->treatment==='rework_required'){
                 throw ValidationException::withMessages([
@@ -199,6 +201,7 @@ class ProductionWasteFinancialReviewService
                 ]);
             }
         }
+        app(ProductionAbnormalWasteCostService::class)->forOrder($orderId);
     }
 
     public function summaryForOrder(int $orderId):array
