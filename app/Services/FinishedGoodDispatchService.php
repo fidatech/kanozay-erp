@@ -18,8 +18,14 @@ class FinishedGoodDispatchService
         $releasedQuarantines=(int)DB::table('sales_return_quarantines')
             ->where('production_batch_id',$batch->id)->where('status','released')
             ->sum('quantity_packages');
-        $restockedReturns = (int) DB::table('sales_credit_note_lines')
-            ->where('production_batch_id', $batch->id)->where('restocked', true)->sum('quantity_packages');
+        // Historic direct-restock flags must not double-count a newer QC
+        // quarantine record that already credited the same physical stock.
+        $restockedReturns = (int) DB::table('sales_credit_note_lines as credited')
+            ->leftJoin('sales_return_quarantines as quarantined',
+                'quarantined.sales_credit_note_line_id','=','credited.id')
+            ->where('credited.production_batch_id',$batch->id)
+            ->where('credited.restocked',true)
+            ->whereNull('quarantined.id')->sum('credited.quantity_packages');
         return max(0, (int) $batch->accepted_packages + $restockedReturns + $releasedQuarantines - $dispatched);
     }
 
