@@ -272,6 +272,26 @@ class HistoricalFinanceCorrectionService
                     ->where('reversal_of_id',$revenue->id)->exists()){
                 $this->fail('The original sales revenue journal is absent, reversed, unposted or in a different currency. Reconcile the sales invoice before creating related historic COGS.');
             }
+            $receivable=DB::table('trade_documents')
+                ->where('id',$invoice->trade_document_id??0)->first();
+            if(!$receivable || $receivable->type!=='receivable' ||
+                (int)$receivable->trade_party_id!==(int)$invoice->customer_id ||
+                (int)$receivable->currency_id!==(int)$invoice->currency_id ||
+                !BigDecimal::of((string)$receivable->amount)
+                    ->isEqualTo((string)$invoice->total) ||
+                (string)$revenue->entry_date!==$source['date']){
+                $this->fail('Original sales receivable and revenue journal do not agree with the posted invoice date, customer, currency and source total.');
+            }
+            $journalDebit=BigDecimal::zero();$journalCredit=BigDecimal::zero();
+            foreach(DB::table('journal_lines')
+                ->where('journal_entry_id',$revenue->id)->get(['debit','credit']) as $amount){
+                $journalDebit=$journalDebit->plus((string)$amount->debit);
+                $journalCredit=$journalCredit->plus((string)$amount->credit);
+            }
+            if(!$journalDebit->isEqualTo((string)$invoice->total) ||
+                !$journalCredit->isEqualTo((string)$invoice->total)){
+                $this->fail('Original revenue GL journal debits and credits do not both reconcile to the source customer invoice total.');
+            }
             // Re-use the existing hard-validated original-cost pathway. It
             // checks batch capitalization date, exact warehouse dispatch,
             // original currency, lot cost and pre-existing COGS sequencing.
