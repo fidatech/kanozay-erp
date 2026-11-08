@@ -83,16 +83,11 @@
 @endif
 @if($lineCosts->count()<$invoice->lines->count())
 @canany(['finance.update','administration.update'])
-<details style="border:1px solid #e6d8c5;border-radius:9px;padding:13px;margin:12px 0">
-<summary>Reconcile missing original-currency COGS (finance only)</summary>
-<p class="muted">This action may post COGS only where the source factory batch already had a fully reviewed GL capitalization on or before the original invoice date. All existing invoice and dispatch details remain immutable. Missing or later-dated cost evidence blocks the action.</p>
-<form method="POST" action="{{ route('sales.invoices.cogs.reconcile',$invoice) }}" style="display:grid;gap:10px;max-width:580px">
-@csrf
-<label>Finance reconciliation reference<input type="text" name="reconciliation_reference" minlength="4" maxlength="180" required placeholder="Signed original-cost reconciliation file"></label>
-<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="confirm_source_evidence" value="1" required> Verify the original dated finished inventory capitalization and unchanged batch quantities.</label>
-<div><button class="btn" type="submit" onclick="return confirm('Post only missing original-currency COGS journals where previously capitalized factory cost and physical dispatch can be verified?')">Reconcile posted sale costs</button></div>
-</form>
-</details>
+<div style="border:1px solid #e6d8c5;border-radius:9px;padding:13px;margin:12px 0">
+<strong>Missing original-currency COGS requires independent historical correction.</strong>
+<p class="muted">Open a source-fingerprinted finance case. A different authorized reviewer must approve its evidence before the system can post any missing COGS journal. Existing invoices and physical dispatches remain unchanged.</p>
+<a class="btn btn-light" href="{{ route('finance.historical-corrections.index',['type'=>'invoice_missing_cogs','source_id'=>$invoice->id]) }}">Submit historical COGS correction case</a>
+</div>
 @endcanany
 @endif
 <p class="muted">Historic invoices that predate source manufacturing capitalization may have no posted COGS. Such exceptions require explicit journal and inventory reconciliation; this view cannot invent a retrospective source exchange rate.</p>
