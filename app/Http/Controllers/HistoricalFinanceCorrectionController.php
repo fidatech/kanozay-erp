@@ -20,7 +20,7 @@ class HistoricalFinanceCorrectionController extends Controller
     {
         $this->gate($request);
         $filters=$request->validate([
-            'status'=>['nullable',Rule::in(['submitted','approved','rejected','resolved'])],
+            'status'=>['nullable',Rule::in(['submitted','approved','rejected','resolved','withdrawn'])],
             'type'=>['nullable',Rule::in(array_keys(HistoricalFinanceCorrectionService::TYPES))],
             'source_id'=>['nullable','integer','min:1'],
         ]);
@@ -114,6 +114,18 @@ class HistoricalFinanceCorrectionController extends Controller
         ]);
         $service->review($case,$data,(int)$request->user()->id);
         return back()->with('success','Independent historical correction review recorded without changing a source document or accounting value.');
+    }
+
+    public function withdraw(Request $request,int $case,HistoricalFinanceCorrectionService $service)
+    {
+        $this->gate($request,true);
+        $data=$request->validate([
+            'reason'=>['required','string','min:20','max:3000'],
+            'confirm_withdrawal'=>['accepted'],
+        ]);
+        $service->withdraw($case,$data['reason'],(int)$request->user()->id);
+        return back()->with('success',
+            'Correction case withdrawn with permanent source and reviewer history. No accounting journal or physical stock was changed.');
     }
 
     public function execute(Request $request,int $case,HistoricalFinanceCorrectionService $service)
