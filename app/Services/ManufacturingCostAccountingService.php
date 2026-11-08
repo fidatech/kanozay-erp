@@ -189,6 +189,24 @@ class ManufacturingCostAccountingService
         }
     }
 
+    private function assetBalanceAsOf(int $ledgerId,int $currencyId,string $date):BigDecimal
+    {
+        $balance=BigDecimal::zero();
+        $rows=DB::table('journal_lines as line')
+            ->join('journal_entries as journal',
+                'journal.id','=','line.journal_entry_id')
+            ->where('journal.status','posted')
+            ->where('journal.currency_id',$currencyId)
+            ->whereDate('journal.entry_date','<=',$date)
+            ->where('line.ledger_account_id',$ledgerId)
+            ->get(['line.debit','line.credit']);
+        foreach($rows as $row){
+            $balance=$balance->plus((string)$row->debit)
+                ->minus((string)$row->credit);
+        }
+        return $balance;
+    }
+
     public function capitalize(int $batchId,array $data,int $actorId):object
     {
         return DB::transaction(function()use($batchId,$data,$actorId){
@@ -272,6 +290,15 @@ class ManufacturingCostAccountingService
                     'memo'=>'Approved overhead '.$row->number];
             }
             $materialPosted=$this->money($material);
+            if(!BigDecimal::of($materialPosted)->isPositive()){
+                $this->reject('Frozen material cost rounds to zero in journal precision and cannot support a positive GL posting.');
+            }
+            if($this->assetBalanceAsOf(
+                (int)$policy->material_inventory_ledger_id,
+                (int)$policy->currency_id,$data['accounting_date']
+            )->isLessThan($materialPosted)){
+                $this->reject('The source raw-material asset GL balance is insufficient for these original-currency FIFO issues on the capitalization date. Reconcile earlier inventory and purchase journals.');
+            }
             $overheadPosted=(string)$overhead->toScale(4,RoundingMode::HalfUp);
             $totalPosted=$this->money(BigDecimal::of($materialPosted)->plus($overheadPosted));
             $debit=[['ledger'=>(int)$policy->work_in_progress_ledger_id,
