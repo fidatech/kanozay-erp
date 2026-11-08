@@ -31,6 +31,40 @@ class GoodsReceiptLandedCostPostingService
         throw ValidationException::withMessages(['landed_cost_posting'=>$message]);
     }
 
+    /**
+     * Block FIFO issue or return of material whose landed cost has already
+     * entered its layer's source value but lacks a corresponding valid GL
+     * capitalization in the original receipt currency.
+     */
+    public function assertLotCostPosted(int $receiptLineId,string $issueDate,?int $expectedAssetLedger=null):void
+    {
+        $rows=DB::table('goods_receipt_landed_cost_allocations as allocation')
+            ->join('goods_receipt_landed_costs as cost',
+                'cost.id','=','allocation.goods_receipt_landed_cost_id')
+            ->leftJoin('goods_receipt_landed_cost_postings as posting',
+                'posting.goods_receipt_landed_cost_id','=','cost.id')
+            ->leftJoin('journal_entries as journal',
+                'journal.id','=','posting.journal_entry_id')
+            ->where('allocation.goods_receipt_line_id',$receiptLineId)
+            ->select('cost.id as cost_id','cost.amount as cost_amount',
+                'posting.amount as posted_amount','posting.currency_id',
+                'posting.inventory_ledger_id','posting.accounting_date',
+                'posting.journal_entry_id','journal.status as journal_status',
+                'journal.reversal_of_id')->get();
+        foreach($rows as $row){
+            if(!$row->journal_entry_id || $row->journal_status!=='posted' ||
+               $row->reversal_of_id ||
+               DB::table('journal_entries')->where('reversal_of_id',$row->journal_entry_id)->exists() ||
+               $row->accounting_date>$issueDate ||
+               !BigDecimal::of((string)($row->posted_amount??'0'))
+                   ->isEqualTo((string)$row->cost_amount) ||
+               ($expectedAssetLedger!==null &&
+                (int)$row->inventory_ledger_id!==$expectedAssetLedger)){
+                $this->reject('A source FIFO lot includes freight/customs/handling that has not been independently capitalized to the approved original-currency inventory ledger before this material movement.');
+            }
+        }
+    }
+
     public function post(int $costId,array $data,int $actorId):object
     {
         return DB::transaction(function()use($costId,$data,$actorId){
