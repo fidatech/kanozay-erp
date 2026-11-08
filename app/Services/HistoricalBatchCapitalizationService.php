@@ -13,10 +13,15 @@ use Illuminate\Validation\ValidationException;
 /**
  * Restricted historical manufacturing cost recovery:
  * - an already dispatched, uncapitalized QC batch;
- * - every dispatch has a real, posted, original-date customer invoice;
- * - no customer returns, unclassified dispatch or unsupported source costs;
+ * - every physical dispatch has EITHER a genuine posted original-date
+ *   customer invoice OR an independently signed and approved non-sale
+ *   purpose (promotional sample, production loss or internal consumption);
+ * - each signed non-sale line has separately reviewed original-cost expense
+ *   ledger authorization; no returns, unclassified movement or unsupported
+ *   source costs;
  * - all original journal dates are OPEN;
- * - source-backed WIP/finished inventory + all invoice COGS post atomically.
+ * - source-backed WIP/finished inventory, genuine sales COGS and
+ *   signed non-sale expense journals all post atomically.
  *
  * It does not create an invoice, alter stock, fabricate costs, or backdate
  * journals into an independently closed accounting month.
@@ -203,6 +208,7 @@ final class HistoricalBatchCapitalizationService
                     $signed->review_status!=='approved' ||
                     (int)$signed->reviewed_source_id!==(int)$row->dispatch_id ||
                     (string)$signed->reviewed_source_date!==(string)$row->dispatch_date ||
+                    !$signed->original_approved_by || !$signed->reviewed_by ||
                     (int)$signed->original_requested_by===(int)$signed->original_approved_by ||
                     (int)$signed->original_requested_by===(int)$signed->reviewed_by ||
                     !in_array($signed->business_purpose,[
