@@ -4,7 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\CompanyWarehouse;
 use App\Models\InventoryMaterial;
+use App\Models\InventoryCostLayer;
 use App\Services\WarehouseStockService;
+use App\Services\InventoryLotLocationService;
+use App\Support\LocalizedDecimal;
+use Brick\Math\BigDecimal;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -14,7 +19,27 @@ class WarehouseStockController extends Controller
     {
         abort_unless($request->user()->canAny(['inventory.view','administration.view']),403);
         $state=$service->snapshot();
+        $layers=InventoryCostLayer::with('material')->where('remaining_quantity','>',0)
+            ->orderBy('received_on')->orderBy('id')->limit(400)->get();
+        $positionSums=DB::table('inventory_cost_layer_locations')
+            ->whereIn('inventory_cost_layer_id',$layers->pluck('id'))
+            ->get()->groupBy('inventory_cost_layer_id');
+        $legacyLots=$layers->map(function($layer)use($positionSums){
+            $located=BigDecimal::zero();
+            foreach($positionSums->get($layer->id,collect()) as $position){
+                $located=$located->plus((string)$position->quantity);
+            }
+            $missing=BigDecimal::of((string)$layer->remaining_quantity)->minus($located);
+            $layer->setAttribute('unpositioned_quantity',(string)$missing->toScale(6));
+            return $layer;
+        })->filter(fn($layer)=>BigDecimal::of($layer->unpositioned_quantity)->isPositive())->values();
+        $recentLotRows=DB::table('inventory_warehouse_lot_movements')
+            ->select('inventory_warehouse_movement_id')
+            ->selectRaw('COUNT(*) as lot_count')
+            ->groupBy('inventory_warehouse_movement_id')->get()->keyBy('inventory_warehouse_movement_id');
         return view('inventory.warehouse-stock',$state+[
+            'legacyLots'=>$legacyLots,
+            'recentLotRows'=>$recentLotRows,
             'recent'=>\Illuminate\Support\Facades\DB::table('inventory_warehouse_movements as m')
                 ->join('inventory_materials as i','i.id','=','m.inventory_material_id')
                 ->join('company_warehouses as d','d.id','=','m.destination_warehouse_id')
@@ -51,6 +76,33 @@ class WarehouseStockController extends Controller
         }
         return redirect()->route('inventory.warehouse-stock.index')->with('success','Warehouse movement recorded without changing company-wide stock totals.');
     }
+    public function assignLegacy(Request $request, InventoryLotLocationService $service)
+    {
+        abort_unless(
+            $request->user()->can('administration.update') ||
+            ($request->user()->can('inventory.update') && $request->user()->can('finance.update')),
+            403
+        );
+        $request->merge(['quantity'=>LocalizedDecimal::normalize($request->input('quantity'))]);
+        $data=$request->validate([
+            'inventory_cost_layer_id'=>['required','integer','exists:inventory_cost_layers,id'],
+            'company_warehouse_id'=>['nullable','integer',
+                Rule::exists('company_warehouses','id')->where('is_active',true)],
+            'quantity'=>['required','numeric','gt:0',
+                'regex:/^(?:0|[1-9][0-9]{0,13})(?:\\.[0-9]{1,6})?$/'],
+            'reference'=>['required','string','min:3','max:160'],
+            'reason'=>['required','string','min:15','max:2000'],
+        ]);
+        $service->assignLegacy(
+            (int)$data['inventory_cost_layer_id'],
+            empty($data['company_warehouse_id'])?null:(int)$data['company_warehouse_id'],
+            (string)$data['quantity'],trim($data['reference']),trim($data['reason']),
+            $request->user()->id
+        );
+        return redirect()->route('inventory.warehouse-stock.index')
+            ->with('success','Historical FIFO lot location attributed without creating stock or changing its cost.');
+    }
+
     private function normalize(mixed $value):mixed
     {
         if(!is_string($value))return $value;
