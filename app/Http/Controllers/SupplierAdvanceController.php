@@ -12,6 +12,18 @@ use Illuminate\Validation\Rule;
 
 class SupplierAdvanceController extends Controller
 {
+ private function normalizeAmount(Request $request):void
+ {
+  $amount=$request->input('amount');
+  if(!is_string($amount))return;
+  $amount=strtr($amount,[
+   '٠'=>'0','١'=>'1','٢'=>'2','٣'=>'3','٤'=>'4','٥'=>'5','٦'=>'6','٧'=>'7','٨'=>'8','٩'=>'9',
+   '۰'=>'0','۱'=>'1','۲'=>'2','۳'=>'3','۴'=>'4','۵'=>'5','۶'=>'6','۷'=>'7','۸'=>'8','۹'=>'9',
+   '٫'=>'.','٬'=>',','،'=>',',
+  ]);
+  $request->merge(['amount'=>str_replace(',','',$amount)]);
+ }
+
  private function guard(Request $request,bool $write=false):void
  {
   abort_unless($write
@@ -45,6 +57,7 @@ class SupplierAdvanceController extends Controller
  public function pay(Request $request,SupplierAdvanceService $service)
  {
   $this->guard($request,true);
+  $this->normalizeAmount($request);
   $data=$request->validate([
    'purchase_order_id'=>['required',Rule::exists('purchase_orders','id')->where('status','confirmed')],
    'submission_token'=>['required','uuid'],
@@ -61,6 +74,7 @@ class SupplierAdvanceController extends Controller
  public function apply(Request $request,int $advance,SupplierAdvanceService $service)
  {
   $this->guard($request,true);
+  $this->normalizeAmount($request);
   $data=$request->validate([
    'submission_token'=>['required','uuid'],
    'trade_document_id'=>['required',Rule::exists('trade_documents','id')->where('type','payable')],
