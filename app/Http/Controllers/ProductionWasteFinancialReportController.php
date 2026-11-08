@@ -24,8 +24,8 @@ class ProductionWasteFinancialReportController extends Controller
         $query=DB::table('production_material_wastes as waste')
             ->join('production_order_materials as item',
                 'item.id','=','waste.production_order_material_id')
-            ->join('production_orders as order',
-                'order.id','=','item.production_order_id')
+            ->join('production_orders as plan',
+                'plan.id','=','item.production_order_id')
             ->leftJoin('production_batches as batch',
                 'batch.production_order_id','=','order.id')
             ->leftJoin('production_waste_financial_reviews as review',
@@ -40,8 +40,8 @@ class ProductionWasteFinancialReportController extends Controller
             })
             ->select('waste.id','waste.quantity','waste.reason',
                 'waste.created_at','item.material_name','item.unit',
-                'order.id as production_order_id','order.number as order_number',
-                'order.status as order_status','batch.batch_number',
+                'plan.id as production_order_id','plan.number as order_number',
+                'plan.status as order_status','batch.batch_number',
                 'batch.status as batch_status',
                 'review.treatment','review.approval_reference',
                 'review.review_notes','review.reviewed_by');
