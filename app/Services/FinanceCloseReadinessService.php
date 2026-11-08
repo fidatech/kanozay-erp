@@ -165,6 +165,70 @@ class FinanceCloseReadinessService
             $blockers[]=$invalidHistoricalDispatchExpense.
                 ' source-linked non-sale dispatch expense line(s) lack a valid original-currency posted GL journal.';
         }
+        // Historical recoveries must remain linked to their exact source
+        // manufacturing GL and *every* original invoice's cost journal.
+        // A posted recovery without the full source graph is never ready
+        // for period closing, even when its individual journals balance.
+        $recoveries=DB::table('finance_historical_batch_capitalizations as record')
+            ->leftJoin('production_batch_cost_postings as source',
+                'source.id','=','record.production_batch_cost_posting_id')
+            ->leftJoin('finance_historical_correction_cases as review',
+                'review.id','=','record.finance_historical_correction_case_id')
+            ->leftJoin('journal_entries as issue',
+                'issue.id','=','source.issue_journal_id')
+            ->leftJoin('journal_entries as finished',
+                'finished.id','=','source.capitalization_journal_id')
+            ->where('record.status','posted')
+            ->whereBetween('record.accounting_date',[$begin,$end])
+            ->select('record.*','source.production_batch_id as source_batch_id',
+                'source.currency_id as source_currency_id',
+                'source.total_amount as source_total_amount',
+                'source.accounting_date as source_accounting_date',
+                'issue.id as issue_id','issue.status as issue_status',
+                'issue.reversal_of_id as issue_reversal',
+                'finished.id as finished_id','finished.status as finished_status',
+                'finished.reversal_of_id as finished_reversal',
+                'review.status as case_status')->get();
+        $invalidRecovery=0;
+        foreach($recoveries as $recovery){
+            $valid=$recovery->source_batch_id &&
+                (int)$recovery->source_batch_id===(int)$recovery->production_batch_id &&
+                (int)$recovery->currency_id===(int)$recovery->source_currency_id &&
+                (string)$recovery->accounting_date===(string)$recovery->source_accounting_date &&
+                $recovery->case_status==='resolved' &&
+                $recovery->issue_status==='posted' && $recovery->finished_status==='posted' &&
+                !$recovery->issue_reversal && !$recovery->finished_reversal &&
+                $recovery->issue_id && $recovery->finished_id &&
+                !DB::table('journal_entries')->whereIn('reversal_of_id',[
+                    $recovery->issue_id,$recovery->finished_id])->exists() &&
+                BigDecimal::of((string)$recovery->expected_original_cost)
+                    ->isEqualTo((string)$recovery->source_total_amount);
+            if($valid){
+                $matched=DB::table('finished_good_dispatch_lines as physical')
+                    ->join('sales_invoice_lines as sale',
+                        'sale.dispatch_id','=','physical.finished_good_dispatch_id')
+                    ->leftJoin('production_invoice_cogs_postings as cogs',
+                        'cogs.sales_invoice_line_id','=','sale.id')
+                    ->leftJoin('journal_entries as journal',
+                        'journal.id','=','cogs.journal_entry_id')
+                    ->where('physical.production_batch_id',$recovery->production_batch_id)
+                    ->get(['cogs.production_batch_cost_posting_id','journal.id as journal_id',
+                        'journal.status as journal_status','journal.reversal_of_id as journal_reversal']);
+                $valid=$matched->count()===(int)$recovery->invoice_line_count;
+                foreach($matched as $line){
+                    if((int)$line->production_batch_cost_posting_id!==(int)$recovery->production_batch_cost_posting_id ||
+                        !$line->journal_id || $line->journal_status!=='posted' ||
+                        $line->journal_reversal ||
+                        DB::table('journal_entries')->where('reversal_of_id',$line->journal_id)->exists()){
+                        $valid=false;break;
+                    }
+                }
+            }
+            if(!$valid)$invalidRecovery++;
+        }
+        if($invalidRecovery)
+            $blockers[]=$invalidRecovery.
+                ' historical batch capitalization record(s) lack valid and complete original source manufacturing/COGS journals.';
         $invalidProductionJournals=DB::table('production_batch_cost_postings as cost')
             ->join('journal_entries as wip','wip.id','=','cost.issue_journal_id')
             ->join('journal_entries as finished','finished.id','=','cost.capitalization_journal_id')
