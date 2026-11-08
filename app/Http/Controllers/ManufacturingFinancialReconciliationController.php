@@ -28,22 +28,22 @@ class ManufacturingFinancialReconciliationController extends Controller
                 fwrite($out,"\xEF\xBB\xBF");
                 fputcsv($out,['Batch','Product','Status','Original currency','Accepted packages',
                     'Warehouse received packages','Gross physical dispatches','QC restocked packages',
-                    'Packages costed to COGS','Costed QC returns',
+                    'Packages costed to COGS','Packages costed to non-sale expenses','Costed QC returns',
                     'Physical remaining packages','Financial remaining packages',
                     'Gross source material cost','Abnormal FIFO loss expensed',
-                    'Net capitalized value','Posted COGS','Returned inventory cost',
+                    'Net capitalized value','Posted COGS','Posted non-sale inventory expenses','Returned inventory cost',
                     'Financial remaining asset value','Reconciliation exceptions']);
                 $query->orderBy('id')->chunkById(75,function($batches)use($service,$out){
                     foreach($service->rows($batches) as $row){
                         $fields=[
                             $row['batch'],$row['product'],$row['status'],$row['currency'],
                             $row['accepted'],$row['received'],$row['dispatched'],$row['qc_returns'],
-                            $row['costed_sales'],$row['costed_recoveries'],
+                            $row['costed_sales'],$row['costed_non_sale'],$row['costed_recoveries'],
                             $row['net_physical'],$row['remaining_costed'],
                             $row['gross_material_source_cost'],
                             $row['abnormal_waste_expensed'],
                             $row['total_capitalized'],$row['posted_cogs'],
-                            $row['returned_cost'],$row['remaining_asset_value'],
+                            $row['posted_non_sale_expense'],$row['returned_cost'],$row['remaining_asset_value'],
                             implode(' | ',$row['issues']),
                         ];
                         fputcsv($out,array_map(
