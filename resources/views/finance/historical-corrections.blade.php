@@ -22,8 +22,8 @@
 <a class="btn btn-light" href="{{ route('finance.periods.index') }}">Accounting period close</a>
 </div>
 </div>
-<div class="hfc-note"><strong>Only previously capitalized, fully evidenced invoice COGS can be automatically repaired.</strong>
-Other historical exceptions remain open investigation records until a documented, independently approved source-accounting adjustment exists. This screen cannot invent opening stock values, backdate a closed period, create missing supplier payables or change posted inventory documents. All monetary postings retain the source currency.</div>
+<div class="hfc-note"><strong>Source-linked historical accounting requires independent evidence and financial approval.</strong>
+Supported corrections include original invoice COGS, approved manufacturing/warehouse issue costs, independently reviewed FIFO and supplier credit exceptions, and already QC-released physical customer returns with genuine credit notes but missing factory COGS asset recovery. Historical return recovery never creates another credit note, refund, QC decision or physical restock. Unknown original costs and closed accounting periods remain blocked. All monetary postings retain the original source currency.</div>
 <section class="hfc-sheet">
 <h2>Recorded historical correction cases</h2>
 <form method="GET" action="{{ route('finance.historical-corrections.index') }}" class="hfc-grid" style="margin-bottom:13px">
