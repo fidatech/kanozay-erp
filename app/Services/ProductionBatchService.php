@@ -36,6 +36,18 @@ class ProductionBatchService
             if ($reported < 1 || $reported > $order->package_count) {
                 $this->reject('Reported packages must be between one and the planned package count.');
             }
+            // Packaging quantities are frozen with the approved recipe. A
+            // batch cannot report more finished packages than the issued
+            // packaging can physically support. Extra loss remains recorded
+            // as waste and is already counted in issued quantities.
+            foreach ($order->materials()->where('is_packaging',true)->get() as $packaging) {
+                $required = BigDecimal::of((string)$packaging->quantity_per_package)
+                    ->multipliedBy((string)$reported);
+                if (BigDecimal::of((string)$packaging->issued_quantity)->isLessThan($required)) {
+                    $this->reject('Insufficient issued packaging material '.$packaging->material_name.
+                        ' for '.$reported.' reported packages. Reconcile issued quantities before batch submission.');
+                }
+            }
             $batch = $order->batch()->create([
                 'finished_good_id' => $good->id,
                 'batch_number' => 'BATCH-PENDING-'.bin2hex(random_bytes(8)),
