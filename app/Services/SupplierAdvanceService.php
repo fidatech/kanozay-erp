@@ -45,11 +45,16 @@ class SupplierAdvanceService
       'entity_type'=>$cash->type,'entity_id'=>$cash->id,
       'currency_id'=>$po->currency_id,'purpose'=>'cash',
    ])->value('ledger_account_id');
-   $advance=LedgerAccount::whereKey($data['advance_ledger_id'])
-      ->where('type','asset')->where('is_active',true)->where('is_group',false)->first();
-   if(!$cashLedger || !$advance || (int)$cashLedger===$advance->id ||
-       DB::table('entity_ledger_accounts')->where('ledger_account_id',$advance->id)->exists())
-    throw ValidationException::withMessages(['advance_ledger_id'=>'Choose a dedicated unmapped supplier-advance asset account.']);
+   // Supplier advances must be traceable in that supplier's own ledger,
+   // not posted to an arbitrary shared asset account.
+   $advanceLedgerId=DB::table('entity_ledger_accounts')->where([
+      'entity_type'=>'supplier','entity_id'=>$supplier->id,
+      'currency_id'=>$po->currency_id,'purpose'=>'advance',
+   ])->value('ledger_account_id');
+   $advance=$advanceLedgerId?LedgerAccount::whereKey($advanceLedgerId)
+      ->where('type','asset')->where('is_active',true)->where('is_group',false)->first():null;
+   if(!$cashLedger || !$advance || (int)$cashLedger===$advance->id)
+    throw ValidationException::withMessages(['supplier_id'=>'Supplier-specific advance ledger must be provisioned in the purchase currency.']);
    $value=BigDecimal::of((string)$data['amount'])->toScale(4);
    if(!$value->isPositive() || $value->isGreaterThan('999999999999.9999'))
     throw ValidationException::withMessages(['amount'=>'Supplier advance must be a positive supported amount.']);
