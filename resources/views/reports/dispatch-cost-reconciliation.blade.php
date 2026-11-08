@@ -1,5 +1,6 @@
 @extends('layouts.kanozay')
 @section('content')
+@php($t=fn(string $key)=>\App\Support\ReportingLabels::text($key))
 <style>
 .dcr-sheet{background:#fff;border:1px solid #dce6f0;border-radius:11px;padding:18px;margin:14px 0}
 .dcr-warning{background:#fff7ec;border:1px solid #f1dbb4;border-radius:9px;padding:14px;color:#735122;line-height:1.7}
@@ -12,43 +13,41 @@
 .dcr-summary>div{border:1px solid #dce6f0;border-radius:9px;padding:12px;min-width:180px}
 </style>
 <div class="heading">
-<div><h1>Finished-Goods Dispatch Cost Reconciliation</h1>
-<p>Original-currency batch-source costs, with explicit journal and valuation limitations.</p></div>
+<div><h1>{{ $t('dispatch_cost_title') }}</h1>
+<p>{{ $t('dispatch_cost_description') }}</p></div>
 <div class="actions">
-<a class="btn btn-light" href="{{ route('manufacturing.cost-readiness.index') }}">Batch cost readiness</a>
-<a class="btn" href="{{ route('reports.dispatch-cost.index',array_merge(request()->query(),['export'=>'csv'])) }}">Export CSV</a>
+<a class="btn btn-light" href="{{ route('manufacturing.cost-readiness.index') }}">{{ $t('batch_cost_readiness') }}</a>
+<a class="btn" href="{{ route('reports.dispatch-cost.index',array_merge(request()->query(),['export'=>'csv'])) }}">{{ $t('export_csv') }}</a>
 </div>
 </div>
 <div class="dcr-warning">
-<strong>Management source-cost estimate only. No COGS entry is posted.</strong>
-Costs originate from frozen FIFO material consumption snapshots plus independently approved production overhead source expenses. They are not proof that all factory costs were capitalized to WIP or finished-goods inventory in the General Ledger.
-These numbers exclude unknown or mixed-currency batches, unvalued source lots, pending overhead and unresolved historic records.
-A customer sales credit or physical return must be reconciled separately; it does not automatically reverse source inventory cost.
+<strong>{{ $t('dispatch_cost_warning') }}</strong>
+<div class="muted">Unknown or mixed currencies, missing FIFO costs and pending overhead block source estimates. Customer credits and physical returns require independent inventory-cost reconciliation.</div>
 </div>
 <section class="dcr-sheet">
 <form method="GET" action="{{ route('reports.dispatch-cost.index') }}" class="dcr-filters">
-<label>Dispatch from<input name="from" type="date" value="{{ $from }}" required></label>
-<label>Dispatch to<input name="to" type="date" value="{{ $to }}" required></label>
-<button class="btn" type="submit">Apply</button>
-<a class="btn btn-light" href="{{ route('reports.dispatch-cost.index') }}">Reset</a>
+<label>{{ $t('dispatch_from') }}<input name="from" type="date" value="{{ $from }}" required></label>
+<label>{{ $t('dispatch_to') }}<input name="to" type="date" value="{{ $to }}" required></label>
+<button class="btn" type="submit">{{ $t('apply_filters') }}</button>
+<a class="btn btn-light" href="{{ route('reports.dispatch-cost.index') }}">{{ $t('reset') }}</a>
 </form>
 <div class="dcr-summary">
-<div><span>Source-estimated lines (current page)</span><h2>{{ number_format($summary['costed_lines']) }}</h2></div>
-<div><span>Blocked lines (current page)</span><h2>{{ number_format($summary['blocked_lines']) }}</h2></div>
+<div><span>{{ $t('dispatch_estimated_lines') }}</span><h2>{{ number_format($summary['costed_lines']) }}</h2></div>
+<div><span>{{ $t('dispatch_blocked_lines') }}</span><h2>{{ number_format($summary['blocked_lines']) }}</h2></div>
 @foreach($summary['by_currency'] as $currency)
 <div><span>{{ $currency['currency'] }} estimated source cost, current page</span>
 <h2>{{ \App\Support\ReportingLabels::decimal($currency['indicative_cost']) }}</h2>
 <small>{{ $currency['packages'] }} packages</small></div>
 @endforeach
 </div>
-<p class="muted">Amounts above summarize only the current 30-row page and are grouped by original source currency. The CSV includes all matching dispatch lines.</p>
+<p class="muted">{{ $t('dispatch_page_totals') }}</p>
 </section>
 <section class="dcr-sheet">
 <div class="dcr-scroll"><table>
 <thead><tr>
-<th>Dispatch date</th><th>Dispatch</th><th>Batch / product</th>
-<th>Packages</th><th>Currency</th><th>Source cost per package</th>
-<th>Indicative dispatched cost</th><th>Readiness</th>
+<th>{{ $t('dispatch_date') }}</th><th>{{ $t('dispatch_reference') }}</th><th>{{ $t('dispatch_batch_product') }}</th>
+<th>{{ $t('dispatch_packages') }}</th><th>{{ $t('dispatch_source_currency') }}</th><th>{{ $t('dispatch_unit_cost') }}</th>
+<th>{{ $t('dispatch_total_cost') }}</th><th>{{ $t('dispatch_readiness') }}</th>
 </tr></thead><tbody>
 @forelse($rows as $row)
 <tr>
@@ -57,17 +56,17 @@ A customer sales credit or physical return must be reconciled separately; it doe
 <td><strong>{{ $row['batch'] }}</strong><div class="muted">{{ $row['product'] }}</div></td>
 <td>{{ number_format($row['packages']) }}</td>
 <td>{{ $row['currency']??'Unknown' }}</td>
-<td>{{ $row['unit_cost']??'Unvalued' }}</td>
-<td>{{ $row['indicative_cost']??'Not calculable' }}</td>
+<td>{{ $row['unit_cost']??$t('dispatch_cost_not_ready') }}</td>
+<td>{{ $row['indicative_cost']??$t('dispatch_cost_not_ready') }}</td>
 <td>
 @if($row['status']==='blocked')
 <span class="dcr-bad">Blocked</span>
 @foreach($row['reasons'] as $reason)<div class="muted">{{ $reason }}</div>@endforeach
-@else <span class="dcr-est">Source cost only — GL not reconciled</span>
+@else <span class="dcr-est">{{ $t('dispatch_source_only') }}</span>
 @endif
 </td>
 </tr>
-@empty<tr><td colspan="8">No finished-goods dispatches match these dates.</td></tr>
+@empty<tr><td colspan="8">{{ $t('dispatch_no_rows') }}</td></tr>
 @endforelse
 </tbody></table></div>
 {{ $records->links() }}
