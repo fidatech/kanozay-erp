@@ -208,15 +208,35 @@ class InventoryCostService
                     'quantity'=>'The source receipt lot no longer contains enough stock for this supplier return.',
                 ]);
             }
-            // Base supplier debit notes reverse the invoiced receipt value
-            // only. Once freight/customs is capitalized, returning that
-            // source lot also requires a separately authorized landed-cost
-            // write-off or recovery, which the base return flow cannot infer.
+            // The returned FIFO quantity includes the capitalized landed
+            // share. A separately signed, original-currency expense-to-asset
+            // journal must remove that share before this stock issue occurs.
             if(DB::table('goods_receipt_landed_cost_allocations')
                 ->where('goods_receipt_line_id',$origin->source_id)->exists()){
-                throw ValidationException::withMessages([
-                    'quantity'=>'This supplier-return lot contains allocated landed costs. The ordinary supplier debit note only reverses the base inventory purchase. Reconcile the capitalized freight/customs value with an independently authorized landed-cost return adjustment before removing this physical lot.',
-                ]);
+                $review=DB::table('purchase_return_landed_cost_adjustment_lines as detail')
+                    ->join('purchase_return_landed_cost_adjustments as approval',
+                        'approval.id','=','detail.purchase_return_landed_cost_adjustment_id')
+                    ->join('journal_entries as journal',
+                        'journal.id','=','approval.journal_entry_id')
+                    ->where('detail.purchase_return_record_line_id',$line->id)
+                    ->select('detail.quantity','detail.amount',
+                        'approval.currency_id','approval.inventory_ledger_id',
+                        'approval.approved_by','approval.purchase_return_record_id',
+                        'journal.status','journal.reversal_of_id',
+                        'journal.entry_date','journal.id as journal_id')->first();
+                if(!$review || $review->status!=='posted' || $review->reversal_of_id ||
+                    DB::table('journal_entries')->where('reversal_of_id',$review->journal_id)->exists() ||
+                    (int)$review->currency_id!==(int)$origin->currency_id ||
+                    !BigDecimal::of((string)$review->quantity)->isEqualTo((string)$movement->quantity) ||
+                    $review->entry_date!==$movement->occurred_on->toDateString()){
+                    throw ValidationException::withMessages([
+                        'quantity'=>'This landed-cost lot requires the independent, posted, unreversed and exactly quantity-matched supplier-return inventory write-off before physical stock can be issued.',
+                    ]);
+                }
+                app(GoodsReceiptLandedCostPostingService::class)->assertLotCostPosted(
+                    (int)$origin->source_id,$movement->occurred_on->toDateString(),
+                    (int)$review->inventory_ledger_id
+                );
             }
             $locations->consume($origin,$warehouseId,$returnQty);
             InventoryCostConsumption::create([
