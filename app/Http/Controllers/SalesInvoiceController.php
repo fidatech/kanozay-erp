@@ -122,7 +122,36 @@ class SalesInvoiceController extends Controller
             }
         }
 
+        $mayViewCosts=$request->user()->canAny([
+            'finance.view','reports.view','administration.view',
+        ]);
+        $lineCosts=collect();
+        $costTotals=[];
+        if($mayViewCosts){
+            $lineCosts=\Illuminate\Support\Facades\DB::table('production_invoice_cogs_postings as booked')
+                ->join('production_batch_cost_postings as source',
+                    'source.id','=','booked.production_batch_cost_posting_id')
+                ->join('currencies as currency','currency.id','=','source.currency_id')
+                ->join('journal_entries as journal','journal.id','=','booked.journal_entry_id')
+                ->whereIn('booked.sales_invoice_line_id',$invoice->lines->pluck('id'))
+                ->select('booked.*','currency.code as cost_currency_code',
+                    'journal.number as journal_number','journal.status as journal_status')
+                ->get()->keyBy('sales_invoice_line_id');
+            foreach($lineCosts as $cost){
+                $code=(string)$cost->cost_currency_code;
+                $costTotals[$code]=isset($costTotals[$code])
+                    ?$costTotals[$code]->plus((string)$cost->amount)
+                    :BigDecimal::of((string)$cost->amount);
+            }
+            foreach($costTotals as $code=>$value){
+                $costTotals[$code]=(string)$value->toScale(4);
+            }
+        }
+
         return view('sales.invoices.show', [
+            'mayViewCosts'=>$mayViewCosts,
+            'lineCosts'=>$lineCosts,
+            'costTotals'=>$costTotals,
             'deliveryNotes'=>$deliveryNotes,
             'logistics'=>$logistics,
             'invoice' => $invoice,
