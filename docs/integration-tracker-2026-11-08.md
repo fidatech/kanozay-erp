@@ -47,6 +47,22 @@ Implemented on the development branch after the tracker was created:
 
 **Development status:** these are committed implementation changes, not acceptance results. Historical legacy import, customer-approved finance policies, automated full cross-module reconciliation and final accounting UAT remain open.
 
+## Additional customer, supplier and accounting development
+
+Committed after the earlier progress update:
+
+- Posted-journal validation protects ordinary trade-document settlements. Allocations require a matching-currency posted invoice journal and matching-currency posted payment journal.
+- Journal posting now rejects entries that use a customer, supplier, employee or cash/bank/sarafi mapped ledger belonging to a different currency.
+- Customer deposits have dedicated receipts, advance-liability postings, unapplied balances, invoice applications, immutable source history and capped cash/bank/sarafi refunds. Each application creates a debit to the advance liability and credit to the customer receivable. Each refund debits the advance liability and credits the refunding financial account.
+- Customer deposits and their applications are kept out of ordinary receivable cash-allocation lists. Deposit applications are recorded as trade-document credits and included in outstanding receivable balances.
+- Supplier advances newly posted after this change use the mapped supplier/currency-specific advance asset ledger, so the supplier statement reflects those prepayments. Historical advance postings using arbitrary unmapped asset ledgers are preserved and may require a reviewed legacy reconciliation.
+- Supplier advance payment/application replay tokens require unchanged dates and references.
+- Customer deposits and refunds are tracked by source, currency and token. Applications and refunds are capped and dated after earlier deposit activity.
+- Independent reversal of customer advance-application journals is blocked; the original transaction cannot be changed by reversing a journal outside its document workflow.
+- Supplier advance amounts accept localized digits and thousands grouping.
+
+**Important development boundaries:** database migrations and newly authored pages/services have not been executed or validated in a UAT environment at user direction. These are committed code changes, not a declaration of runtime correctness, full phase acceptance or production readiness. Legacy data reconciliation, correction/reversal of financial source documents, bank statement matching, tax/policy sign-off and large-volume integration remain outstanding.
+
 ## Acceptance and release gates
 
 1. Passing SQLite feature suite and isolated regression suite on the latest commit.
