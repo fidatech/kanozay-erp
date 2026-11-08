@@ -28,7 +28,7 @@ Other historical exceptions remain open investigation records until a documented
 <h2>Recorded historical correction cases</h2>
 <form method="GET" action="{{ route('finance.historical-corrections.index') }}" class="hfc-grid" style="margin-bottom:13px">
 <label>Case status<select name="status"><option value="">All statuses</option>
-@foreach(['submitted'=>'Submitted','approved'=>'Approved for correction','rejected'=>'Rejected','resolved'=>'Resolved'] as $status=>$label)
+@foreach(['submitted'=>'Submitted','approved'=>'Approved for correction','rejected'=>'Rejected','resolved'=>'Resolved','withdrawn'=>'Withdrawn'] as $status=>$label)
 <option value="{{ $status }}" @selected(($filters['status']??'')===$status)>{{ $label }}</option>
 @endforeach</select></label>
 <label>Exception type<select name="type"><option value="">All types</option>
