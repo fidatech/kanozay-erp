@@ -21,11 +21,31 @@ class ProductionWorkStepService
   $steps=[];
   foreach($routes as $route){
    $d=json_decode($route->data,true);
-   if(empty($d['step'])||empty($d['operation']))continue;
-   $steps[]=['route_id'=>$route->id,'step'=>(int)$d['step'],'operation'=>$d['operation'],
-     'equipment'=>!empty($d['equipment'])?(int)$d['equipment']:null,
-     'minutes'=>!empty($d['estimated_minutes'])?(int)$d['estimated_minutes']:null,
-     'instructions'=>$d['instructions']??''];
+   if(!is_array($d) || !isset($d['step']) ||
+      filter_var($d['step'],FILTER_VALIDATE_INT,['options'=>['min_range'=>1,'max_range'=>65535]])===false ||
+      !is_string($d['operation']??null) ||
+      trim($d['operation'])==='' || mb_strlen($d['operation'])>180){
+    throw ValidationException::withMessages([
+     'production_recipe_id'=>'Approved routing record '.$route->id.' is incomplete. Correct its stage number and operation before creating this production plan.',
+    ]);
+   }
+   $equipmentId=empty($d['equipment'])?null:(int)$d['equipment'];
+   if($equipmentId && !DB::table('manufacturing_equipment')
+       ->where('id',$equipmentId)->where('is_active',true)->exists()){
+    throw ValidationException::withMessages([
+     'production_recipe_id'=>'Approved routing stage '.$d['step'].' uses an inactive or missing manufacturing machine.',
+    ]);
+   }
+   $minutes=empty($d['estimated_minutes'])?null:(int)$d['estimated_minutes'];
+   if($minutes!==null && ($minutes<1 || $minutes>1000000) ||
+      mb_strlen((string)($d['instructions']??''))>5000){
+    throw ValidationException::withMessages([
+     'production_recipe_id'=>'Approved routing has unsupported time or instructions fields.',
+    ]);
+   }
+   $steps[]=['route_id'=>$route->id,'step'=>(int)$d['step'],
+     'operation'=>trim($d['operation']),'equipment'=>$equipmentId,
+     'minutes'=>$minutes,'instructions'=>(string)($d['instructions']??'')];
   }
   usort($steps,fn($a,$b)=>$a['step']<=>$b['step']);
   $last=null;
