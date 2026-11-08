@@ -7,6 +7,10 @@ use App\Models\FinancialAccount;
 use App\Models\JournalEntry;
 use App\Models\LedgerAccount;
 use App\Models\Shareholder;
+use App\Models\DocumentSequence;
+use App\Services\ShareholderDistributionAllocationService;
+use App\Services\FinancePeriodClosingService;
+use App\Support\LocalizedDecimal;
 use App\Services\Accounting\JournalPostingService;
 use Brick\Math\BigDecimal;
 use Illuminate\Http\Request;
@@ -31,6 +35,13 @@ class ShareholderGovernanceController extends Controller {
     ->select('o.*','s.name as shareholder_name')->orderBy('o.share_class')->orderBy('s.name')->get(),
    'changes'=>DB::table('shareholder_ownership_changes')->orderByDesc('id')->limit(100)->get(),
    'resolutions'=>DB::table('shareholder_resolutions')->orderByDesc('id')->get(),
+   'allocations'=>DB::table('shareholder_distribution_allocations as a')
+    ->join('shareholders as s','s.id','=','a.shareholder_id')
+    ->join('shareholder_resolutions as r','r.id','=','a.shareholder_resolution_id')
+    ->leftJoin('currencies as c','c.id','=','r.currency_id')
+    ->select('a.*','s.name as shareholder_name','r.number as resolution_number',
+      'r.status as resolution_status','c.code as currency_code')
+    ->orderByDesc('a.id')->limit(300)->get(),
    'distributions'=>DB::table('shareholder_profit_distributions as d')
     ->join('shareholders as s','s.id','=','d.shareholder_id')
     ->join('shareholder_resolutions as r','r.id','=','d.shareholder_resolution_id')
@@ -43,6 +54,7 @@ class ShareholderGovernanceController extends Controller {
  }
  public function ownership(Request $request){
   $this->check($request,true);
+  $request->merge(['percentage'=>LocalizedDecimal::normalize($request->input('percentage'))]);
   $data=$request->validate([
    'shareholder_id'=>['required','integer',Rule::exists('shareholders','id')->where('is_active',true)],
    'share_class'=>['required','string','max:60','regex:/^[A-Za-z0-9 _-]+$/'],
@@ -93,6 +105,7 @@ class ShareholderGovernanceController extends Controller {
  }
  public function resolution(Request $request){
   $this->check($request,true);
+  $request->merge(['distribution_cap'=>LocalizedDecimal::normalize($request->input('distribution_cap'))]);
   $data=$request->validate([
    'number'=>['required','string','max:45','regex:/^[A-Za-z0-9_\\/-]+$/','unique:shareholder_resolutions,number'],
    'title'=>['required','string','max:180'],
@@ -127,6 +140,9 @@ class ShareholderGovernanceController extends Controller {
    if($item->status!=='draft')throw ValidationException::withMessages(['decision'=>'Decision already recorded.']);
    if((int)$item->created_by===$request->user()->id)
     throw ValidationException::withMessages(['decision'=>'An independent reviewer must approve or reject the board resolution.']);
+   if($data['decision']==='approved'){
+    app(ShareholderDistributionAllocationService::class)->assertReadyForApproval($item);
+   }
    DB::table('shareholder_resolutions')->where('id',$resolution)->update([
     'status'=>$data['decision'],'reviewed_by'=>$request->user()->id,'reviewed_at'=>now(),'updated_at'=>now(),
    ]);
@@ -135,9 +151,27 @@ class ShareholderGovernanceController extends Controller {
   });
   return back()->with('success','Resolution review recorded.');
  }
+ public function allocate(Request $request,ShareholderDistributionAllocationService $service){
+  $this->check($request,true);
+  $request->merge([
+   'authorized_amount'=>LocalizedDecimal::normalize($request->input('authorized_amount')),
+  ]);
+  $data=$request->validate([
+   'shareholder_resolution_id'=>['required','integer',
+     Rule::exists('shareholder_resolutions','id')->where('purpose','distribution')->where('status','draft')],
+   'shareholder_id'=>['required','integer',Rule::exists('shareholders','id')->where('is_active',true)],
+   'authorized_amount'=>['required','numeric','gt:0','decimal:0,4','max:9999999999999999.9999'],
+   'approval_reference'=>['required','string','min:4','max:180'],
+  ]);
+  $service->save($data,$request->user()->id);
+  return redirect()->route('workspace.page',['shareholders','resolutions'])
+    ->with('success','Per-shareholder distribution entitlement documented. Independent resolution approval is still required.');
+ }
+
  public function distribute(Request $request,JournalPostingService $posting){
   $this->check($request,true);
   abort_unless($request->user()->canAny(['finance.update','administration.update']),403);
+  $request->merge(['amount'=>LocalizedDecimal::normalize($request->input('amount'))]);
   $data=$request->validate([
    'submission_token'=>['required','uuid'],
    'shareholder_resolution_id'=>['required','integer',Rule::exists('shareholder_resolutions','id')->where('purpose','distribution')->where('status','approved')],
@@ -147,8 +181,20 @@ class ShareholderGovernanceController extends Controller {
    'amount'=>['required','numeric','gt:0','decimal:0,4','max:9999999999999999.9999'],
   ]);
   DB::transaction(function()use($request,$data,$posting){
-   $duplicate=DB::table('shareholder_profit_distributions')->where('submission_token',$data['submission_token'])->first();
-   if($duplicate)return;
+   // Serialize payout availability and period closure against all other GL postings.
+   app(FinancePeriodClosingService::class)->holdPostingGate();
+   $duplicate=DB::table('shareholder_profit_distributions')
+    ->where('submission_token',$data['submission_token'])->first();
+   if($duplicate){
+    if((int)$duplicate->shareholder_resolution_id===(int)$data['shareholder_resolution_id'] &&
+       (int)$duplicate->shareholder_id===(int)$data['shareholder_id'] &&
+       (int)$duplicate->financial_account_id===(int)$data['financial_account_id'] &&
+       $duplicate->paid_on===$data['paid_on'] &&
+       BigDecimal::of((string)$duplicate->amount)->isEqualTo((string)$data['amount']))return;
+    throw ValidationException::withMessages([
+     'submission_token'=>'This distribution token was already used for a different payout.',
+    ]);
+   }
    $resolution=DB::table('shareholder_resolutions')->where('id',$data['shareholder_resolution_id'])
     ->lockForUpdate()->first();
    abort_unless($resolution,404);
@@ -171,6 +217,25 @@ class ShareholderGovernanceController extends Controller {
     ->where('is_group',false)->where('is_active',true)->first();
    if(!$retained)throw ValidationException::withMessages(['account'=>'Configure the non-group retained-earnings account 3200 first.']);
    $amount=BigDecimal::of((string)$data['amount'])->toScale(4);
+   $allocation=DB::table('shareholder_distribution_allocations')
+     ->where('shareholder_resolution_id',$resolution->id)
+     ->where('shareholder_id',$party->id)->first();
+   if(!$allocation){
+    throw ValidationException::withMessages([
+     'shareholder_id'=>'This shareholder has no explicitly approved entitlement in the signed distribution resolution. Existing legacy resolutions require a new approved allocation resolution.',
+    ]);
+   }
+   $paidForPayee=BigDecimal::zero();
+   foreach(DB::table('shareholder_profit_distributions')
+      ->where('shareholder_resolution_id',$resolution->id)
+      ->where('shareholder_id',$party->id)->pluck('amount') as $paidAmount){
+    $paidForPayee=$paidForPayee->plus((string)$paidAmount);
+   }
+   if($paidForPayee->plus($amount)->isGreaterThan((string)$allocation->authorized_amount)){
+    throw ValidationException::withMessages([
+     'amount'=>'Shareholder payout exceeds their individually approved distribution entitlement.',
+    ]);
+   }
    $already=BigDecimal::zero();
    foreach(DB::table('shareholder_profit_distributions')
      ->where('shareholder_resolution_id',$resolution->id)->pluck('amount') as $a)$already=$already->plus((string)$a);
@@ -179,14 +244,16 @@ class ShareholderGovernanceController extends Controller {
    $earned=BigDecimal::zero();
    $items=DB::table('journal_lines as l')->join('journal_entries as j','j.id','=','l.journal_entry_id')
      ->where('j.status','posted')->where('j.currency_id',$resolution->currency_id)
+     ->whereDate('j.entry_date','<=',$data['paid_on'])
      ->where('l.ledger_account_id',$retained->id)->select('l.debit','l.credit')->get();
    foreach($items as $i)$earned=$earned->plus((string)$i->credit)->minus((string)$i->debit);
    if($earned->isLessThan($amount))
     throw ValidationException::withMessages(['amount'=>'Posted retained earnings in this currency are insufficient for the distribution. No estimated profits may be paid.']);
-   $number='SHD-'.str_pad((string)(DB::table('shareholder_profit_distributions')->max('id')+1),7,'0',STR_PAD_LEFT);
-   // Stable journal idempotence token; database unique constraints serialize payouts.
+   DocumentSequence::firstOrCreate(['document_type'=>'shareholder_distribution'],
+     ['prefix'=>'SHD-','next_number'=>1,'padding'=>7,'is_active'=>true]);
+   $number=DocumentSequence::issue('shareholder_distribution');
    $journal=JournalEntry::create([
-    'number'=>$number.'-'.substr($data['submission_token'],0,8),
+    'number'=>'JE-'.$number,
     'entry_date'=>$data['paid_on'],'reference'=>$resolution->number,
     'description'=>'Approved shareholder profit distribution '.$resolution->number,
     'status'=>'draft','currency_id'=>$resolution->currency_id,'created_by'=>$request->user()->id,
