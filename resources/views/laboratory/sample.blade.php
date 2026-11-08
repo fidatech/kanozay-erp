@@ -10,8 +10,13 @@
 <div class="heading"><div><h1>Laboratory sample {{ $sample->number }}</h1><p>Status {{ strtoupper($sample->status) }} · Collected {{ $sample->collected_on }}</p></div><a class="btn btn-light" href="{{ route('workspace.page',['laboratory','samples']) }}">Sample register</a></div>
 @if(session('success'))<p class="notice">{{ session('success') }}</p>@endif
 @if($errors->any())<p class="notice notice-warning">{{ implode(' ',$errors->all()) }}</p>@endif
-<div class="qs-panel"><h2>Required specifications and recorded results</h2><table><thead><tr><th>Test</th><th>Criteria</th><th>Observation</th><th>Result</th></tr></thead><tbody>
-@foreach($specs as $spec)<tr><td>{{ $spec->test_name }}</td><td>{{ $spec->kind==='numeric' ? ($spec->minimum??'—').' to '.($spec->maximum??'—').' '.$spec->unit : 'Pass / fail' }}</td>
+<div class="qs-panel"><h2>Required specifications and recorded results</h2>
+@if($legacyRequirements)
+<p style="color:#995b19;font-size:12px">Legacy sample: its required specification versions were not frozen when collected. Current active test criteria are displayed for reconciliation; do not represent them as the original historical criteria.</p>
+@else
+<p class="muted">Specification versions below were frozen at sample collection. Later specification revisions do not rewrite these test limits.</p>
+@endif<table><thead><tr><th>Test / version</th><th>Criteria</th><th>Observation</th><th>Result</th></tr></thead><tbody>
+@foreach($specs as $spec)<tr><td>{{ $spec->test_name }} <small>v{{ $spec->version }}</small></td><td>{{ $spec->kind==='numeric' ? ($spec->minimum??'—').' to '.($spec->maximum??'—').' '.$spec->unit : 'Pass / fail' }}</td>
 @php($result=$results->get($spec->id))
 <td>{{ $result?->observed_value??($result?->observation??'—') }}</td><td>{{ $result?->outcome??'Pending' }}</td></tr>@endforeach
 </tbody></table></div>
