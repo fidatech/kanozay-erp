@@ -82,11 +82,48 @@
  @empty<tr><td colspan="12">No saved material requirements are available for this older plan. Do not use its recipe for purchasing or production without reviewing and recreating the plan.</td></tr>@endforelse
  </tbody></table></div>
  @if($order->materials->sum(fn ($line) => $line->wastes->count()) > 0)
- <h3>Recorded material waste</h3>
- <div class="table-wrap"><table><thead><tr><th>Material</th><th>Rejected quantity</th><th>Unit</th><th>Reason</th><th>Recorded at</th></tr></thead><tbody>
+ <h3>Recorded material waste and finance disposition</h3>
+ <p class="muted">Waste has already been included in the original raw-material issue; reviewing it never reduces stock twice. A different authorized finance reviewer must classify each loss before QC warehouse release. Normal process loss remains included in approved output cost only with documented policy evidence. Abnormal loss and unresolved rework must not be capitalized to saleable finished goods until a separate verified disposition and GL correction workflow exists.</p>
+ <p class="muted">Unreviewed: {{ $wasteReviewSummary['pending'] }} · Abnormal: {{ $wasteReviewSummary['abnormal'] }} · Rework pending: {{ $wasteReviewSummary['rework'] }}</p>
+ <div class="table-wrap"><table><thead><tr><th>Material</th><th>Rejected quantity</th><th>Unit</th><th>Reason</th><th>Recorded at</th><th>Financial treatment</th></tr></thead><tbody>
  @foreach($order->materials as $line)
   @foreach($line->wastes as $waste)
-  <tr><td>{{ $line->material_name }}</td><td>{{ $waste->quantity }}</td><td>{{ $line->unit }}</td><td>{{ $waste->reason }}</td><td>{{ $waste->created_at->format('Y-m-d H:i') }}</td></tr>
+  @php($financialReview=$wasteReviewSummary['reviews']->get($waste->id))
+  <tr>
+  <td>{{ $line->material_name }}</td><td>{{ $waste->quantity }}</td>
+  <td>{{ $line->unit }}</td><td>{{ $waste->reason }}</td>
+  <td>{{ $waste->created_at->format('Y-m-d H:i') }}</td>
+  <td>
+  @if($financialReview && $financialReview->treatment)
+   <strong style="color:{{ $financialReview->treatment==='normal_process_loss'?'#08734b':'#aa4e26' }}">
+    {{ match($financialReview->treatment){
+        'normal_process_loss'=>'Normal process loss, policy reviewed',
+        'abnormal_loss'=>'Abnormal loss: expense recognition required',
+        'rework_required'=>'Unresolved rework: release blocked',
+        default=>'Unknown financial treatment'
+    } }}
+   </strong>
+   <div class="muted">Evidence: {{ $financialReview->approval_reference }}</div>
+  @else
+   <strong style="color:#9b5a20">Independent finance review required</strong>
+   @if(auth()->user()->can('administration.update') || (auth()->user()->can('finance.update') && auth()->user()->can('manufacturing.view')))
+   <details><summary>Record source-backed waste treatment</summary>
+   <form method="POST" action="{{ route('production.orders.waste.review',[$order,$waste]) }}" style="display:grid;gap:7px;min-width:225px;margin-top:9px">
+    @csrf
+    <select name="treatment" required aria-label="Financial treatment">
+     <option value="">Select physical and financial treatment</option>
+     <option value="normal_process_loss">Normal loss, covered by signed manufacturing policy</option>
+     <option value="abnormal_loss">Abnormal loss, requires separate expense posting</option>
+     <option value="rework_required">Rework pending, output not yet saleable</option>
+    </select>
+    <input name="approval_reference" required minlength="4" maxlength="180" placeholder="Signed QC / finance review reference">
+    <textarea name="review_notes" required minlength="20" maxlength="3000" rows="3" placeholder="State source evidence, approved normal-loss policy or abnormal/rework action"></textarea>
+    <label style="font-size:12px;display:flex;gap:6px;align-items:center"><input type="checkbox" name="confirm_no_second_stock_issue" value="1" required> Loss already issued; no second stock deduction</label>
+    <button class="btn" type="submit" onclick="return confirm('Save irreversible independent finance waste classification? This action does not post a journal or deduct stock.')">Save independent review</button>
+   </form></details>
+   @endif
+  @endif
+  </td></tr>
   @endforeach
  @endforeach
  </tbody></table></div>
