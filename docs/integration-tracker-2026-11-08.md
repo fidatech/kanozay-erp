@@ -227,6 +227,12 @@ Added `finance_supplier_short_credit_settlements` and a source-validated financi
 
 [Supplier Short-Credit Financial Recognition](supplier-short-credit-recognition-2026-11-08.md) records controls and scope. **Development only, not verified.** Outstanding: historical standalone dispatch GL corrections, consumed opening FIFO stock valuations, approved dispute amendment path, financial close/audit coverage, full translations and release verification. As instructed, migrations/tests/lint/UAT/deployment are deferred.
 
+## Source-capitalized historical standalone non-sale dispatch expense accounting
+
+Added `finance_historical_dispatch_cost_settlements` and per-physical-dispatch-line unique cost and journal records. An independently signed historical `promotional_sample`, `production_loss` or `internal_consumption` classification can be proposed for expense recognition only if its original QC batch already has approved, posted and unreversed source-cost manufacturing/WIP-to-finished inventory capitalization **dated before or on the actual physical dispatch**. Each original-source batch line has a separately selected, independent purpose-specific expense ledger. A distinct approver authorizes the original-currency expense and a different executor posts an atomic debit-to-approved-expense / credit-to-finished-inventory GL journal per line in an open accounting period. Posted sales COGS, non-sale dispatch cost and approved customer return cost are jointly included when checking batch remaining cost/quantity; the financial month close excludes independently posted non-sale dispatches from uncosted orphan warnings and audits their journal validity. Customer-sale and unresolved dispositions remain **nonposting**. No revenue, receivable, FX conversion, fictitious GL balance or extra physical stock movement is created.
+
+[Historical Standalone Dispatch Expense Accounting](historical-standalone-dispatch-expense-2026-11-09.md) describes source requirements and unresolved historic capitalization. **Development source committed only; no tests, migrations, browser checks or deployment.** Previously dispatched batches without genuine earlier capitalization remain blocked pending a separately controlled legacy capitalization workflow.
+
 ## Acceptance and release gates
 
 1. Passing SQLite feature suite and isolated regression suite on the latest commit.
