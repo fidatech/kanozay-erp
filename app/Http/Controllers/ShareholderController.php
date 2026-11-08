@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
+use App\Support\LocalizedDecimal;
 
 class ShareholderController extends Controller
 {
@@ -93,15 +94,19 @@ class ShareholderController extends Controller
 
     public function postTransaction(Request $request, Shareholder $shareholder, ShareholderTransactionService $service)
     {
-        abort_unless($request->user()->canAny(['shareholders.create', 'shareholders.update', 'administration.update']), 403);
+        abort_unless($request->user()->can('administration.update') ||
+            ($request->user()->canAny(['shareholders.create','shareholders.update']) &&
+             $request->user()->can('finance.update')),403);
+        $request->merge(['amount'=>LocalizedDecimal::normalize($request->input('amount'))]);
         $data = $request->validate([
             'idempotency_key' => ['required', 'uuid'],
             'type' => ['required', Rule::in(['contribution', 'withdrawal'])],
-            'transaction_date' => ['required', 'date'],
+            'transaction_date' => ['required', 'date','before_or_equal:today'],
             'currency_id' => ['required', 'integer', Rule::exists('shareholder_currencies', 'currency_id')->where('shareholder_id', $shareholder->id)],
             'financial_account_id' => ['required', 'integer', 'exists:financial_accounts,id'],
             'amount' => ['required', 'numeric', 'gt:0', 'decimal:0,4', 'max:9999999999999999.9999'],
-            'reference' => ['nullable', 'string', 'max:120'],
+            'reference' => [Rule::requiredIf(fn()=>($request->input('type')==='withdrawal')),
+                'nullable','string','min:4','max:120'],
             'description' => ['required', 'string', 'max:2000'],
         ]);
         $service->post($shareholder, $data, $request->user()->id);
