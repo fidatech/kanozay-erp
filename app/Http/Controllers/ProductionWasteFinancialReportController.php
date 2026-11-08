@@ -30,6 +30,14 @@ class ProductionWasteFinancialReportController extends Controller
                 'batch.production_order_id','=','order.id')
             ->leftJoin('production_waste_financial_reviews as review',
                 'review.production_material_waste_id','=','waste.id')
+            ->leftJoin('production_abnormal_waste_cost_reviews as abnormal',
+                'abnormal.production_material_waste_id','=','waste.id')
+            ->leftJoin('currencies as cost_currency',
+                'cost_currency.id','=','abnormal.currency_id')
+            ->leftJoin('production_batch_cost_postings as posting',
+                'posting.production_batch_id','=','batch.id')
+            ->leftJoin('journal_entries as batch_journal',
+                'batch_journal.id','=','posting.issue_journal_id')
             ->when($filters['from']??null,
                 fn($q,$date)=>$q->whereDate('waste.created_at','>=',$date))
             ->when($filters['to']??null,
@@ -44,7 +52,11 @@ class ProductionWasteFinancialReportController extends Controller
                 'plan.status as order_status','batch.batch_number',
                 'batch.status as batch_status',
                 'review.treatment','review.approval_reference',
-                'review.review_notes','review.reviewed_by');
+                'review.review_notes','review.reviewed_by',
+                'abnormal.source_cost_amount as abnormal_cost',
+                'abnormal.approval_reference as cost_approval_reference',
+                'cost_currency.code as cost_currency',
+                'batch_journal.number as batch_expense_journal');
         if(($filters['export']??null)==='csv'){
             return response()->streamDownload(function()use($query){
                 $out=fopen('php://output','w');
@@ -52,7 +64,9 @@ class ProductionWasteFinancialReportController extends Controller
                 fputcsv($out,['Production order','Batch','Recorded on','Material',
                     'Original material unit','Previously issued waste quantity',
                     'Reason','Financial treatment','Approval reference',
-                    'Reviewer identifier','Review notes']);
+                    'Reviewer identifier','Review notes',
+                    'Approved abnormal FIFO source cost','Original currency',
+                    'Abnormal cost approval','Batch GL journal']);
                 foreach((clone $query)->orderBy('waste.id')->cursor() as $row){
                     fputcsv($out,array_map(
                         [ReportCenterController::class,'csvSafe'],[
@@ -62,6 +76,8 @@ class ProductionWasteFinancialReportController extends Controller
                             $row->treatment??'Pending review',
                             $row->approval_reference,$row->reviewed_by,
                             $row->review_notes,
+                            $row->abnormal_cost,$row->cost_currency,
+                            $row->cost_approval_reference,$row->batch_expense_journal,
                         ]
                     ));
                 }
