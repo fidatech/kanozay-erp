@@ -208,9 +208,16 @@ class InventoryCostService
                     'quantity'=>'The source receipt lot no longer contains enough stock for this supplier return.',
                 ]);
             }
-            app(GoodsReceiptLandedCostPostingService::class)->assertLotCostPosted(
-                (int)$origin->source_id,$movement->occurred_on->toDateString()
-            );
+            // Base supplier debit notes reverse the invoiced receipt value
+            // only. Once freight/customs is capitalized, returning that
+            // source lot also requires a separately authorized landed-cost
+            // write-off or recovery, which the base return flow cannot infer.
+            if(DB::table('goods_receipt_landed_cost_allocations')
+                ->where('goods_receipt_line_id',$origin->source_id)->exists()){
+                throw ValidationException::withMessages([
+                    'quantity'=>'This supplier-return lot contains allocated landed costs. The ordinary supplier debit note only reverses the base inventory purchase. Reconcile the capitalized freight/customs value with an independently authorized landed-cost return adjustment before removing this physical lot.',
+                ]);
+            }
             $locations->consume($origin,$warehouseId,$returnQty);
             InventoryCostConsumption::create([
                 'inventory_stock_movement_id'=>$movement->id,
