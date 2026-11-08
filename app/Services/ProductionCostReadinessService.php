@@ -68,6 +68,18 @@ class ProductionCostReadinessService {
     $costPerPackage=$complete?
       (string)$material->plus($overheadTotal)
        ->dividedBy((string)$batch->accepted_packages,8,RoundingMode::HalfUp):null;
+    $warning=match(true){
+      $unreviewedWaste>0=>'Recorded material waste requires independent finance classification',
+      $unresolvedWaste>0=>'Abnormal production waste or unresolved rework requires a separate approved cost disposition',
+      $sourcePosting!==null=>'Posted to original-currency WIP and finished goods GL; review source evidence',
+      $hasUnvalued=>'Missing or unvalued material source costs',
+      $mixedCurrency=>'Multiple source currencies; no combined cost',
+      $pending>0=>'Unapproved overhead remains',
+      $batch->status!=='released'=>'Batch not released',
+      $batch->accepted_packages<1=>'No accepted packages',
+      $complete=>'Source cost snapshot ready; finance must verify source journals and approve capitalization',
+      default=>'Material source cost unavailable',
+    };
     $result->push([
      'batch_id'=>$batch->id,'batch'=>$batch->batch_number,
      'product'=>$batch->finishedGood?->name??'Unknown',
@@ -84,15 +96,7 @@ class ProductionCostReadinessService {
      'gl_posted'=>$sourcePosting!==null,
      'gl_currency_id'=>$sourcePosting?->currency_id,
      'gl_accounted_cost'=>$sourcePosting?->total_amount,
-     'warning'=>$sourcePosting?'Posted to original-currency WIP and finished goods GL; check historic cost source evidence':
-       ($complete?'Source cost snapshot ready; finance must verify original posted supplier inventory debit and approve GL capitalization':
-       ($hasUnvalued?'Missing or unvalued material source costs':
-        ($mixedCurrency?'Multiple source currencies; no combined cost':
-         ($pending>0?'Unapproved overhead remains':
-          ($unreviewedWaste>0?'Recorded material waste requires independent finance classification':
-           ($unresolvedWaste>0?'Abnormal production waste or unresolved rework requires a separate approved cost disposition':
-          ($batch->status!=='released'?'Batch not released':
-           ($batch->accepted_packages<1?'No accepted packages':'Material cost unavailable in source currency')))))))) ,
+     'warning'=>$warning,
     ]);
    }
   }
