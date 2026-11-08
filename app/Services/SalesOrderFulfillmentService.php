@@ -2,8 +2,6 @@
 
 namespace App\Services;
 
-use App\Models\SalesOrder;
-use Brick\Math\BigDecimal;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
