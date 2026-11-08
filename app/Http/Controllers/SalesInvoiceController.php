@@ -99,7 +99,22 @@ class SalesInvoiceController extends Controller
             if ($balance->isGreaterThan(0)) $previousBalance = $previousBalance->plus($balance);
         }
 
+        $deliveryNotes=\App\Models\SalesDeliveryNote::with('lines')
+            ->where('sales_invoice_id',$invoice->id)->orderByDesc('id')->get();
+        $logistics=['documented'=>0,'delivered'=>0,'returned'=>0,'cancelled'=>0];
+        foreach($deliveryNotes as $note){
+            $packages=(int)$note->lines->sum('quantity_packages');
+            if($note->status==='cancelled')$logistics['cancelled']+=$packages;
+            else{
+                $logistics['documented']+=$packages;
+                if($note->status==='delivered')$logistics['delivered']+=$packages;
+                if($note->status==='returned')$logistics['returned']+=$packages;
+            }
+        }
+
         return view('sales.invoices.show', [
+            'deliveryNotes'=>$deliveryNotes,
+            'logistics'=>$logistics,
             'invoice' => $invoice,
             'company' => CompanySetting::first(),
             'paid' => (string) $paid->toScale(4),
