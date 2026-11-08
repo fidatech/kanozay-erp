@@ -58,7 +58,7 @@ class SalesCreditNoteController extends Controller
     public function show(Request $request, SalesCreditNote $creditNote)
     {
         abort_unless($request->user()->canAny(['sales.view', 'administration.view', 'finance.view', 'reports.view']), 403);
-        $creditNote->load(['invoice.customer', 'lines.invoiceLine', 'journal',
+        $creditNote->load(['invoice.customer', 'lines.invoiceLine', 'lines.quarantine', 'journal',
             'refund.source','refund.transaction.journal','tradeDocumentCredit']);
         return view('sales.credit-notes.show', compact('creditNote'));
     }
