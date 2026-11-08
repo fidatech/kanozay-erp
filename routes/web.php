@@ -46,6 +46,7 @@ Route::middleware('auth')->post('/inventory/warehouse-stock', [\App\Http\Control
 Route::middleware('auth')->post('/inventory/warehouse-stock/legacy-lots', [\App\Http\Controllers\WarehouseStockController::class,'assignLegacy'])->name('inventory.warehouse-stock.legacy.assign');
 Route::middleware('auth')->get('/reports/dispatch-cost-reconciliation', [\App\Http\Controllers\DispatchCostReconciliationController::class,'index'])->name('reports.dispatch-cost.index');
 Route::middleware('auth')->get('/reports/manufacturing-financial-reconciliation', [\App\Http\Controllers\ManufacturingFinancialReconciliationController::class,'index'])->name('reports.manufacturing-financial.index');
+Route::middleware('auth')->get('/reports/production-waste-financial', [\App\Http\Controllers\ProductionWasteFinancialReportController::class,'index'])->name('reports.production-waste.index');
 Route::middleware('auth')->get('/manufacturing/cost-accounting', [\App\Http\Controllers\ManufacturingCostAccountingController::class,'index'])->name('manufacturing.cost-accounting.index');
 Route::middleware('auth')->post('/manufacturing/cost-accounting/policies', [\App\Http\Controllers\ManufacturingCostAccountingController::class,'policy'])->name('manufacturing.cost-accounting.policies.store');
 Route::middleware('auth')->post('/manufacturing/cost-accounting/policies/{policy}/approve', [\App\Http\Controllers\ManufacturingCostAccountingController::class,'approve'])->whereNumber('policy')->name('manufacturing.cost-accounting.policies.approve');
