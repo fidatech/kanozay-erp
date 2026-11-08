@@ -309,6 +309,36 @@ class ManufacturingCostAccountingService
             if(!BigDecimal::of($materialPosted)->isPositive()){
                 $this->reject('Frozen material cost rounds to zero in journal precision and cannot support a positive GL posting.');
             }
+            $abnormal=app(ProductionAbnormalWasteCostService::class)
+                ->forOrder($batch->production_order_id,(int)$policy->currency_id,$data['accounting_date']);
+            $abnormalPosted=$abnormal['total']->toScale(4,RoundingMode::HalfUp);
+            if($abnormalPosted->isGreaterThanOrEqualTo($materialPosted)){
+                $this->reject('After excluding abnormal waste, the batch has no remaining eligible normal material cost for accepted finished packages.');
+            }
+            // Round the ledger debits as a group. The last ledger takes the
+            // rounding remainder, so total loss expense exactly matches the
+            // cost excluded from finished goods in the 20,4 journal.
+            $abnormalDebits=[];
+            $assignedAbnormal=BigDecimal::zero();
+            $ledgerIds=array_keys($abnormal['by_ledger']);
+            sort($ledgerIds);
+            foreach($ledgerIds as $index=>$ledgerId){
+                $value=$index===count($ledgerIds)-1
+                    ?$abnormalPosted->minus($assignedAbnormal)
+                    :$abnormal['by_ledger'][$ledgerId]->toScale(4,RoundingMode::HalfUp);
+                if(!$value->isPositive()){
+                    $this->reject('An abnormal waste expense split rounds to zero. Review source cost precision before posting.');
+                }
+                $assignedAbnormal=$assignedAbnormal->plus($value);
+                $abnormalDebits[]=[
+                    'ledger'=>(int)$ledgerId,'amount'=>(string)$value->toScale(4),
+                    'memo'=>'Independent FIFO-valued abnormal loss '.$batch->batch_number,
+                ];
+            }
+            $netMaterial=$material->minus($abnormal['total']);
+            if(!$netMaterial->isPositive()){
+                $this->reject('Original FIFO values leave no eligible production material value for finished inventory.');
+            }
             if($this->assetBalanceAsOf(
                 (int)$policy->material_inventory_ledger_id,
                 (int)$policy->currency_id,$data['accounting_date']
@@ -316,9 +346,11 @@ class ManufacturingCostAccountingService
                 $this->reject('The source raw-material asset GL balance is insufficient for these original-currency FIFO issues on the capitalization date. Reconcile earlier inventory and purchase journals.');
             }
             $overheadPosted=(string)$overhead->toScale(4,RoundingMode::HalfUp);
-            $totalPosted=$this->money(BigDecimal::of($materialPosted)->plus($overheadPosted));
+            $totalPosted=$this->money(
+                BigDecimal::of($materialPosted)->plus($overheadPosted)->minus($abnormalPosted));
             $debit=[['ledger'=>(int)$policy->work_in_progress_ledger_id,
-                'amount'=>$totalPosted,'memo'=>'WIP material plus approved overhead '.$batch->batch_number]];
+                'amount'=>$totalPosted,'memo'=>'Normal source material plus approved overhead '.$batch->batch_number]];
+            $debit=array_merge($debit,$abnormalDebits);
             $credit=[['ledger'=>(int)$policy->material_inventory_ledger_id,
                 'amount'=>$materialPosted,'memo'=>'FIFO raw material and packaging issues '.$batch->batch_number]];
             $credit=array_merge($credit,$credits);
@@ -338,6 +370,7 @@ class ManufacturingCostAccountingService
                 'currency_id'=>$policy->currency_id,
                 'accepted_packages'=>$batch->accepted_packages,
                 'material_amount'=>$materialPosted,
+                'abnormal_waste_amount'=>(string)$abnormalPosted->toScale(4),
                 'overhead_amount'=>$overheadPosted,
                 'total_amount'=>$totalPosted,
                 'accounting_date'=>$data['accounting_date'],
@@ -353,6 +386,7 @@ class ManufacturingCostAccountingService
                 'FIFO material and reviewed overhead reclassified to WIP and finished-goods asset.',
                 ['posting_id'=>$id,'currency_id'=>$policy->currency_id,
                 'material'=>$materialPosted,'overhead'=>$overheadPosted,
+                'abnormal_waste_expensed'=>(string)$abnormalPosted->toScale(4),
                 'total'=>$totalPosted,'issue_journal'=>$issue->number,
                 'capitalization_journal'=>$finished->number]);
             return DB::table('production_batch_cost_postings')->where('id',$id)->first();
