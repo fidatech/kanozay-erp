@@ -38,7 +38,10 @@
 </tbody></table></div>
 <div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0">
 @foreach($ownershipClassTotals as $shareClass=>$percent)
-<span class="sh-note">{{ $shareClass }} documented: {{ $percent }}% @if(\Brick\Math\BigDecimal::of((string)$percent)->isLessThan('100')) · Not fully allocated @endif</span>
+<span class="sh-note">{{ $shareClass }} documented: {{ $percent }}%
+@if(\Brick\Math\BigDecimal::of((string)$percent)->isGreaterThan('100')) · Historical allocation exceeds 100%; reconcile signed amendments
+@elseif(\Brick\Math\BigDecimal::of((string)$percent)->isLessThan('100')) · Not fully allocated
+@endif</span>
 @endforeach
 </div>
 <p class="muted">An incomplete share class is not assumed to have unrecorded shareholders. This register reflects signed historical ownership changes. Payout entitlements require independent resolution-specific amounts.</p>
@@ -71,7 +74,7 @@
 <option value="">Choose signed draft resolution</option>
 @foreach($resolutions as $resolution)
 @if($resolution->purpose==='distribution' && $resolution->status==='draft')
-<option value="{{ $resolution->id }}">{{ $resolution->number }} · Total ceiling {{ $resolution->distribution_cap }} · Currency #{{ $resolution->currency_id }}</option>
+<option value="{{ $resolution->id }}">{{ $resolution->number }} · Total ceiling {{ $resolution->distribution_cap }} · {{ $currencies->firstWhere('id',$resolution->currency_id)?->code??'Unspecified currency' }}</option>
 @endif
 @endforeach
 </select></label>
