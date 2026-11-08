@@ -30,7 +30,8 @@ class ManufacturingFinancialReconciliationController extends Controller
                     'Warehouse received packages','Gross physical dispatches','QC restocked packages',
                     'Packages costed to COGS','Costed QC returns',
                     'Physical remaining packages','Financial remaining packages',
-                    'Capitalized value','Posted COGS','Returned inventory cost',
+                    'Gross source material cost','Abnormal FIFO loss expensed',
+                    'Net capitalized value','Posted COGS','Returned inventory cost',
                     'Financial remaining asset value','Reconciliation exceptions']);
                 $query->orderBy('id')->chunkById(75,function($batches)use($service,$out){
                     foreach($service->rows($batches) as $row){
@@ -39,6 +40,8 @@ class ManufacturingFinancialReconciliationController extends Controller
                             $row['accepted'],$row['received'],$row['dispatched'],$row['qc_returns'],
                             $row['costed_sales'],$row['costed_recoveries'],
                             $row['net_physical'],$row['remaining_costed'],
+                            $row['gross_material_source_cost'],
+                            $row['abnormal_waste_expensed'],
                             $row['total_capitalized'],$row['posted_cogs'],
                             $row['returned_cost'],$row['remaining_asset_value'],
                             implode(' | ',$row['issues']),
