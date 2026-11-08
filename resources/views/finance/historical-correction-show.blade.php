@@ -126,6 +126,69 @@ Post verified opening-stock valuation</button>
 </form>
 </section>
 @endif
+@if($case->case_type==='standalone_dispatch')
+<section class="hfcs-card">
+<h2>Recorded physical dispatch and source-batch cost evidence</h2>
+<p class="muted">These are factual quantities and original batch amounts, not an approved price for a customer sale, a sample or a loss. The original dispatch remains immutable and no stock is added or removed here.</p>
+<div style="overflow-x:auto"><table style="width:100%;min-width:780px">
+<thead><tr><th>Source batch</th><th>Dispatched packages</th><th>Warehouse</th><th>Accepted batch packages</th><th>Original batch capitalized value</th><th>Original costing GL</th></tr></thead><tbody>
+@forelse($dispatchEvidence as $detail)
+<tr><td>{{ $detail->batch_number }} (#{{ $detail->production_batch_id }})</td>
+<td>{{ number_format($detail->quantity_packages) }}</td>
+<td>#{{ $detail->company_warehouse_id??'Unassigned' }}</td>
+<td>{{ number_format((int)$detail->accepted_packages) }}</td>
+<td>{{ $detail->total_amount??'No verified capitalization' }} {{ $detail->original_cost_currency }}</td>
+<td>@if($detail->accounting_date)
+{{ $detail->accounting_date }} · {{ $detail->capitalization_journal_status??'Journal absent' }}
+@else Source capitalization missing @endif</td>
+</tr>
+@empty<tr><td colspan="6">No verifiable physical dispatch source lines found.</td></tr>@endforelse
+</tbody></table></div>
+@if($dispatchDisposition)
+<h3>Independent business-purpose review</h3>
+<div class="hfcs-grid">
+<div><small>Disposition</small><div><strong>{{ str_replace('_',' ',ucfirst($dispatchDisposition->business_purpose)) }}</strong></div></div>
+<div><small>Evidence document</small><div>{{ $dispatchDisposition->supporting_document_reference }}</div></div>
+<div><small>Reviewer</small><div>#{{ $dispatchDisposition->reviewed_by }}</div></div>
+</div>
+<p style="white-space:pre-wrap">{{ $dispatchDisposition->source_evidence }}</p>
+<p><strong>Remaining financial action:</strong></p>
+<p style="white-space:pre-wrap">{{ $dispatchDisposition->remaining_financial_action }}</p>
+<p class="hfcs-alert">Disposition is recorded but the case remains open. Financial posting still needs an independently source-valued, purpose-specific correction. No customer receivable, revenue, COGS or expense entry was created.</p>
+@elseif($case->status==='approved' &&
+ (auth()->user()->can('finance.update') || auth()->user()->can('administration.update')) &&
+ (int)$case->requested_by!==auth()->id())
+<h3>Classify original warehouse-only dispatch purpose</h3>
+<p class="hfcs-alert">A missing customer invoice must not be invented from a warehouse issue. Review the original signed reason. Samples, damaged output and internal consumption may require different expense accounts, while sales require separately valid customer and original revenue documents. This form records the conclusion only; it cannot post GL entries.</p>
+<form method="POST" action="{{ route('finance.historical-corrections.dispatch-purpose',$case->id) }}" class="hfcs-form">
+@csrf
+<label>Business purpose
+<select name="business_purpose" required>
+<option value="">Choose evidenced business disposition</option>
+<option value="customer_sale">Customer sale requiring independent invoice/COGS reconciliation</option>
+<option value="promotional_sample">Promotional or product sampling expense</option>
+<option value="production_loss">Damage or nonrecoverable inventory loss</option>
+<option value="internal_consumption">Approved internal-use consumption</option>
+<option value="unresolved">Purpose still unverified</option>
+</select></label>
+<label>Original supporting document reference
+<input name="supporting_document_reference" required minlength="4" maxlength="180"></label>
+<label>Independent source evidence
+<textarea name="source_evidence" rows="4" required minlength="30" maxlength="5000"
+ placeholder="State original dispatch source, authorized customer/recipient, purpose, quantity, date and signed evidence."></textarea></label>
+<label>Outstanding original-currency accounting action
+<textarea name="remaining_financial_action" rows="4" required minlength="30" maxlength="5000"
+ placeholder="Describe which source GL and operational documents still need to be created or reconciled. No estimated amounts."></textarea></label>
+<label style="display:flex;align-items:center;gap:8px">
+<input type="checkbox" name="confirm_no_gl_posting" value="1" required style="width:auto">
+I understand this review neither approves an accounting value nor records an invoice, GL journal or stock movement.
+</label>
+<button class="btn" type="submit"
+ onclick="return confirm('Record this source-linked physical dispatch classification without posting any financial or warehouse movement?')">Record independent disposition</button>
+</form>
+@endif
+</section>
+@endif
 @if($case->status==='approved' && $case->case_type==='invoice_missing_cogs' &&
  (auth()->user()->can('finance.update') || auth()->user()->can('administration.update')) &&
  (int)$case->requested_by!==auth()->id())
