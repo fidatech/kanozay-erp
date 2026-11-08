@@ -32,6 +32,15 @@
 </form>
 @endcanany
 @endif
+@if($note->status==='returned')
+@canany(['sales.update','administration.update'])
+<form method="POST" action="{{ route('sales.delivery-notes.cancel',$note) }}" onsubmit="return confirm('Close this returned logistics note and free its delivery-document allocation? The original invoice dispatch and stock will not be reversed.')">
+@csrf
+<input name="reason" required maxlength="1000" minlength="5" placeholder="Return evidence and cancellation reason">
+<button class="btn btn-light">Close returned note</button>
+</form>
+@endcanany
+@endif
 </div>
 @if(session('success'))<div class="panel no-print" style="color:#206c49">{{ session('success') }}</div>@endif
 @if($errors->any())<div class="panel no-print" style="color:#ae312d">@foreach($errors->all() as $error)<p>{{ $error }}</p>@endforeach</div>@endif
