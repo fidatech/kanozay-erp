@@ -50,6 +50,9 @@ Route::middleware('auth')->post('/manufacturing/equipment', [\App\Http\Controlle
 Route::middleware('auth')->post('/manufacturing/schedules', [\App\Http\Controllers\ManufacturingOperationsController::class,'schedule'])->name('manufacturing.schedules.store');
 Route::middleware('auth')->post('/manufacturing/schedules/{schedule}/transition', [\App\Http\Controllers\ManufacturingOperationsController::class,'transition'])->name('manufacturing.schedules.transition');
 Route::middleware('auth')->post('/manufacturing/downtime', [\App\Http\Controllers\ManufacturingOperationsController::class,'downtime'])->name('manufacturing.downtime.store');
+Route::middleware('auth')->get('/inventory/quality-holds', [\App\Http\Controllers\RawMaterialQualityHoldController::class,'index'])->name('inventory.quality-holds.index');
+Route::middleware('auth')->post('/inventory/quality-holds/lots/{layer}', [\App\Http\Controllers\RawMaterialQualityHoldController::class,'hold'])->name('inventory.quality-holds.hold');
+Route::middleware('auth')->post('/inventory/quality-holds/{hold}/release', [\App\Http\Controllers\RawMaterialQualityHoldController::class,'release'])->whereNumber('hold')->name('inventory.quality-holds.release');
 Route::middleware('auth')->post('/laboratory/specifications', [\App\Http\Controllers\LaboratoryQualityController::class,'specification'])->name('laboratory.specifications.store');
 Route::middleware('auth')->post('/laboratory/samples', [\App\Http\Controllers\LaboratoryQualityController::class,'sample'])->name('laboratory.samples.store');
 Route::middleware('auth')->get('/laboratory/samples/{sample}', [\App\Http\Controllers\LaboratoryQualityController::class,'show'])->name('laboratory.samples.show');
