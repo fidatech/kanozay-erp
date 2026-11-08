@@ -44,7 +44,12 @@ class EmployeeExitService
    if($remaining->isGreaterThan(0))
     throw ValidationException::withMessages(['decision'=>'Employee has an outstanding salary advance. Collect or formally reconcile it before separation.']);
   }
-  $employee->update(['is_active'=>false]);
+  if($employee->hired_on && $data['last_working_on']<$employee->hired_on->toDateString())
+   throw ValidationException::withMessages(['decision'=>'Separation cannot predate the employee hire date.']);
+  $employee->update([
+   'is_active'=>false,
+   'separated_on'=>$data['last_working_on'],
+  ]);
   ActivityLog::record('hr.employee.exit.closed','employee_profile',$employee->id,
     'Employee offboarding closed from approved separation '.$record->number.'; future salary snapshots will exclude the employee.',
     ['operational_record_id'=>$record->id,'asset_clearance'=>$data['asset_clearance'],
