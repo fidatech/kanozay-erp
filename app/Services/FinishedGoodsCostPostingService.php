@@ -102,6 +102,15 @@ class FinishedGoodsCostPostingService
             $original=SalesInvoiceLine::whereKey($line->id)->lockForUpdate()->firstOrFail();
             $invoice=DB::table('sales_invoices')->where('id',$original->sales_invoice_id)->first();
             if(!$invoice)$this->reject('Sales invoice document not found.');
+            if($original->dispatch_id && DB::table('finance_historical_dispatch_cost_lines as expense')
+                ->join('finished_good_dispatch_lines as physical',
+                    'physical.id','=','expense.finished_good_dispatch_line_id')
+                ->join('finance_historical_dispatch_cost_settlements as settlement',
+                    'settlement.id','=','expense.finance_historical_dispatch_cost_settlement_id')
+                ->where('physical.finished_good_dispatch_id',$original->dispatch_id)
+                ->where('settlement.status','posted')->exists()){
+                $this->reject('This source dispatch was already expensed as an approved non-sale issue. A later invoice requires a separate documented correction; duplicate COGS is prohibited.');
+            }
             $existing=DB::table('production_invoice_cogs_postings')
                 ->where('sales_invoice_line_id',$original->id)->first();
             if($existing)return $existing;
@@ -144,8 +153,16 @@ class FinishedGoodsCostPostingService
                     'journal.id','=','recovered.journal_entry_id')
                 ->where('sold.production_batch_cost_posting_id',$posted->id)
                 ->max('journal.entry_date');
+            $lastNonSaleDate=DB::table('finance_historical_dispatch_cost_lines as expense')
+                ->join('finance_historical_dispatch_cost_settlements as settlement',
+                    'settlement.id','=','expense.finance_historical_dispatch_cost_settlement_id')
+                ->join('journal_entries as journal','journal.id','=','expense.journal_entry_id')
+                ->where('expense.production_batch_cost_posting_id',$posted->id)
+                ->where('settlement.status','posted')
+                ->max('journal.entry_date');
             if(($lastCOGSDate && $invoice->invoice_date<$lastCOGSDate) ||
-               ($lastReturnDate && $invoice->invoice_date<$lastReturnDate)){
+               ($lastReturnDate && $invoice->invoice_date<$lastReturnDate) ||
+               ($lastNonSaleDate && $invoice->invoice_date<$lastNonSaleDate)){
                 $this->reject('This invoice predates an already posted sale or QC-return cost movement for the same batch. A separately reviewed historical adjustment is required to preserve chronological GL valuation.');
             }
             $priorSales=DB::table('production_invoice_cogs_postings')
@@ -163,6 +180,19 @@ class FinishedGoodsCostPostingService
             foreach($returns as $row){
                 $priorQty-=(int)$row->quantity_packages;
                 $netCost=$netCost->minus((string)$row->amount);
+            }
+            // Historical non-sale physical dispatches draw from the SAME
+            // frozen original batch, so reserve their posted asset and
+            // quantity before recognizing any additional customer COGS.
+            $nonSale=DB::table('finance_historical_dispatch_cost_lines as expense')
+                ->join('finance_historical_dispatch_cost_settlements as settlement',
+                    'settlement.id','=','expense.finance_historical_dispatch_cost_settlement_id')
+                ->where('expense.production_batch_cost_posting_id',$posted->id)
+                ->where('settlement.status','posted')
+                ->get(['expense.quantity_packages','expense.source_cost_amount']);
+            foreach($nonSale as $row){
+                $priorQty+=(int)$row->quantity_packages;
+                $netCost=$netCost->plus((string)$row->source_cost_amount);
             }
             if($priorQty<0 || $priorQty+$quantity>(int)$posted->accepted_packages){
                 $this->reject('Net costed dispatched units exceed the QC-accepted batch quantity. Reconcile historic COGS and physical returns.');
