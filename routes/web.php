@@ -141,6 +141,7 @@ Route::middleware('auth')->get('/manufacturing/traceability/batches/{batch}', [\
 Route::middleware('auth')->get('/manufacturing/traceability/source-lots/{layer}', [\App\Http\Controllers\ProductionTraceabilityController::class, 'sourceLot'])->name('manufacturing.traceability.source-lot');
 Route::middleware('auth')->get('/production/recipes', [\App\Http\Controllers\ProductionRecipeController::class, 'index'])->name('production.recipes.index');
 Route::middleware('auth')->get('/production/recipes/{recipe}', [\App\Http\Controllers\ProductionRecipeController::class, 'show'])->name('production.recipes.show');
+Route::middleware('auth')->patch('/production/recipes/{recipe}', [\App\Http\Controllers\ProductionRecipeController::class, 'updateDraft'])->name('production.recipes.update');
 Route::middleware('auth')->post('/production/recipes/{recipe}/approve', [\App\Http\Controllers\ProductionRecipeController::class, 'approve'])->name('production.recipes.approve');
 Route::middleware('auth')->post('/production/recipes', [\App\Http\Controllers\ProductionRecipeController::class, 'store'])->name('production.recipes.store');
 Route::middleware('auth')->post('/purchases/quick-supplier', [\App\Http\Controllers\PurchaseOrderController::class,'quickSupplier'])->name('purchases.quick-supplier');
