@@ -23,6 +23,7 @@ class HistoricalFinanceCorrectionService
         'landed_cost_unreconciled'=>'Historic GRN landed cost without GL evidence',
         'supplier_return_unreconciled'=>'Historic supplier return / short credit discrepancy',
         'released_return_missing_cost'=>'Historic QC-released customer return missing inventory/COGS recovery',
+        'customer_return_disposition'=>'Historic quarantined customer return review or documented scrap loss',
     ];
 
     private function fail(string $message):never
@@ -42,6 +43,7 @@ class HistoricalFinanceCorrectionService
             'landed_cost_unreconciled'=>'goods_receipt_landed_costs',
             'supplier_return_unreconciled'=>'purchase_return_records',
             'released_return_missing_cost'=>'sales_return_quarantines',
+            'customer_return_disposition'=>'sales_return_quarantines',
         };
         $original=DB::table($table)->where('id',$id)->first();
         if(!$original)$this->fail('The selected original source document no longer exists.');
@@ -85,6 +87,72 @@ class HistoricalFinanceCorrectionService
                         ->where('finished_good_dispatch_id',$id)->orderBy('id')
                         ->get(['id','production_batch_id','finished_good_id',
                             'company_warehouse_id','quantity_packages'])->toArray()];
+                break;
+            case 'customer_return_disposition':
+                $reference='RET-DISPOSITION-'.$id;
+                $credit=DB::table('sales_credit_note_lines')
+                    ->where('id',$original->sales_credit_note_line_id)->first();
+                $note=$credit?DB::table('sales_credit_notes')
+                    ->where('id',$credit->sales_credit_note_id)->first():null;
+                $sale=$credit?DB::table('sales_invoice_lines')
+                    ->where('id',$credit->sales_invoice_line_id)->first():null;
+                $invoice=$sale?DB::table('sales_invoices')
+                    ->where('id',$sale->sales_invoice_id)->first():null;
+                if(!$credit || !$note || !$sale || !$invoice)
+                    $this->fail('Original customer credit, invoice and returned-line documents are required before independently reviewing a historic QC disposition.');
+                $date=$original->status==='scrapped'
+                    ?(string)$original->decided_on:(string)$note->credit_date;
+                $cost=DB::table('production_invoice_cogs_postings')
+                    ->where('sales_invoice_line_id',$sale->id)->first();
+                $batchCost=$cost?DB::table('production_batch_cost_postings')
+                    ->where('id',$cost->production_batch_cost_posting_id)->first():null;
+                $currencyId=$batchCost?->currency_id;
+                $movements=DB::table('finished_good_warehouse_movements')
+                    ->where('production_batch_id',$original->production_batch_id)
+                    ->where('type','customer_return')
+                    ->where('reference','Quarantined customer return QC '.$id)
+                    ->orderBy('id')
+                    ->get(['id','production_batch_id','source_warehouse_id',
+                        'destination_warehouse_id','quantity_packages','occurred_on',
+                        'reference','created_by'])->toArray();
+                $immutable=[
+                    'qc'=>[
+                        $original->id,$original->sales_credit_note_line_id,
+                        $original->production_batch_id,$original->received_warehouse_id,
+                        $original->released_warehouse_id,$original->quantity_packages,
+                        $original->status,$original->registered_by,$original->decided_by,
+                        $original->decided_on,$original->quality_reference,
+                        $original->decision_notes,
+                    ],
+                    'credit'=>[
+                        $credit->id,$credit->sales_credit_note_id,$credit->sales_invoice_line_id,
+                        $credit->finished_good_id,$credit->production_batch_id,
+                        $credit->quantity_packages,$credit->unit_price,$credit->line_total,
+                        $credit->restocked,
+                    ],
+                    'note'=>[
+                        $note->id,$note->number,$note->sales_invoice_id,
+                        $note->trade_document_id,$note->journal_entry_id,
+                        $note->credit_date,$note->total,$note->currency_code,
+                        $note->created_by,
+                    ],
+                    'sale'=>[
+                        $sale->id,$sale->sales_invoice_id,$sale->dispatch_id,
+                        $sale->finished_good_id,$sale->production_batch_id,
+                        $sale->quantity_packages,$sale->unit_price,$sale->line_total,
+                    ],
+                    'invoice'=>[
+                        $invoice->id,$invoice->status,$invoice->customer_id,
+                        $invoice->currency_id,$invoice->total,$invoice->invoice_date,
+                        $invoice->journal_entry_id,$invoice->trade_document_id,
+                    ],
+                    'physical_return_movements'=>$movements,
+                    'posted_source_cogs'=>$cost?[
+                        $cost->id,$cost->production_batch_cost_posting_id,
+                        $cost->quantity_packages,$cost->amount,$cost->journal_entry_id,
+                    ]:null,
+                    'original_batch_cost_currency'=>$currencyId,
+                ];
                 break;
             case 'released_return_missing_cost':
                 $reference='RET-QC-'.$id;
@@ -215,6 +283,19 @@ class HistoricalFinanceCorrectionService
                 ->where('open_key',$key)->exists()){
                 $this->fail('An unresolved correction case already exists for this source. Add evidence through the existing case.');
             }
+            if($source['type']==='customer_return_disposition'){
+                $qc=DB::table('sales_return_quarantines')
+                    ->where('id',$source['id'])->first();
+                if(!in_array($qc->status,['quarantined','scrapped'],true) ||
+                    (int)$qc->quantity_packages<1 ||
+                    DB::table('production_return_cost_postings')
+                        ->where('sales_return_quarantine_id',$qc->id)->exists())
+                    $this->fail('Only genuinely quarantined or independently scrapped customer credit returns without restored inventory cost qualify for source-disposition review.');
+                if($qc->status==='scrapped' &&
+                    (!$qc->decided_by || !$qc->decided_on ||
+                     (int)$qc->registered_by===(int)$qc->decided_by))
+                    $this->fail('Scrapped customer returns require signed independent QC decision, separate from original registrar.');
+            }
             if($source['type']==='released_return_missing_cost'){
                 $qc=DB::table('sales_return_quarantines')
                     ->where('id',$source['id'])->first();
@@ -301,6 +382,8 @@ class HistoricalFinanceCorrectionService
                DB::table('finance_historical_batch_capitalizations')
                    ->where('finance_historical_correction_case_id',$caseId)->exists() ||
                DB::table('finance_historical_customer_return_cost_recoveries')
+                   ->where('finance_historical_correction_case_id',$caseId)->exists() ||
+               DB::table('finance_historical_customer_return_disposition_reviews')
                    ->where('finance_historical_correction_case_id',$caseId)->exists()){
                 $this->fail('This case already contains signed source evidence or a historical production cost backfill proposal. It cannot be withdrawn without a dedicated audited amendment workflow.');
             }
