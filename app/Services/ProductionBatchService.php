@@ -176,6 +176,10 @@ class ProductionBatchService
             // release. Never release packages whose input FIFO sources have
             // since become held or whose posted usage cannot be traced.
             $this->assertSourceLotsReleased($batch);
+            // Unapproved waste must not be absorbed silently into the
+            // financial unit value of a QC-accepted finished batch.
+            app(ProductionWasteFinancialReviewService::class)
+                ->assertReleasedCostTreatment($batch->production_order_id);
             app(ProductionCostService::class)->snapshot($batch);
             $good->movements()->create([
                 'production_batch_id' => $batch->id,
