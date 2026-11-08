@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\SalesCreditNote;
 use App\Models\SalesInvoice;
+use App\Support\LocalizedDecimal;
 use App\Services\SalesCreditNoteService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -29,6 +30,14 @@ class SalesCreditNoteController extends Controller
     public function store(Request $request, SalesInvoice $invoice, SalesCreditNoteService $service)
     {
         abort_unless($request->user()->can('sales.create'), 403);
+        $lines=$request->input('lines');
+        if(is_array($lines))foreach($lines as &$line){
+            if(is_array($line) && array_key_exists('quantity_packages',$line)){
+                $line['quantity_packages']=LocalizedDecimal::normalize($line['quantity_packages']);
+            }
+        }
+        unset($line);
+        if(is_array($lines))$request->merge(['lines'=>$lines]);
         $data = $request->validate([
             'submission_token' => ['required', 'uuid'], 'credit_date' => ['required', 'date', 'before_or_equal:today'],
             'reason' => ['required', 'string', 'max:255'],
