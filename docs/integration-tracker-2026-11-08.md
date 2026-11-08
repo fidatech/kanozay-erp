@@ -193,6 +193,8 @@ Supplier returns of GRN lots containing freight, customs or other capitalized la
 
 [Abnormal Waste and Supplier Landed-Return Accounting](abnormal-waste-and-supplier-landed-return-accounting-2026-11-08.md) documents new source tables, explicit source-cost and reviewer requirements, deferred historic corrections and recoverable supplier/freight claims.
 
+The ordinary supplier debit-note workflow now insists on the full source-priced return base value, since crediting less would leave removed material value in the inventory GL asset. A disputed or partial credit requires a separate approved loss/receivable correction. The landed-cost write-off verifies that the original-currency asset balance can support its credit, and cancelled return tokens cannot be replayed.
+
 **Development status: abnormal FIFO loss and nonrecoverable landed-cost supplier-return code committed, not runtime verified.** Formal recoverable landed-cost claims, legacy source corrections, complete multilingual transactional UI and production release verification remain. User requested no tests, migrations, syntax lint, MySQL/UAT or deployment at this stage.
 
 ## Acceptance and release gates
