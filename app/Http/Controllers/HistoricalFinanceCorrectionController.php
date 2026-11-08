@@ -120,9 +120,34 @@ class HistoricalFinanceCorrectionController extends Controller
         }
         $dispatchDisposition=null;
         $dispatchEvidence=collect();
+        $dispatchCostSettlement=null;
+        $dispatchCostSettlementLines=collect();
+        $dispatchExpenseLedgers=collect();
         if($row->case_type==='standalone_dispatch'){
             $dispatchDisposition=DB::table('finance_historical_dispatch_dispositions')
                 ->where('finance_historical_correction_case_id',$row->id)->first();
+            $dispatchCostSettlement=DB::table('finance_historical_dispatch_cost_settlements')
+                ->where('finance_historical_correction_case_id',$row->id)->first();
+            if($dispatchCostSettlement){
+                $dispatchCostSettlementLines=DB::table('finance_historical_dispatch_cost_lines as posting')
+                    ->leftJoin('journal_entries as journal','journal.id','=','posting.journal_entry_id')
+                    ->leftJoin('currencies as currency','currency.id','=','posting.currency_id')
+                    ->where('posting.finance_historical_dispatch_cost_settlement_id',$dispatchCostSettlement->id)
+                    ->select('posting.*','currency.code as currency_code',
+                        'journal.number as journal_number','journal.status as journal_status')
+                    ->orderBy('posting.finished_good_dispatch_line_id')->get();
+            }
+            if($dispatchDisposition && $row->status==='approved' &&
+                in_array($dispatchDisposition->business_purpose,
+                    ['promotional_sample','production_loss','internal_consumption'],true) &&
+                $request->user()->canAny(['finance.update','administration.update'])){
+                $reserved=DB::table('manufacturing_cost_ledger_policies')
+                    ->pluck('cogs_ledger_id')->all();
+                $dispatchExpenseLedgers=\App\Models\LedgerAccount::query()
+                    ->where('type','expense')->where('is_active',true)
+                    ->where('is_group',false)->whereNotIn('id',$reserved)
+                    ->orderBy('code')->get(['id','code','name']);
+            }
             $dispatchEvidence=DB::table('finished_good_dispatch_lines as detail')
                 ->join('production_batches as batch',
                     'batch.id','=','detail.production_batch_id')
@@ -188,6 +213,9 @@ class HistoricalFinanceCorrectionController extends Controller
             'currencies'=>$currencies,'openingPosting'=>$openingPosting,
             'dispatchDisposition'=>$dispatchDisposition,
             'dispatchEvidence'=>$dispatchEvidence,
+            'dispatchCostSettlement'=>$dispatchCostSettlement,
+            'dispatchCostSettlementLines'=>$dispatchCostSettlementLines,
+            'dispatchExpenseLedgers'=>$dispatchExpenseLedgers,
             'supplierDispute'=>$supplierDispute,
             'supplierReturnLines'=>$supplierReturnLines,
             'supplierCreditCurrency'=>$supplierCreditCurrency,
@@ -237,6 +265,49 @@ class HistoricalFinanceCorrectionController extends Controller
         );
         return back()->with('success',
             'Supplier-offered short credit documented against immutable original return price. No financial liability, receivable or loss was posted; approved accounting treatment is still outstanding.');
+    }
+
+    public function submitDispatchCost(Request $request,int $case,
+        \App\Services\HistoricalDispatchCostSettlementService $service)
+    {
+        $this->gate($request,true);
+        $data=$request->validate([
+            'posting_date'=>['required','date','before_or_equal:today'],
+            'expense_ledgers'=>['required','array','min:1','max:50'],
+            'expense_ledgers.*'=>['required','integer','exists:ledger_accounts,id'],
+            'source_authorization_reference'=>['required','string','min:4','max:180'],
+            'expense_recognition_evidence'=>['required','string','min:50','max:5000'],
+            'confirm_original_non_sale_cost'=>['accepted'],
+        ]);
+        $service->submit($case,$data,(int)$request->user()->id);
+        return back()->with('success',
+            'Original-currency dispatch expense submitted for independent review. No sale, stock movement or GL journal was created.');
+    }
+
+    public function approveDispatchCost(Request $request,int $case,
+        \App\Services\HistoricalDispatchCostSettlementService $service)
+    {
+        $this->gate($request,true);
+        $data=$request->validate([
+            'decision'=>['required',Rule::in(['approve','reject'])],
+            'approval_reference'=>['required','string','min:4','max:180'],
+            'approval_notes'=>['required','string','min:40','max:5000'],
+            'confirm_independent_cost'=>['accepted'],
+        ]);
+        $service->approve($case,$data,(int)$request->user()->id);
+        return back()->with('success',
+            'Independent purpose-specific dispatch expense decision recorded. No journal posted.');
+    }
+
+    public function postDispatchCost(Request $request,int $case,
+        \App\Services\HistoricalDispatchCostSettlementService $service)
+    {
+        $this->gate($request,true);
+        $request->validate(['confirm_original_cost_posting'=>['accepted']]);
+        $result=$service->post($case,(int)$request->user()->id);
+        return back()->with('success',
+            'Original batch source-cost non-sale dispatch expenses posted for settlement #'.$result->id.
+            '. No customer sale, revenue, receivable or duplicate physical movement was created.');
     }
 
     public function classifyDispatch(Request $request,int $case,
