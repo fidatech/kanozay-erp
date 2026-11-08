@@ -208,6 +208,9 @@ class InventoryCostService
                     'quantity'=>'The source receipt lot no longer contains enough stock for this supplier return.',
                 ]);
             }
+            app(GoodsReceiptLandedCostPostingService::class)->assertLotCostPosted(
+                (int)$origin->source_id,$movement->occurred_on->toDateString()
+            );
             $locations->consume($origin,$warehouseId,$returnQty);
             InventoryCostConsumption::create([
                 'inventory_stock_movement_id'=>$movement->id,
@@ -263,6 +266,11 @@ class InventoryCostService
                 ]);
             }
 
+            if($layer->source_type==='goods_receipt_line'){
+                app(GoodsReceiptLandedCostPostingService::class)->assertLotCostPosted(
+                    (int)$layer->source_id,$movement->occurred_on->toDateString()
+                );
+            }
             $amount=$this->amountForConsumption($layer,$qty);
             $locations->consume($layer,$warehouseId,$qty);
             InventoryCostConsumption::create([
