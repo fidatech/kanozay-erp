@@ -25,9 +25,16 @@ class DispatchCostReconciliationService
             ->whereIn('id',$batchIds)->get()->keyBy('id');
         $overheads=DB::table('production_overhead_allocations as overhead')
             ->join('currencies as currency','currency.id','=','overhead.currency_id')
+            ->join('journal_lines as source','source.id','=','overhead.source_journal_line_id')
+            ->join('journal_entries as journal','journal.id','=','source.journal_entry_id')
             ->whereIn('overhead.production_batch_id',$batchIds)
             ->get(['overhead.production_batch_id','overhead.status',
-                'overhead.amount','currency.code as currency_code'])
+                'overhead.amount','overhead.reviewed_at',
+                'journal.entry_date as expense_date',
+                'journal.id as source_journal_entry_id',
+                'journal.status as expense_status',
+                'journal.reversal_of_id as expense_reversal_id',
+                'currency.code as currency_code'])
             ->groupBy('production_batch_id');
         $results=collect();
         foreach($lines as $line){
@@ -47,6 +54,20 @@ class DispatchCostReconciliationService
             $approved=$overheads->get($line->production_batch_id,collect());
             if($approved->where('status','submitted')->isNotEmpty()){
                 $reason[]='Unapproved overhead allocation remains';
+            }
+            foreach($approved->where('status','approved') as $item){
+                if(!$item->reviewed_at ||
+                    substr((string)$item->reviewed_at,0,10)>$line->dispatch->dispatch_date->toDateString()){
+                    $reason[]='Overhead approved after dispatch or missing approval time';
+                    break;
+                }
+                if($item->expense_date>$line->dispatch->dispatch_date->toDateString() ||
+                    $item->expense_status!=='posted' || $item->expense_reversal_id ||
+                    DB::table('journal_entries')
+                        ->where('reversal_of_id',$item->source_journal_entry_id??0)->exists()){
+                    $reason[]='Source overhead expense postdates dispatch or has invalid journal evidence';
+                    break;
+                }
             }
             $currencyCodes=$costs->pluck('currency_code')->filter()
                 ->merge($approved->where('status','approved')->pluck('currency_code'))
