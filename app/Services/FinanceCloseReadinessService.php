@@ -32,17 +32,29 @@ class FinanceCloseReadinessService
         if($draftJournals){
             $blockers[]=$draftJournals.' draft GL journal(s) remain in the month.';
         }
-        $debits=BigDecimal::zero();$credits=BigDecimal::zero();
+        $balanceByCurrency=[];
         foreach(DB::table('journal_lines as line')
             ->join('journal_entries as entry','entry.id','=','line.journal_entry_id')
             ->where('entry.status','posted')
             ->whereBetween('entry.entry_date',[$begin,$end])
-            ->get(['line.debit','line.credit']) as $row){
-            $debits=$debits->plus((string)$row->debit);
-            $credits=$credits->plus((string)$row->credit);
+            ->get(['entry.currency_id','line.debit','line.credit']) as $row){
+            $id=(int)$row->currency_id;
+            if(!isset($balanceByCurrency[$id])){
+                $balanceByCurrency[$id]=[
+                    'debits'=>BigDecimal::zero(),
+                    'credits'=>BigDecimal::zero(),
+                ];
+            }
+            $balanceByCurrency[$id]['debits']=$balanceByCurrency[$id]['debits']
+                ->plus((string)$row->debit);
+            $balanceByCurrency[$id]['credits']=$balanceByCurrency[$id]['credits']
+                ->plus((string)$row->credit);
         }
-        if(!$debits->isEqualTo($credits)){
-            $blockers[]='Posted GL debits and credits do not balance for this accounting month.';
+        foreach($balanceByCurrency as $currencyId=>$totals){
+            if(!$totals['debits']->isEqualTo($totals['credits'])){
+                $blockers[]='Posted GL journal debits and credits do not balance in currency ID '.
+                    $currencyId.' for the accounting month. Review its original-currency journal lines.';
+            }
         }
         $draftPayroll=DB::table('payroll_periods')
             ->where('period_start',$begin)->where('status','draft')->count();
@@ -201,18 +213,6 @@ class FinanceCloseReadinessService
                     ' has no single approved reconciliation covering the entire month. Verify statement coverage before signing the close.';
             }
         }
-        // Dispatch-cost figures are diagnostic until all production input
-        // costs, WIP capitalization and finished-good inventory journals
-        // have been reviewed. Never treat estimated source cost as COGS.
-        $dispatchLineCount=DB::table('finished_good_dispatch_lines as item')
-            ->join('finished_good_dispatches as dispatch',
-                'dispatch.id','=','item.finished_good_dispatch_id')
-            ->whereBetween('dispatch.dispatch_date',[$begin,$end])->count();
-        if($dispatchLineCount){
-            $warnings[]=$dispatchLineCount.
-                ' finished-goods dispatch line(s) require source-cost and WIP/finished-stock/COGS GL reconciliation. The source cost review is not a posted inventory valuation.';
-        }
-
         $unreconciledAssets=DB::table('fixed_assets as asset')
             ->leftJoin('fixed_asset_capitalizations as link',
                 'link.fixed_asset_id','=','asset.id')
