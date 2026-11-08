@@ -105,7 +105,10 @@ class InventoryStockService
             ]);
             $locked->forceFill(['on_hand_quantity' => (string) $next->toScale(6)])->save();
 
-            if ($type === 'opening') {
+            // Stock-count increases and manual positive adjustments also
+            // create explicit unvalued FIFO layers at the actual location.
+            // Never invent a purchase cost for an inventory discrepancy.
+            if (in_array($type,['opening','adjustment_in'],true)) {
                 app(InventoryCostService::class)->createFromInboundMovement(
                     $entry,
                     isset($data['unit_cost']) ? (string) $data['unit_cost'] : null,
