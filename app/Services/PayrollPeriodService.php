@@ -29,7 +29,22 @@ class PayrollPeriodService
             $existing = PayrollPeriod::where('period_start', $periodStart)->where('currency_id', $currency->id)->first();
             if ($existing) return $existing;
 
-            $employees = EmployeeProfile::where('salary_currency_id', $currency->id)->where('is_active', true)->orderBy('employee_number')->get();
+            // Determine eligibility for the historical pay period. Never
+            // invent a hire date for older imported employees.
+            $periodEnd=\Carbon\CarbonImmutable::parse($periodStart)->endOfMonth()->toDateString();
+            $employees=EmployeeProfile::where('salary_currency_id',$currency->id)
+                ->where(function($query)use($periodStart){
+                    $query->where('is_active',true)
+                        ->orWhereDate('separated_on','>=',$periodStart);
+                })
+                ->where(function($query)use($periodEnd){
+                    $query->whereNull('hired_on')->orWhereDate('hired_on','<=',$periodEnd);
+                })
+                ->where(function($query)use($periodStart){
+                    $query->whereNull('separated_on')
+                        ->orWhereDate('separated_on','>=',$periodStart);
+                })
+                ->orderBy('employee_number')->get();
             if ($employees->isEmpty()) throw ValidationException::withMessages(['currency_id' => 'There are no active employees in this currency.']);
 
             $period = PayrollPeriod::create([
@@ -78,7 +93,21 @@ class PayrollPeriodService
             $total = BigDecimal::zero();
             $lines = $locked->lines()->lockForUpdate()->get();
             if ($lines->isEmpty()) $this->reject('No employees are included in this payroll period.');
-            foreach ($lines as $line) $total = $total->plus((string) $line->payable_amount);
+            // A checked confirmation alone is not enough: every included
+            // employee must have a current reviewed evidence fingerprint.
+            $lines->load('employee');
+            app(PayrollLineReviewService::class)->assertPeriodReviewed($locked,$lines);
+            foreach($lines as $line){
+                $employee=$line->employee;
+                $start=$locked->period_start->toDateString();
+                $end=$locked->period_start->copy()->endOfMonth()->toDateString();
+                if(($employee->hired_on && $employee->hired_on->toDateString()>$end) ||
+                    ($employee->separated_on && $employee->separated_on->toDateString()<$start)){
+                    $this->reject('Employee '.$employee->employee_number.
+                        ' falls outside the employment dates of this payroll period.');
+                }
+                $total=$total->plus((string)$line->payable_amount);
+            }
             if (! $total->isGreaterThan(0) || $total->isGreaterThan(BigDecimal::of('9999999999999999.9999'))) $this->reject('Approved payroll total must be positive and within the supported range.');
 
             $components=DB::table('payroll_line_components')->whereIn('payroll_line_id',$lines->pluck('id'))->get();
@@ -160,6 +189,9 @@ class PayrollPeriodService
                 $this->reject('This employee line has already been paid.');
             }
             if ($locked->status !== 'approved') $this->reject('Approve the payroll period before paying employees.');
+            if($locked->approvalJournal && $date<$locked->approvalJournal->entry_date->toDateString()) {
+                $this->reject('Payroll payment cannot be dated before the posted salary accrual journal.');
+            }
             if (MoneyTransaction::where('submission_token', $token)->exists()) $this->reject('This payment token has already been used.');
             $account = FinancialAccount::whereKey($source->id)->where('is_active', true)->firstOrFail();
             if ((int) $account->currency_id !== (int) $locked->currency_id) $this->reject('Payment account currency must match the payroll currency.');
