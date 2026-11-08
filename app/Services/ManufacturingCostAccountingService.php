@@ -299,6 +299,9 @@ class ManufacturingCostAccountingService
                     (int)$row->ledger_account_id===(int)$policy->cogs_ledger_id){
                     $this->reject('Approved overhead must come from an independent, active expense account, not the COGS ledger.');
                 }
+                if(array_key_exists((int)$row->ledger_account_id,$abnormal['by_ledger'])){
+                    $this->reject('A source overhead expense account cannot also be the abnormal-loss expense account for this batch.');
+                }
                 $amount=BigDecimal::of((string)$row->amount);
                 $overhead=$overhead->plus($amount);
                 $credits[]=['ledger'=>(int)$row->ledger_account_id,
