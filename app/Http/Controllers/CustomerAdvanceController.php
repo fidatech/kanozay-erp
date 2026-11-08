@@ -58,4 +58,23 @@ class CustomerAdvanceController extends Controller
         return redirect()->route('finance.customers.show', $party)
             ->with('status', 'Customer advance applied against invoice and balanced journal posted.');
     }
+    public function refund(Request $request, TradeParty $party, int $advance, CustomerAdvanceService $service)
+    {
+        abort_unless($request->user()->canAny(['administration.update','finance.update']), 403);
+        abort_unless($party->type === 'customer', 404);
+        abort_unless(DB::table('customer_advance_receipts')
+            ->where('id', $advance)->where('customer_id', $party->id)->exists(), 404);
+        $this->normalize($request);
+        $data = $request->validate([
+            'submission_token'=>['required','uuid'],
+            'source_account_id'=>['required','integer',Rule::exists('financial_accounts','id')->where('is_active', true)],
+            'refunded_on'=>['required','date','before_or_equal:today'],
+            'amount'=>['required','numeric','gt:0','decimal:0,4','max:9999999999999999.9999'],
+            'reference'=>['required','string','min:2','max:120'],
+        ]);
+        $service->refund($advance, $data, $request->user()->id);
+        return redirect()->route('finance.customers.show', $party)
+            ->with('status', 'Unused customer deposit refunded with balanced liability and cash journal.');
+    }
+
 }
