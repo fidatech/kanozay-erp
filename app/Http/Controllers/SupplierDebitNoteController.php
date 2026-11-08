@@ -2,6 +2,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\LedgerAccount;
+use App\Support\LocalizedDecimal;
 use App\Models\PurchaseReturnRecord;
 use App\Models\SupplierDebitNote;
 use App\Models\TradeDocument;
@@ -40,6 +41,7 @@ class SupplierDebitNoteController extends Controller {
  }
  public function post(Request $request,PurchaseReturnRecord $return,SupplierDebitNoteService $service){
   abort_unless($request->user()->canAny(['finance.update','administration.update']),403);
+  $request->merge(['amount'=>LocalizedDecimal::normalize($request->input('amount'))]);
   $data=$request->validate([
    'submission_token'=>['required','uuid'],
    'trade_document_id'=>['required','integer',Rule::exists('trade_documents','id')->where('type','payable')],
