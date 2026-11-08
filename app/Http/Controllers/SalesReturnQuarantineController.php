@@ -17,6 +17,7 @@ class SalesReturnQuarantineController extends Controller {
     'finance.view','reports.view','administration.view',
   ]);
   $returnCosts=collect();
+  $returnDispositions=collect();
   if($mayViewCosts){
     $returnCosts=\Illuminate\Support\Facades\DB::table('production_return_cost_postings as recovered')
       ->join('production_invoice_cogs_postings as origin',
@@ -30,9 +31,20 @@ class SalesReturnQuarantineController extends Controller {
         'journal.number as journal_number','journal.status as journal_status')
       ->orderByDesc('recovered.id')->limit(1500)->get()
       ->keyBy('sales_return_quarantine_id');
+    $returnDispositions=\Illuminate\Support\Facades\DB::table(
+        'finance_historical_customer_return_disposition_reviews as reviewed'
+      )
+      ->leftJoin('journal_entries as journal','journal.id','=','reviewed.journal_entry_id')
+      ->leftJoin('currencies as currency','currency.id','=','reviewed.currency_id')
+      ->whereIn('reviewed.status',['submitted','approved','held','posted'])
+      ->select('reviewed.*','journal.number as journal_number',
+          'journal.status as journal_status','currency.code as currency_code')
+      ->orderBy('reviewed.id')->limit(1500)->get()
+      ->keyBy('sales_return_quarantine_id');
   }
   return view('sales.return-quarantine',[
    'mayViewCosts'=>$mayViewCosts,'returnCosts'=>$returnCosts,
+   'returnDispositions'=>$returnDispositions,
    'entries'=>SalesReturnQuarantine::query()->with([
       'creditLine','creditLine.invoiceLine.finishedGood','batch',
    ])->when($filter['status']??null,fn($q,$s)=>$q->where('status',$s))
