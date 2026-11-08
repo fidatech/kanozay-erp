@@ -185,6 +185,16 @@ Added independent production material waste financial classification (normal pro
 
 **Status: cross-module source controls advanced; source-currency abnormal loss expense and landed-cost supplier-return journals incomplete.** Tests, migrations, syntax lint, browser UAT, MySQL validation and deployment remain intentionally deferred.
 
+## Abnormal production loss and supplier landed-return GL posting
+
+Implemented exact original-currency abnormal waste cost approvals against immutable FIFO consumption records. Independent finance approval now documents source-lot waste quantity, source cost and a distinct non-COGS expense ledger. Manufacturing batch capitalization credits full raw material, debits the approved abnormal-loss expense and debits WIP with only the remaining eligible material plus overhead. Net eligible cost becomes the finished-goods asset and subsequent source of invoice COGS. Source values are preserved separately in `production_batch_cost_postings.abnormal_waste_amount`; report registers distinguish approved-only cost from expense actually posted and compare physical amounts with GL debits. Warehouse release is permitted only after independently reviewed FIFO attribution; unresolved/rework losses remain blocked. Month-close also distinguishes approved-and-posted abnormal expenses from unresolved ones.
+
+Supplier returns of GRN lots containing freight, customs or other capitalized landed costs now use a two-stage flow. The request records original source quantities but leaves stock intact until an independent finance reviewer approves a nonrecoverable original-currency landed-cost expense write-off against the exact inventory asset ledger. The one journal and all physical lot returns post atomically. The original base supplier payable remains governed by the separate posted debit-note workflow. Cancelled pending requests release their proposed quantities without GL or stock moves. Finance close blocks unapproved or reversed landed-return journals; the return document shows approval status and original write-off reference.
+
+[Abnormal Waste and Supplier Landed-Return Accounting](abnormal-waste-and-supplier-landed-return-accounting-2026-11-08.md) documents new source tables, explicit source-cost and reviewer requirements, deferred historic corrections and recoverable supplier/freight claims.
+
+**Development status: abnormal FIFO loss and nonrecoverable landed-cost supplier-return code committed, not runtime verified.** Formal recoverable landed-cost claims, legacy source corrections, complete multilingual transactional UI and production release verification remain. User requested no tests, migrations, syntax lint, MySQL/UAT or deployment at this stage.
+
 ## Acceptance and release gates
 
 1. Passing SQLite feature suite and isolated regression suite on the latest commit.
