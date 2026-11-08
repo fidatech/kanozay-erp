@@ -212,6 +212,7 @@ Route::middleware('auth')->get('/hr/advances', [\App\Http\Controllers\EmployeeSa
 Route::middleware('auth')->post('/hr/advances', [\App\Http\Controllers\EmployeeSalaryAdvanceController::class, 'store'])->name('hr.advances.store');
 Route::middleware('auth')->post('/hr/advances/{advance}/repayments', [\App\Http\Controllers\EmployeeSalaryAdvanceController::class, 'repay'])->name('hr.advances.repay');
 Route::middleware('auth')->get('/assets/{asset}', [\App\Http\Controllers\FixedAssetController::class, 'show'])->name('assets.show');
+Route::middleware('auth')->post('/assets/{asset}/capitalization', [\App\Http\Controllers\FixedAssetController::class, 'reconcileCapitalization'])->name('assets.capitalization.reconcile');
 Route::middleware('auth')->post('/assets/categories', [\App\Http\Controllers\FixedAssetController::class, 'category'])->name('assets.categories.store');
 Route::middleware('auth')->post('/assets', [\App\Http\Controllers\FixedAssetController::class, 'store'])->name('assets.store');
 Route::middleware('auth')->post('/assets/{asset}/assignments', [\App\Http\Controllers\FixedAssetController::class, 'assign'])->name('assets.assignments.store');
