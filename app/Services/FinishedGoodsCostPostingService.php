@@ -94,6 +94,26 @@ class FinishedGoodsCostPostingService
             if($quantity<1)$this->reject('A sales line requires a positive dispatched package quantity.');
             if((int)$original->production_batch_id!==(int)$posted->production_batch_id)
                 $this->reject('Sales invoice line and production cost batch mismatch.');
+            if(!$original->dispatch_id){
+                $this->reject('The original invoice line has no source-linked finished-goods physical dispatch.');
+            }
+            $physical=DB::table('finished_good_dispatch_lines as line')
+                ->join('finished_good_dispatches as dispatch',
+                    'dispatch.id','=','line.finished_good_dispatch_id')
+                ->where('line.finished_good_dispatch_id',$original->dispatch_id)
+                ->get(['line.production_batch_id','line.finished_good_id',
+                    'line.quantity_packages','dispatch.dispatch_date']);
+            if($physical->count()!==1 ||
+               (int)$physical[0]->production_batch_id!==(int)$original->production_batch_id ||
+               (int)$physical[0]->finished_good_id!==(int)$original->finished_good_id ||
+               (int)$physical[0]->quantity_packages!==$quantity ||
+               (string)$physical[0]->dispatch_date!==(string)$invoice->invoice_date){
+                $this->reject('Finished-goods dispatch does not match this invoiced batch, item, quantity and date.');
+            }
+            if(DB::table('sales_invoice_lines')->where('dispatch_id',$original->dispatch_id)
+                ->where('id','!=',$original->id)->exists()){
+                $this->reject('The same physical dispatch is linked to more than one sales invoice line.');
+            }
 
             $priorSales=DB::table('production_invoice_cogs_postings')
                 ->where('production_batch_cost_posting_id',$posted->id)->get();
@@ -161,6 +181,14 @@ class FinishedGoodsCostPostingService
             $credit=DB::table('sales_credit_note_lines')
                 ->where('id',$record->sales_credit_note_line_id)->first();
             if(!$credit)$this->reject('Original customer credit line is missing.');
+            if((int)$credit->production_batch_id!==(int)$record->production_batch_id ||
+               (int)$credit->quantity_packages!==(int)$record->quantity_packages){
+                $this->reject('Returned quantity or production batch differs from its posted customer credit note source.');
+            }
+            $creditNote=DB::table('sales_credit_notes')->where('id',$credit->sales_credit_note_id)->first();
+            if(!$creditNote || $creditNote->credit_date>$date){
+                $this->reject('QC return recovery cannot predate the customer credit note.');
+            }
             $source=DB::table('production_invoice_cogs_postings')
                 ->where('sales_invoice_line_id',$credit->sales_invoice_line_id)->first();
             if(!$source){
