@@ -279,6 +279,8 @@ class ManufacturingCostAccountingService
                    (int)$row->journal_currency_id!==(int)$policy->currency_id ||
                    $row->journal_status!=='posted' || $row->reversal_of_id!==null ||
                    $row->reversed_by_id!==null || $row->entry_date>$data['accounting_date'] ||
+                   !$row->reviewed_at ||
+                   substr((string)$row->reviewed_at,0,10)>$data['accounting_date'] ||
                    BigDecimal::of((string)$row->debit)->isLessThan((string)$row->amount) ||
                    BigDecimal::of((string)$row->credit)->isPositive()){
                     $this->reject('A reviewed overhead source is not an eligible, earlier posted expense debit in the batch currency.');
