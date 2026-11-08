@@ -22,9 +22,14 @@ class FixedAssetDepreciationController extends Controller
             ->whereIn('fixed_asset_id',$assets->pluck('id'))
             ->select('fixed_asset_id')->selectRaw('SUM(amount) as total')
             ->groupBy('fixed_asset_id')->pluck('total','fixed_asset_id');
-        $capitalizations=DB::table('fixed_asset_capitalizations')
-            ->whereIn('fixed_asset_id',$assets->pluck('id'))
-            ->pluck('acquisition_journal_id','fixed_asset_id');
+        $capitalizations=DB::table('fixed_asset_capitalizations as verified')
+            ->join('journal_entries as origin','origin.id','=','verified.acquisition_journal_id')
+            ->leftJoin('journal_entries as reversal','reversal.reversal_of_id','=','origin.id')
+            ->whereIn('verified.fixed_asset_id',$assets->pluck('id'))
+            ->select('verified.fixed_asset_id','origin.status','origin.reversal_of_id')
+            ->selectRaw('COUNT(reversal.id) as reversals')
+            ->groupBy('verified.fixed_asset_id','origin.status','origin.reversal_of_id')
+            ->get()->keyBy('fixed_asset_id');
         $bookValues=[];
         foreach($assets as $asset){
             $remaining=BigDecimal::of((string)$asset->acquisition_cost)
@@ -34,6 +39,9 @@ class FixedAssetDepreciationController extends Controller
                 'book_value'=>$remaining->isNegative()?null:(string)$remaining->toScale(4),
                 'overdepreciated'=>$remaining->isNegative(),
                 'capitalized'=>$capitalizations->has($asset->id),
+                'source_current'=>($capitalizations->get($asset->id)?->status==='posted' &&
+                    !$capitalizations->get($asset->id)?->reversal_of_id &&
+                    (int)($capitalizations->get($asset->id)?->reversals??0)===0),
             ];
         }
         return view('assets.depreciation',[
