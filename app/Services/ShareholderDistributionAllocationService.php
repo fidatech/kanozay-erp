@@ -94,7 +94,7 @@ class ShareholderDistributionAllocationService
         });
     }
 
-    public function assertReadyForApproval(object $resolution):void
+    public function assertReadyForApproval(object $resolution,int $reviewerId):void
     {
         if($resolution->purpose!=='distribution')return;
         $rows=DB::table('shareholder_distribution_allocations')
@@ -105,7 +105,14 @@ class ShareholderDistributionAllocationService
             ]);
         }
         $total=BigDecimal::zero();
-        foreach($rows as $row)$total=$total->plus((string)$row->authorized_amount);
+        foreach($rows as $row){
+            if((int)$row->recorded_by===$reviewerId){
+                throw ValidationException::withMessages([
+                    'decision'=>'A distribution allocation cannot be entered or last amended by the person approving its board resolution. Ask a separate authorized reviewer.',
+                ]);
+            }
+            $total=$total->plus((string)$row->authorized_amount);
+        }
         if(!$total->isPositive() || $total->isGreaterThan((string)$resolution->distribution_cap)){
             throw ValidationException::withMessages([
                 'decision'=>'Allocated shareholder entitlements must be positive and must not exceed the signed distribution ceiling.',
