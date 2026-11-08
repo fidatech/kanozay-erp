@@ -90,6 +90,18 @@ class FinanceCloseReadinessService
                     ' has no single approved reconciliation covering the entire month. Verify statement coverage before signing the close.';
             }
         }
+        // Dispatch-cost figures are diagnostic until all production input
+        // costs, WIP capitalization and finished-good inventory journals
+        // have been reviewed. Never treat estimated source cost as COGS.
+        $dispatchLineCount=DB::table('finished_good_dispatch_lines as item')
+            ->join('finished_good_dispatches as dispatch',
+                'dispatch.id','=','item.finished_good_dispatch_id')
+            ->whereBetween('dispatch.dispatch_date',[$begin,$end])->count();
+        if($dispatchLineCount){
+            $warnings[]=$dispatchLineCount.
+                ' finished-goods dispatch line(s) require source-cost and WIP/finished-stock/COGS GL reconciliation. The source cost review is not a posted inventory valuation.';
+        }
+
         $unreconciledAssets=DB::table('fixed_assets as asset')
             ->leftJoin('fixed_asset_capitalizations as link',
                 'link.fixed_asset_id','=','asset.id')
