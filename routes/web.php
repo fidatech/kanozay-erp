@@ -137,6 +137,8 @@ Route::middleware('auth')->post('/production/orders/{order}/materials/{materialL
 Route::middleware('auth')->post('/production/orders/{order}/issue', [\App\Http\Controllers\ProductionOrderController::class, 'issue'])->name('production.orders.issue');
 Route::middleware('auth')->post('/production/orders/{order}/cancel', [\App\Http\Controllers\ProductionOrderController::class, 'cancel'])->name('production.orders.cancel');
 Route::middleware('auth')->get('/production/orders/{order}', [\App\Http\Controllers\ProductionOrderController::class, 'show'])->name('production.orders.show');
+Route::middleware('auth')->get('/manufacturing/traceability/batches/{batch}', [\App\Http\Controllers\ProductionTraceabilityController::class, 'batch'])->name('manufacturing.traceability.batch');
+Route::middleware('auth')->get('/manufacturing/traceability/source-lots/{layer}', [\App\Http\Controllers\ProductionTraceabilityController::class, 'sourceLot'])->name('manufacturing.traceability.source-lot');
 Route::middleware('auth')->get('/production/recipes', [\App\Http\Controllers\ProductionRecipeController::class, 'index'])->name('production.recipes.index');
 Route::middleware('auth')->get('/production/recipes/{recipe}', [\App\Http\Controllers\ProductionRecipeController::class, 'show'])->name('production.recipes.show');
 Route::middleware('auth')->post('/production/recipes/{recipe}/approve', [\App\Http\Controllers\ProductionRecipeController::class, 'approve'])->name('production.recipes.approve');
