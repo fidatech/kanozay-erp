@@ -84,8 +84,27 @@ class SalesDeliveryNoteController extends Controller
         $note=DB::transaction(function()use($data,$request) {
             $duplicate=SalesDeliveryNote::where('submission_token',$data['submission_token'])->first();
             if($duplicate){
-                if($duplicate->sales_invoice_id===(int)$data['sales_invoice_id'])return $duplicate;
-                throw ValidationException::withMessages(['submission_token'=>'This token belongs to a different delivery note.']);
+                $submitted=collect($data['quantities'])
+                    ->filter(fn($quantity)=>(int)$quantity>0)
+                    ->mapWithKeys(fn($quantity,$lineId)=>[(int)$lineId=>(int)$quantity])
+                    ->sortKeys()->all();
+                $original=$duplicate->lines()
+                    ->pluck('quantity_packages','sales_invoice_line_id')
+                    ->mapWithKeys(fn($quantity,$lineId)=>[(int)$lineId=>(int)$quantity])
+                    ->sortKeys()->all();
+                if((int)$duplicate->sales_invoice_id===(int)$data['sales_invoice_id'] &&
+                    $duplicate->delivery_date->toDateString()===$data['delivery_date'] &&
+                    $original===$submitted &&
+                    (string)($duplicate->delivery_address??'')===(string)($data['delivery_address']??'') &&
+                    (string)($duplicate->vehicle_number??'')===(string)($data['vehicle_number']??'') &&
+                    (string)($duplicate->driver_name??'')===(string)($data['driver_name']??'') &&
+                    (string)($duplicate->reference??'')===(string)($data['reference']??'') &&
+                    (string)($duplicate->notes??'')===(string)($data['notes']??'')){
+                    return $duplicate;
+                }
+                throw ValidationException::withMessages([
+                    'submission_token'=>'This submission token belongs to a different delivery document. Refresh the form before submitting a new note.',
+                ]);
             }
             $invoice=SalesInvoice::where('status','posted')->whereKey($data['sales_invoice_id'])
                 ->lockForUpdate()->firstOrFail();
