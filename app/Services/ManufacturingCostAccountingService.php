@@ -115,10 +115,14 @@ class ManufacturingCostAccountingService
                 }
                 if(!isset($checkedLots[$layer->id])){
                     $checkedLots[$layer->id]=true;
-                    if(DB::table('goods_receipt_landed_cost_allocations')
-                        ->where('goods_receipt_line_id',$layer->source_id)->exists()){
-                        $this->reject('A consumed FIFO layer includes landed costs without an independently verified matching GL capitalized expense. Reconcile these sources first.');
-                    }
+                    // The FIFO consumption already includes any recorded
+                    // freight/customs allocations. Their original expense
+                    // must first be reclassified into the exact source
+                    // inventory ledger without creating a second receipt.
+                    app(GoodsReceiptLandedCostPostingService::class)->assertLotCostPosted(
+                        (int)$layer->source_id,$date,
+                        (int)$policy->material_inventory_ledger_id
+                    );
                     $receiptLine=DB::table('goods_receipt_lines')->where('id',$layer->source_id)->first();
                     if(!$receiptLine){
                         $this->reject('A consumed source receipt line is missing.');
