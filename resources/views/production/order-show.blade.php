@@ -104,6 +104,22 @@
     } }}
    </strong>
    <div class="muted">Evidence: {{ $financialReview->approval_reference }}</div>
+   @if($financialReview->treatment==='rework_required' &&
+      in_array($order->status,['issued','pending_qc'],true) &&
+      (auth()->user()->can('administration.update') ||
+       (auth()->user()->can('finance.update') && auth()->user()->can('manufacturing.view'))))
+    <details style="margin-top:8px"><summary>Certify completed rework before fresh QC</summary>
+    <form method="POST" action="{{ route('production.orders.waste.resolve-rework',[$order,$waste]) }}" style="display:grid;gap:7px;min-width:235px;margin-top:8px">
+    @csrf
+    <label>Physical rework completion<input type="date" name="physical_rework_completed_on" required max="{{ now()->toDateString() }}"></label>
+    <label>QC reinspection evidence<input name="qc_reinspection_reference" required minlength="4" maxlength="180" placeholder="QC rework case / inspection"></label>
+    <label>Approved normal-loss policy<input name="approved_loss_policy_reference" required minlength="4" maxlength="180" placeholder="Signed production loss policy"></label>
+    <label>Independent finance approval<input name="finance_approval_reference" required minlength="4" maxlength="180" placeholder="Finance rework acceptance"></label>
+    <label>Closure evidence<textarea name="resolution_notes" required minlength="20" maxlength="3000" rows="3" placeholder="Explain completed rework, retained material loss, source verification and why it may now be absorbed into accepted output"></textarea></label>
+    <label style="display:flex;gap:7px;align-items:center;font-size:12px"><input type="checkbox" name="confirm_reinspected" value="1" required> Rework completed; fresh QC sample and approval will follow</label>
+    <button type="submit" class="btn" onclick="return confirm('Record independently certified rework completion? A new QC sample is still required. No extra stock or journal will be posted.')">Save rework resolution</button>
+    </form></details>
+   @endif
   @else
    <strong style="color:#9b5a20">Independent finance review required</strong>
    @if(auth()->user()->can('administration.update') || (auth()->user()->can('finance.update') && auth()->user()->can('manufacturing.view')))
