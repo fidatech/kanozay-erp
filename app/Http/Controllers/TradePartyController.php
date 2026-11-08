@@ -67,6 +67,21 @@ class TradePartyController extends Controller {
   });
   $openDocuments=$documents->filter(fn($document)=>BigDecimal::of((string)$document->outstanding_amount)->isPositive())->values();
   $unallocatedPayments=$recentPayments->filter(fn($payment)=>BigDecimal::of((string)$payment->unallocated_amount)->isPositive())->values();
+  $customerAdvances=collect();
+  if($type==='customer'){
+   $customerAdvances=DB::table('customer_advance_receipts')
+    ->where('customer_id',$party->id)->orderByDesc('id')->limit(100)->get();
+   $applications=DB::table('customer_advance_applications')
+    ->whereIn('customer_advance_receipt_id',$customerAdvances->pluck('id'))
+    ->get()->groupBy('customer_advance_receipt_id');
+   $customerAdvances->each(function($advance)use($applications){
+    $remaining=BigDecimal::of((string)$advance->amount);
+    foreach($applications->get($advance->id,collect()) as $row){
+     $remaining=$remaining->minus((string)$row->amount);
+    }
+    $advance->remaining=(string)$remaining->toScale(4);
+   });
+  }
   $cashboxes=\App\Models\FinancialAccount::whereIn('type',['cashbox','bank','sarafi'])->where('is_active',true)
    ->whereIn('currency_id',$party->currencies->pluck('id'))->with('currency')->orderBy('name')->get();
   return view('finance.parties.show',[
@@ -75,6 +90,7 @@ class TradePartyController extends Controller {
    'documents'=>$documents,'cashboxes'=>$cashboxes,
    'accountBalances'=>$accountBalances,'recentPayments'=>$recentPayments,
    'openDocuments'=>$openDocuments,'unallocatedPayments'=>$unallocatedPayments,
+   'customerAdvances'=>$customerAdvances,
   ]);
  }
  public function customers(Request $request){$request->merge(['type'=>'customer']);return $this->index($request);}
