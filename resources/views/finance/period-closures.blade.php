@@ -11,14 +11,37 @@
 <div class="heading"><div><h1>Finance Period Close & Reopening</h1><p>Monthly accounting locks, balanced GL snapshots and independent reopening authorization.</p></div><a class="btn btn-light" href="{{ route('finance.journals.index') }}">General journal</a></div>
 @if(session('success'))<p class="notice">{{ session('success') }}</p>@endif
 @if($errors->any())<p class="notice notice-warning">{{ implode(' ', $errors->all()) }}</p>@endif
+<section class="fp-box">
+<h2>Accounting month-close readiness</h2>
+<p class="muted">This report checks posted source-record consistency for a selected calendar month. It cannot certify external bank statements, inventory counts, statutory tax policy or missing documents that have not been entered into the ERP.</p>
+<form method="GET" action="{{ route('finance.periods.index') }}" class="fp-grid" style="margin-bottom:14px">
+<label>Review month<input name="month" type="month" max="{{ now()->subMonthNoOverflow()->format('Y-m') }}" value="{{ $readiness['month'] }}" required></label>
+<div><button class="btn btn-light" type="submit">Review month</button></div>
+</form>
+<p><strong>{{ $readiness['month'] }}</strong>
+ · @if($readiness['can_close'])No automated source-book blockers detected
+ @else Closing is blocked until outstanding source controls are resolved or this calendar month is finished @endif</p>
+@if($readiness['blockers'])
+<h3>Blocking source records</h3>
+<ul>@foreach($readiness['blockers'] as $reason)<li>{{ $reason }}</li>@endforeach</ul>
+@else
+<p class="muted">No known automated source-record blockers were detected for this month. Manual reconciliation is still mandatory.</p>
+@endif
+@if($readiness['warnings'])
+<h3>Manual reconciliation warnings</h3>
+<ul>@foreach($readiness['warnings'] as $note)<li>{{ $note }}</li>@endforeach</ul>
+@endif
+</section>
 @canany(['finance.update','administration.update'])
 <section class="fp-box"><h2>Close a calendar month</h2>
-<p class="muted">The entire month is locked for new GL posting after close. Draft journals and unbalanced journal totals block closure. This does not independently certify reconciliation of source books, taxes, inventory or bank statements.</p>
+<p class="muted">Only completed calendar months can be closed. Draft journals, payroll, unresolved bank statement reconciliations, pending disposal accounting and shareholder cashbook omissions block closure. Warnings require manual review of external evidence. Closure prevents further GL posting into the month unless independently reopened.</p>
 <form method="POST" class="fp-grid" action="{{ route('finance.periods.close') }}">@csrf
-<label>Month (first day)<input name="period_start" type="date" value="{{ now()->startOfMonth()->toDateString() }}" required></label>
+<label>Month (first day)<input name="period_start" type="date" max="{{ now()->subMonthNoOverflow()->startOfMonth()->toDateString() }}" value="{{ $readiness['begin'] }}" required></label>
 <label>Approval reference<input name="authorization_reference" minlength="3" maxlength="160" required></label>
 <label>Closing notes<textarea name="closing_note" rows="2" minlength="10" maxlength="3000" required></textarea></label>
-<button class="btn">Close reviewed month</button></form></section>
+<label class="fp-grid-full" style="grid-column:1/-1"><input type="checkbox" name="confirm_source_reconciliation" value="1" required style="width:auto">
+ I confirm finance reviewed the bank reconciliation evidence, payroll, fixed assets, shareholder capital and distribution records, source books and relevant tax/stock exceptions for this month.</label>
+<button class="btn" type="submit" onclick="return confirm('Close this completed accounting month after reviewed external reconciliation?')">Close reviewed month</button></form></section>
 @endcanany
 <section class="fp-box"><h2>Accounting period history</h2>
 <div class="fp-scroll"><table><thead><tr><th>Month</th><th>Status</th><th>Posted journals</th><th>Debit total</th><th>Credit total</th><th>Authorization</th><th>Reopening</th></tr></thead><tbody>
