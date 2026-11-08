@@ -19,10 +19,14 @@ class ProductionCostReadinessService {
    ->whereIn('o.production_batch_id',$ids)
    ->select('o.production_batch_id','o.status','o.amount','c.code as currency_code')
    ->get()->groupBy('production_batch_id');
+  $capitalized=DB::table('production_batch_cost_postings')
+   ->whereIn('production_batch_id',$ids)
+   ->get()->keyBy('production_batch_id');
   $result=collect();
   foreach($batches as $batch){
    $costs=$batch->costs;
    $overheadRows=$overhead->get($batch->id,collect());
+   $sourcePosting=$capitalized->get($batch->id);
    $pending=$overheadRows->where('status','submitted')->count();
    $hasUnvalued=$costs->isEmpty() || $costs->contains(function($c){
      return $c->material_cost===null ||
@@ -62,7 +66,11 @@ class ProductionCostReadinessService {
      'pending_overheads'=>$pending,'has_unvalued'=>$hasUnvalued,
      'mixed_currency'=>$mixedCurrency,'ready'=>$complete,
      'cost_per_package'=>$costPerPackage,
-     'warning'=>$complete?'Cost sources reconciled for management review; GL capitalization not posted':
+     'gl_posted'=>$sourcePosting!==null,
+     'gl_currency_id'=>$sourcePosting?->currency_id,
+     'gl_accounted_cost'=>$sourcePosting?->total_amount,
+     'warning'=>$sourcePosting?'Posted to original-currency WIP and finished goods GL; check historic cost source evidence':
+       ($complete?'Source cost snapshot ready; finance must verify original posted supplier inventory debit and approve GL capitalization':
        ($hasUnvalued?'Missing or unvalued material source costs':
         ($mixedCurrency?'Multiple source currencies; no combined cost':
          ($pending>0?'Unapproved overhead remains':
