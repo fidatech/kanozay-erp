@@ -133,6 +133,13 @@ class ManufacturingFinancialReconciliationService
                 }
                 $postings=$cogs->get($capital->id,collect());
                 foreach($postings as $posting){
+                    $invoiceLine=DB::table('sales_invoice_lines')
+                        ->where('id',$posting->sales_invoice_line_id)->first();
+                    if(!$invoiceLine ||
+                       (int)$invoiceLine->production_batch_id!==(int)$batch->id ||
+                       (int)$invoiceLine->quantity_packages!==(int)$posting->quantity_packages){
+                        $issues[]='A COGS source record has an invoice batch or package count mismatch.';
+                    }
                     $sold+=(int)$posting->quantity_packages;
                     $costedCost=$costedCost->plus((string)$posting->amount);
                     if(!$this->journalIsValid((int)$posting->journal_entry_id)){
@@ -149,8 +156,10 @@ class ManufacturingFinancialReconciliationService
                         $restoredCost=$restoredCost->plus((string)$recovery->amount);
                         $quarantine=DB::table('sales_return_quarantines')
                             ->where('id',$recovery->sales_return_quarantine_id)->first();
-                        if(!$quarantine || $quarantine->status!=='released'){
-                            $issues[]='A returned COGS asset recovery has no independently released QC return.';
+                        if(!$quarantine || $quarantine->status!=='released' ||
+                           (int)$quarantine->production_batch_id!==(int)$batch->id ||
+                           (int)$quarantine->quantity_packages!==(int)$recovery->quantity_packages){
+                            $issues[]='A returned COGS recovery differs from its independently released physical QC return.';
                         }
                         if(!$this->journalIsValid((int)$recovery->journal_entry_id)){
                             $issues[]='A QC-return inventory recovery journal is missing, unposted or reversed.';
