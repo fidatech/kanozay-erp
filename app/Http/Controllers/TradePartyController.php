@@ -66,7 +66,14 @@ class TradePartyController extends Controller {
    $payment->setAttribute('unallocated_amount',(string)$remaining->toScale(4));
   });
   $openDocuments=$documents->filter(fn($document)=>BigDecimal::of((string)$document->outstanding_amount)->isPositive())->values();
-  $unallocatedPayments=$recentPayments->filter(fn($payment)=>BigDecimal::of((string)$payment->unallocated_amount)->isPositive())->values();
+  // Customer deposits use the advance-liability ledger and require a
+  // balancing advance-application journal. Never offer them as ordinary
+  // receivable allocations, which would bypass that journal.
+  $primaryPurpose=$type==='customer'?'receivable':'payable';
+  $primaryLedger=$ledgerLinks->firstWhere('purpose',$primaryPurpose)?->ledger_account_id;
+  $unallocatedPayments=$recentPayments->filter(fn($payment)=>
+   $primaryLedger && (int)$payment->counterpart_ledger_account_id===(int)$primaryLedger &&
+   BigDecimal::of((string)$payment->unallocated_amount)->isPositive())->values();
   $customerAdvances=collect();
   if($type==='customer'){
    $customerAdvances=DB::table('customer_advance_receipts')
