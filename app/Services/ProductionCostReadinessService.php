@@ -22,12 +22,23 @@ class ProductionCostReadinessService {
   $capitalized=DB::table('production_batch_cost_postings')
    ->whereIn('production_batch_id',$ids)
    ->get()->keyBy('production_batch_id');
+  $wastes=DB::table('production_material_wastes as waste')
+   ->join('production_order_materials as item',
+      'item.id','=','waste.production_order_material_id')
+   ->leftJoin('production_waste_financial_reviews as review',
+      'review.production_material_waste_id','=','waste.id')
+   ->whereIn('item.production_order_id',$batches->pluck('production_order_id'))
+   ->select('item.production_order_id','review.treatment')->get()
+   ->groupBy('production_order_id');
   $result=collect();
   foreach($batches as $batch){
    $costs=$batch->costs;
    $overheadRows=$overhead->get($batch->id,collect());
    $sourcePosting=$capitalized->get($batch->id);
    $pending=$overheadRows->where('status','submitted')->count();
+   $wasteRows=$wastes->get($batch->production_order_id,collect());
+   $unreviewedWaste=$wasteRows->filter(fn($item)=>$item->treatment===null)->count();
+   $unresolvedWaste=$wasteRows->whereIn('treatment',['abnormal_loss','rework_required'])->count();
    $hasUnvalued=$costs->isEmpty() || $costs->contains(function($c){
      return $c->material_cost===null ||
        BigDecimal::of((string)$c->unvalued_quantity)->isGreaterThan(0);
@@ -52,7 +63,8 @@ class ProductionCostReadinessService {
     }
     $complete=$batch->status==='released' &&
       $batch->accepted_packages>0 && $hasMaterialCurrency &&
-      !$hasUnvalued && !$mixedCurrency && $pending===0;
+      !$hasUnvalued && !$mixedCurrency && $pending===0 &&
+      $unreviewedWaste===0 && $unresolvedWaste===0;
     $costPerPackage=$complete?
       (string)$material->plus($overheadTotal)
        ->dividedBy((string)$batch->accepted_packages,8,RoundingMode::HalfUp):null;
@@ -63,7 +75,10 @@ class ProductionCostReadinessService {
      'currency'=>$code??'Unvalued',
      'material_cost'=>$hasMaterialCurrency?(string)$material->toScale(4,RoundingMode::HalfUp):null,
      'approved_overhead'=>(string)$overheadTotal->toScale(4,RoundingMode::HalfUp),
-     'pending_overheads'=>$pending,'has_unvalued'=>$hasUnvalued,
+     'pending_overheads'=>$pending,
+     'unreviewed_waste'=>$unreviewedWaste,
+     'unresolved_waste'=>$unresolvedWaste,
+     'has_unvalued'=>$hasUnvalued,
      'mixed_currency'=>$mixedCurrency,'ready'=>$complete,
      'cost_per_package'=>$costPerPackage,
      'gl_posted'=>$sourcePosting!==null,
@@ -74,8 +89,10 @@ class ProductionCostReadinessService {
        ($hasUnvalued?'Missing or unvalued material source costs':
         ($mixedCurrency?'Multiple source currencies; no combined cost':
          ($pending>0?'Unapproved overhead remains':
+          ($unreviewedWaste>0?'Recorded material waste requires independent finance classification':
+           ($unresolvedWaste>0?'Abnormal production waste or unresolved rework requires a separate approved cost disposition':
           ($batch->status!=='released'?'Batch not released':
-           ($batch->accepted_packages<1?'No accepted packages':'Material cost unavailable in source currency')))))),
+           ($batch->accepted_packages<1?'No accepted packages':'Material cost unavailable in source currency')))))))) ,
     ]);
    }
   }
