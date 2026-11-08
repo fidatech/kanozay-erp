@@ -59,6 +59,10 @@ class ManufacturingFinancialReconciliationService
             ->whereIn('production_batch_id',$ids)->get()->groupBy('production_batch_id');
         $dispatches=DB::table('finished_good_dispatch_lines')
             ->whereIn('production_batch_id',$ids)->get()->groupBy('production_batch_id');
+        $warehouseReceipts=DB::table('finished_good_movements')
+            ->whereIn('production_batch_id',$ids)
+            ->where('type','production_receipt')
+            ->get()->groupBy('production_batch_id');
         $releasedReturns=DB::table('sales_return_quarantines')
             ->whereIn('production_batch_id',$ids)
             ->where('status','released')->get()->groupBy('production_batch_id');
@@ -73,6 +77,10 @@ class ManufacturingFinancialReconciliationService
         foreach($batches as $batch){
             $issues=[];$capital=$posted->get($batch->id);
             $originalPackages=(int)$batch->accepted_packages;
+            $received=0;
+            foreach($warehouseReceipts->get($batch->id,collect()) as $receipt){
+                $received+=(int)$receipt->quantity_packages;
+            }
             $physical=0;$sold=0;$recovered=0;$restoredCost=BigDecimal::zero();
             $costedCost=BigDecimal::zero();
             foreach($dispatches->get($batch->id,collect()) as $movement){
@@ -86,8 +94,8 @@ class ManufacturingFinancialReconciliationService
             foreach($legacyRestocks->get($batch->id,collect()) as $return){
                 $legacyQty+=(int)$return->quantity_packages;
             }
-            if($physical || $invoices->has($batch->id)){
-                if(!$capital)$issues[]='Dispatched or invoiced batch has no source-backed financial capitalization.';
+            if(!$capital && ($received>0 || $physical || $invoices->has($batch->id))){
+                $issues[]='Physically received, dispatched or invoiced batch has no source-backed financial capitalization.';
             }
             $policy=null;$amount=null;$currency=null;
             if($capital){
@@ -100,6 +108,9 @@ class ManufacturingFinancialReconciliationService
                 }
                 if((int)$capital->accepted_packages!==$originalPackages){
                     $issues[]='Accepted physical packages no longer match the original posted capitalization quantity.';
+                }
+                if((int)$capital->accepted_packages!==$received){
+                    $issues[]='Physical warehouse receipts differ from the accepted package count financially capitalized.';
                 }
                 if(!$this->decimal($capital->material_amount)
                     ->plus((string)$capital->overhead_amount)->isEqualTo($amount)){
@@ -156,9 +167,9 @@ class ManufacturingFinancialReconciliationService
                     $issues[]='Some sales invoice lines do not have exactly one original-currency COGS posting.';
                 }
             }
-            $netPhysical=$originalPackages+$returnQty+$legacyQty-$physical;
+            $netPhysical=$received+$returnQty+$legacyQty-$physical;
             $netCosted=$sold-$recovered;
-            $bookPackages=$originalPackages-$netCosted;
+            $bookPackages=$capital?($originalPackages-$netCosted):null;
             $remaining=$amount?->minus($costedCost)->plus($restoredCost);
             if($netPhysical<0 || ($capital && $bookPackages<0)){
                 $issues[]='Physical or costed finished-goods stock is negative.';
@@ -180,7 +191,7 @@ class ManufacturingFinancialReconciliationService
                 'batch_id'=>$batch->id,'batch'=>$batch->batch_number,
                 'product'=>$batch->finishedGood?->name??'Unknown',
                 'status'=>$batch->status,'currency'=>$currency,
-                'accepted'=>$originalPackages,'dispatched'=>$physical,
+                'accepted'=>$originalPackages,'received'=>$received,'dispatched'=>$physical,
                 'qc_returns'=>$returnQty,'costed_sales'=>$sold,
                 'costed_recoveries'=>$recovered,'net_physical'=>$netPhysical,
                 'remaining_costed'=>$bookPackages,
