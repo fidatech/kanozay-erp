@@ -33,8 +33,16 @@ class ProductionCostAllocationService
     throw ValidationException::withMessages(['submission_token'=>'Duplicate cost allocation token already exists.']);
    }
    $batch=ProductionBatch::whereKey($data['production_batch_id'])->lockForUpdate()->firstOrFail();
-   if($batch->status==='rejected')
-    throw ValidationException::withMessages(['production_batch_id'=>'Rejected production batches cannot receive new capitalized overhead allocations.']);
+   if(in_array($batch->status,['qc_rejected','rejected'],true)){
+    throw ValidationException::withMessages([
+      'production_batch_id'=>'Rejected production batches cannot receive new production cost allocations.',
+    ]);
+   }
+   if(DB::table('finished_good_dispatch_lines')->where('production_batch_id',$batch->id)->exists()){
+    throw ValidationException::withMessages([
+      'production_batch_id'=>'This batch has already been dispatched. Historical production unit-cost inputs cannot be revised after a sale.',
+    ]);
+   }
    $line=JournalLine::whereKey($data['source_journal_line_id'])->lockForUpdate()->firstOrFail();
    $account=$line->account;
    $journal=DB::table('journal_entries')->where('id',$line->journal_entry_id)->first();
@@ -76,6 +84,14 @@ class ProductionCostAllocationService
    if($row->created_by===$actorId)
     throw ValidationException::withMessages(['decision'=>'Overhead approvals require an independent finance reviewer.']);
    if($decision==='approved'){
+    $batch=ProductionBatch::whereKey($row->production_batch_id)->lockForUpdate()->firstOrFail();
+    if(in_array($batch->status,['qc_rejected','rejected'],true) ||
+      DB::table('finished_good_dispatch_lines')
+        ->where('production_batch_id',$batch->id)->exists()){
+      throw ValidationException::withMessages([
+        'decision'=>'Do not approve production overhead after a batch was rejected or dispatched. Use a separately reviewed accounting correction if needed.',
+      ]);
+    }
     $line=JournalLine::whereKey($row->source_journal_line_id)->lockForUpdate()->firstOrFail();
     // Excludes this submitted row, which already reserves its source amount.
     $total=BigDecimal::of((string)$row->amount);
