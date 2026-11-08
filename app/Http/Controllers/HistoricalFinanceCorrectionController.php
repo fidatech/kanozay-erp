@@ -118,11 +118,36 @@ class HistoricalFinanceCorrectionController extends Controller
                     ->get(['id','code']);
             }
         }
+        $dispatchDisposition=null;
+        $dispatchEvidence=collect();
+        if($row->case_type==='standalone_dispatch'){
+            $dispatchDisposition=DB::table('finance_historical_dispatch_dispositions')
+                ->where('finance_historical_correction_case_id',$row->id)->first();
+            $dispatchEvidence=DB::table('finished_good_dispatch_lines as detail')
+                ->join('production_batches as batch',
+                    'batch.id','=','detail.production_batch_id')
+                ->leftJoin('production_batch_cost_postings as posted',
+                    'posted.production_batch_id','=','batch.id')
+                ->leftJoin('currencies as currency',
+                    'currency.id','=','posted.currency_id')
+                ->leftJoin('journal_entries as finished_journal',
+                    'finished_journal.id','=','posted.capitalization_journal_id')
+                ->where('detail.finished_good_dispatch_id',$row->source_id)
+                ->select('detail.id','detail.production_batch_id','detail.finished_good_id',
+                    'detail.company_warehouse_id','detail.quantity_packages',
+                    'batch.batch_number','batch.accepted_packages',
+                    'posted.total_amount','posted.accounting_date',
+                    'currency.code as original_cost_currency',
+                    'finished_journal.status as capitalization_journal_status')
+                ->orderBy('detail.id')->get();
+        }
         return view('finance.historical-correction-show',[
             'case'=>$row,'types'=>HistoricalFinanceCorrectionService::TYPES,
             'events'=>$service->activity($row->id),
             'openingEquityLedgers'=>$openingEquityLedgers,
             'currencies'=>$currencies,'openingPosting'=>$openingPosting,
+            'dispatchDisposition'=>$dispatchDisposition,
+            'dispatchEvidence'=>$dispatchEvidence,
         ]);
     }
 
@@ -137,6 +162,25 @@ class HistoricalFinanceCorrectionController extends Controller
         ]);
         $service->review($case,$data,(int)$request->user()->id);
         return back()->with('success','Independent historical correction review recorded without changing a source document or accounting value.');
+    }
+
+    public function classifyDispatch(Request $request,int $case,
+        HistoricalFinanceCorrectionService $service)
+    {
+        $this->gate($request,true);
+        $data=$request->validate([
+            'business_purpose'=>['required',Rule::in([
+                'customer_sale','promotional_sample','production_loss',
+                'internal_consumption','unresolved',
+            ])],
+            'supporting_document_reference'=>['required','string','min:4','max:180'],
+            'source_evidence'=>['required','string','min:30','max:5000'],
+            'remaining_financial_action'=>['required','string','min:30','max:5000'],
+            'confirm_no_gl_posting'=>['accepted'],
+        ]);
+        $service->classifyStandaloneDispatch($case,$data,(int)$request->user()->id);
+        return back()->with('success',
+            'Historical warehouse-only dispatch purpose independently documented. No invoice, COGS journal or stock movement was created; the financial correction case remains open.');
     }
 
     public function withdraw(Request $request,int $case,HistoricalFinanceCorrectionService $service)
