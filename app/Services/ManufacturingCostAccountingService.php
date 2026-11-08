@@ -223,6 +223,11 @@ class ManufacturingCostAccountingService
             if($batch->status!=='released' || (int)$batch->accepted_packages<1){
                 $this->reject('Only a QC-released batch with accepted physical packages can be capitalized.');
             }
+            // A QC hold may be created after physical batch release. Financial
+            // capitalization must not silently treat held finished products
+            // as an unrestricted, saleable factory asset.
+            app(FinishedGoodLotControlService::class)->assertSourceLotsClear($batch);
+            app(FinishedBatchQualityGate::class)->assertApproved($batch);
             $receipt=DB::table('finished_good_movements')
                 ->where('production_batch_id',$batchId)
                 ->where('type','production_receipt')->first();
