@@ -209,7 +209,8 @@ class SalesDeliveryNoteController extends Controller
                 throw ValidationException::withMessages(['status'=>'Confirmed customer deliveries cannot be cancelled.']);
             }
             $tracking=\App\Models\SalesDeliveryTrackingEvent::where('sales_delivery_note_id',$locked->id)->get();
-            if($locked->status==='issued' && $tracking->isNotEmpty()){
+            if($locked->status==='issued' && $tracking->isNotEmpty() &&
+               !$tracking->contains('status','returned')){
                 throw ValidationException::withMessages([
                     'status'=>'A delivery with recorded loading or transit evidence cannot be cancelled until logistics records a documented return.',
                 ]);
