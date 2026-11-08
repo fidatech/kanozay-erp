@@ -2,6 +2,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\GoodsReceipt;
+use App\Support\LocalizedDecimal;
 use App\Models\LedgerAccount;
 use App\Models\MatchedSupplierInvoice;
 use App\Services\MatchedSupplierInvoiceService;
@@ -40,6 +41,10 @@ class MatchedSupplierInvoiceController extends Controller
  public function store(Request $request,MatchedSupplierInvoiceService $service)
  {
   $this->guard($request,true);
+  $request->merge([
+   'quantities'=>LocalizedDecimal::quantities($request->input('quantities')),
+   'invoice_total'=>LocalizedDecimal::normalize($request->input('invoice_total')),
+  ]);
   $data=$request->validate([
    'goods_receipt_id'=>['required',Rule::exists('goods_receipts','id')->where('status','posted')],
    'submission_token'=>['required','uuid'],
