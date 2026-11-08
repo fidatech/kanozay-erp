@@ -14,7 +14,7 @@
 @if($errors->any())<p class="notice notice-warning">{{ implode(' ',$errors->all()) }}</p>@endif
 @if($page==='ownership')
 <section class="sh-panel"><h2>Documented ownership by share class</h2>
-<p class="sh-note">Ownership is entered from approved board records; capital contributed does not imply a particular ownership percentage. Combined percentages in each class cannot exceed 100%. Every amendment is logged.</p>
+<p class="sh-note">Ownership is entered from approved board records; capital contributed does not imply a particular ownership percentage. Combined percentages in each class cannot exceed 100%. Zero removes current entitlement without deleting past ownership history. Class amendments are chronological and every amendment is recorded.</p>
 @canany(['shareholders.update','administration.update'])
 <form method="POST" action="{{ route('shareholders.governance.ownership') }}" class="sh-form">@csrf
 <label>Shareholder<select name="shareholder_id" required><option value="">Choose shareholder</option>@foreach($shareholders as $s)<option value="{{ $s->id }}">{{ $s->name }}</option>@endforeach</select></label>
@@ -24,6 +24,25 @@
 <label>Board approval reference<input name="approval_reference" required minlength="4" maxlength="180"></label>
 <button class="btn" type="submit">Record approved ownership</button>
 </form>@endcanany
+<form method="GET" action="{{ route('workspace.page',['shareholders','ownership']) }}" style="display:flex;align-items:end;gap:8px;flex-wrap:wrap;margin:14px 0">
+<label>Historical ownership as of<input name="as_of" type="date" max="{{ now()->toDateString() }}" value="{{ $ownershipAsOf }}" required></label>
+<button class="btn btn-light" type="submit">View ownership on date</button>
+</form>
+<h3>Board-approved cap table on {{ $ownershipAsOf }}</h3>
+<div class="sh-wrap"><table><thead><tr><th>Share class</th><th>Shareholder</th><th>Ownership %</th><th>Effective date</th><th>Signed evidence</th></tr></thead><tbody>
+@forelse($ownershipSnapshot as $historic)
+<tr><td>{{ $historic->share_class }}</td><td>{{ $historic->shareholder_name }}</td>
+<td>{{ $historic->new_percentage }}%</td><td>{{ $historic->effective_on }}</td>
+<td>{{ $historic->approval_reference }}</td></tr>
+@empty<tr><td colspan="5">No documented ownership interests were effective on this date.</td></tr>@endforelse
+</tbody></table></div>
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0">
+@foreach($ownershipClassTotals as $shareClass=>$percent)
+<span class="sh-note">{{ $shareClass }} documented: {{ $percent }}% @if(\Brick\Math\BigDecimal::of((string)$percent)->isLessThan('100')) · Not fully allocated @endif</span>
+@endforeach
+</div>
+<p class="muted">An incomplete share class is not assumed to have unrecorded shareholders. This register reflects signed historical ownership changes. Payout entitlements require independent resolution-specific amounts.</p>
+<h3>Current ownership register</h3>
 <div class="sh-wrap"><table><thead><tr><th>Shareholder</th><th>Share class</th><th>Ownership %</th><th>Effective date</th><th>Approval</th></tr></thead><tbody>
 @forelse($ownership as $o)<tr><td>{{ $o->shareholder_name }}</td><td>{{ $o->share_class }}</td><td>{{ $o->percentage }}%</td><td>{{ $o->effective_on }}</td><td>{{ $o->approval_reference }}</td></tr>
 @empty<tr><td colspan="5">Ownership percentages are not established until board approvals are entered.</td></tr>@endforelse
