@@ -84,6 +84,7 @@ class ProductionTraceabilityController extends Controller
     {
         $this->guard($request);
         $layer->load('material');
+        $sourceQcHeld=app(\App\Services\QualityMaterialHoldService::class)->isLayerHeld($layer);
         $batches=DB::table('inventory_cost_consumptions as consumed')
             ->join('inventory_stock_movements as movement',
                 'movement.id','=','consumed.inventory_stock_movement_id')
@@ -116,6 +117,6 @@ class ProductionTraceabilityController extends Controller
                 'inventory_cost_layer_locations.location_key','warehouse.name as warehouse_name'])
             ->get();
 
-        return view('production.source-lot-traceability',compact('layer','batches','positions'));
+        return view('production.source-lot-traceability',compact('layer','batches','positions','sourceQcHeld'));
     }
 }
