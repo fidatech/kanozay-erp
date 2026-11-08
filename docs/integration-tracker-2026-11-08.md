@@ -85,6 +85,14 @@ Committed new draft-recipe editing, packaging line classification and issued-pac
 
 **Status remains integration incomplete.** No tests or migrations were run at user direction. Historical FIFO source records without verifiable consumption will require reconciliation before some older batches can be released.
 
+## Laboratory and quality-control development
+
+Added sample-time snapshots of approved QC specification versions, independent incoming FIFO lot holds/releases, formal finished-product QC requirements where specifications exist, downstream dispatch restrictions for newly held source-material lots, and source-linked nonconformance/root-cause/independent-closure records. The register now identifies downstream production batches consuming a held incoming lot.
+
+[Laboratory and Quality Development](laboratory-quality-development-2026-11-08.md) documents current code and outstanding physical disposition, historical evidence, company quality policies and recall workflows.
+
+**Still integration incomplete.** New database migrations, QA scenarios and MySQL/browser acceptance were not executed at user direction. The new strict hold gates depend on reviewed historical FIFO source data; they must be staged and reconciled before live activation.
+
 ## Acceptance and release gates
 
 1. Passing SQLite feature suite and isolated regression suite on the latest commit.
