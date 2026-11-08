@@ -150,6 +150,7 @@ Route::middleware('auth')->patch('/production/orders/{order}/materials/{material
 Route::middleware('auth')->post('/production/orders/{order}/reserve', [\App\Http\Controllers\ProductionOrderController::class, 'reserve'])->name('production.orders.reserve');
 Route::middleware('auth')->post('/production/orders/{order}/materials/{materialLine}/waste', [\App\Http\Controllers\ProductionOrderController::class, 'waste'])->name('production.orders.materials.waste');
 Route::middleware('auth')->post('/production/orders/{order}/waste/{waste}/financial-review', [\App\Http\Controllers\ProductionOrderController::class,'reviewWaste'])->name('production.orders.waste.review');
+Route::middleware('auth')->post('/production/orders/{order}/waste/{waste}/cost-approval', [\App\Http\Controllers\ProductionOrderController::class,'approveAbnormalWasteCost'])->name('production.orders.waste.cost-approve');
 Route::middleware('auth')->post('/production/orders/{order}/waste/{waste}/resolve-rework', [\App\Http\Controllers\ProductionOrderController::class,'resolveWasteRework'])->name('production.orders.waste.resolve-rework');
 Route::middleware('auth')->post('/production/orders/{order}/issue', [\App\Http\Controllers\ProductionOrderController::class, 'issue'])->name('production.orders.issue');
 Route::middleware('auth')->post('/production/orders/{order}/cancel', [\App\Http\Controllers\ProductionOrderController::class, 'cancel'])->name('production.orders.cancel');
