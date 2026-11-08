@@ -186,9 +186,11 @@
    <p style="color:#08734b">Finished goods released. This batch cannot be released again.</p>
    <h4>Raw-material cost snapshot</h4>
    @if($batch->costs->isNotEmpty())
-    <div class="table-wrap"><table><thead><tr><th>Currency</th><th>Issued quantity valued</th><th>Raw-material cost</th><th>Unvalued quantity</th></tr></thead><tbody>
+    <div class="table-wrap"><table><thead><tr><th>Currency</th><th>Issued quantity valued</th><th>Ingredient cost</th><th>Packaging cost</th><th>Total material cost</th><th>Unvalued quantity</th></tr></thead><tbody>
      @foreach($batch->costs as $cost)
       <tr><td>{{ $cost->currency_code ?? 'Unvalued' }}</td><td>{{ $cost->consumed_quantity }}</td>
+       <td>{{ $cost->ingredient_cost === null ? 'Legacy / unavailable' : $cost->ingredient_cost }}</td>
+       <td>{{ $cost->packaging_cost === null ? 'Legacy / unavailable' : $cost->packaging_cost }}</td>
        <td>{{ $cost->material_cost === null ? '—' : $cost->currency_code.' '.rtrim(rtrim((string) $cost->material_cost, '0'), '.') }}</td>
        <td>{{ $cost->unvalued_quantity }}</td></tr>
      @endforeach
@@ -201,6 +203,7 @@
 </div>
 
  @can('inventory.view')<p><a href="{{ route('inventory.materials.index') }}">Open raw-material inventory</a></p>@endcan
+ <p class="muted">Batch submission requires enough issued packaging for the reported packages according to the approved recipe. Frozen cost snapshots keep ingredient and packaging costs separately in their source currencies. </p>
  <p class="muted">Availability combines demand across lines mapped to the same stock item and excludes stock reserved by other production orders. Reserving does not consume stock. Waste quantities classify materials already issued and do not deduct stock again. Finished goods are added only after laboratory approval and a separate warehouse release. Inventory valuation and financial journals are not yet posted.</p>
 </div>
 @endsection
