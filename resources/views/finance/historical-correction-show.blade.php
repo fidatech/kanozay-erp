@@ -63,6 +63,129 @@ I am not the requester and independently checked the original source documentati
 <button class="btn" type="submit" onclick="return confirm('Record this independent finance decision? No original stock or GL value will change.')">Save independent finance review</button>
 </form></section>
 @endif
+@if($case->case_type==='batch_uncapitalized')
+<section class="hfcs-card">
+<h2>Historical manufacturing cost and original sales COGS recovery</h2>
+<p class="hfcs-alert">Restricted historical accounting: this path only handles one previously uncapitalized, QC-approved finished batch when EVERY physical dispatch is already linked to an actual, posted customer invoice with the exact quantity, batch and original dispatch date. Previously recorded sales revenue is never duplicated. Missing customer invoices, sampled/damaged/internal-use dispatches, returned goods, uncertain FIFO costs and closed original accounting months must use separate reconciliation.</p>
+@if($historicalBatchReadiness)
+<div class="hfcs-grid">
+<div><small>Frozen original cost readiness</small><div><strong>{{ $historicalBatchReadiness['ready'] ? 'Source preview ready' : 'Source reconciliation blocked' }}</strong></div></div>
+<div><small>Original source currency</small><div>{{ $historicalBatchReadiness['currency'] }}</div></div>
+<div><small>Material cost preview</small><div>{{ $historicalBatchReadiness['material_cost']??'Unverified' }}</div></div>
+<div><small>Approved overhead preview</small><div>{{ $historicalBatchReadiness['approved_overhead'] }}</div></div>
+<div><small>Abnormal loss excluded</small><div>{{ $historicalBatchReadiness['abnormal_waste_source_cost'] }}</div></div>
+<div><small>Accepted packages</small><div>{{ number_format($historicalBatchReadiness['packages']) }}</div></div>
+</div>
+<p class="muted">{{ $historicalBatchReadiness['warning'] }}. This is an advisory source-cost estimate; the actual manufacturing posting service rechecks every original FIFO, supplier, overhead and waste journal.</p>
+@endif
+<h3>Original physical dispatches and existing customer invoices</h3>
+<div style="overflow-x:auto">
+<table style="width:100%;min-width:710px">
+<thead><tr><th>Physical dispatch</th><th>Original dispatch date</th><th>Packages</th><th>Posted invoice</th><th>Revenue state</th></tr></thead>
+<tbody>
+@forelse($historicalBatchDispatches as $dispatch)
+<tr>
+<td>{{ $dispatch->dispatch_number }} (line #{{ $dispatch->physical_line_id }})</td>
+<td>{{ $dispatch->dispatch_date }}</td>
+<td>{{ number_format($dispatch->quantity_packages) }}</td>
+<td>
+@if($dispatch->invoice_id)
+<a href="{{ route('sales.invoices.show',$dispatch->invoice_id) }}">{{ $dispatch->invoice_number }}</a>
+@else <strong>Unmatched — blocked</strong> @endif
+</td>
+<td>{{ $dispatch->invoice_status??'Not invoiced' }}</td>
+</tr>
+@empty
+<tr><td colspan="5">This batch has no historical dispatched packages. Use ordinary approved manufacturing capitalization instead.</td></tr>
+@endforelse
+</tbody></table></div>
+@if($historicalBatchPosting)
+<h3>Source-backed historical capitalization record</h3>
+<div class="hfcs-grid">
+<div><small>Plan status</small><div><strong>{{ ucfirst($historicalBatchPosting->status) }}</strong></div></div>
+<div><small>Original batch cost</small><div>{{ $historicalBatchPosting->expected_original_cost }} {{ $historicalBatchPosting->currency_code }}</div></div>
+<div><small>Historical manufacturing journal date</small><div>{{ $historicalBatchPosting->accounting_date }}</div></div>
+<div><small>Source invoice lines</small><div>{{ $historicalBatchPosting->invoice_line_count }}</div></div>
+<div><small>Posted sales COGS lines</small><div>{{ $historicalBatchPosting->posted_invoice_cogs_lines }}</div></div>
+<div><small>Source WIP journal</small><div>{{ $historicalBatchPosting->issue_journal_id ? '#'.$historicalBatchPosting->issue_journal_id : 'Not posted' }}</div></div>
+<div><small>Finished inventory journal</small><div>{{ $historicalBatchPosting->capitalization_journal_id ? '#'.$historicalBatchPosting->capitalization_journal_id : 'Not posted' }}</div></div>
+</div>
+<p><strong>Original source reference:</strong> {{ $historicalBatchPosting->source_authorization_reference }}</p>
+<p style="white-space:pre-wrap">{{ $historicalBatchPosting->source_reconciliation_notes }}</p>
+@if($historicalBatchPosting->status==='submitted' &&
+(auth()->user()->can('finance.update') || auth()->user()->can('administration.update')) &&
+(int)$historicalBatchPosting->submitted_by!==auth()->id() &&
+(int)$case->requested_by!==auth()->id() &&
+(int)$case->reviewed_by!==auth()->id())
+<h3>Independent financial recovery review</h3>
+<form method="POST" action="{{ route('finance.historical-corrections.historical-batch-review',$case->id) }}" class="hfcs-form">
+@csrf
+<label>Decision<select name="decision" required>
+<option value="">Choose an independent original-cost decision</option>
+<option value="approve">Approve original manufacturing and all linked sales COGS</option>
+<option value="reject">Reject source evidence</option>
+</select></label>
+<label>Signed independent finance approval reference
+<input name="approval_reference" required minlength="4" maxlength="180"></label>
+<label>Original material, source currency, supplier GL, WIP, physical dispatch and posted customer revenue reconciliation
+<textarea name="approval_notes" rows="5" minlength="60" maxlength="5000" required></textarea></label>
+<label style="display:flex;align-items:center;gap:8px">
+<input type="checkbox" name="confirm_historical_cost_review" value="1" required style="width:auto">
+I independently reviewed the source evidence and confirmed every original invoice and planned posting month is open.
+</label>
+<button class="btn" type="submit">Save independent financial approval</button>
+</form>
+@endif
+@if($historicalBatchPosting->status==='approved' &&
+(auth()->user()->can('finance.update') || auth()->user()->can('administration.update')) &&
+(int)$historicalBatchPosting->submitted_by!==auth()->id() &&
+(int)$historicalBatchPosting->approved_by!==auth()->id() &&
+(int)$case->requested_by!==auth()->id() &&
+(int)$case->reviewed_by!==auth()->id())
+<h3>Post verified manufacturing and historical sales COGS</h3>
+<form method="POST" action="{{ route('finance.historical-corrections.historical-batch-post',$case->id) }}" class="hfcs-form">
+@csrf
+<p class="hfcs-alert">This creates source-validated WIP and finished inventory capitalization plus every missing original-currency customer COGS journal in one atomic financial transaction. Any unsupported original cost, changed invoice, closed month or incomplete balance rolls back the ENTIRE operation. No physical stock, customer invoice or original sales revenue changes.</p>
+<label style="display:flex;align-items:center;gap:8px">
+<input type="checkbox" name="confirm_atomic_historical_posting" value="1" required style="width:auto">
+I confirm original accounting periods are open and all source and original customer invoice evidence remains valid.
+</label>
+<button class="btn" type="submit"
+onclick="return confirm('Post source-backed manufacturing WIP, finished stock and ALL matching original-invoice COGS journals as one transaction?')">
+Post approved historical manufacturing and COGS</button>
+</form>
+@endif
+@elseif($case->status==='approved' && $historicalBatchReadiness &&
+$historicalBatchReadiness['ready'] &&
+$historicalBatchDispatches->isNotEmpty() &&
+(auth()->user()->can('finance.update') || auth()->user()->can('administration.update')) &&
+(int)$case->requested_by!==auth()->id() &&
+(int)$case->reviewed_by!==auth()->id())
+<h3>Submit complete original-source batch recovery for independent authorization</h3>
+<p class="hfcs-alert">Original WIP capitalization must be dated on or before the earliest physical dispatch, after the QC receipt and after original FIFO issues and supplier/overhead source postings. The original manufacturing date AND EACH customer invoice date must still belong to OPEN accounting months. Finance must reconcile historic statements before using this source recovery.</p>
+<form method="POST" action="{{ route('finance.historical-corrections.historical-batch-submit',$case->id) }}" class="hfcs-form">
+@csrf
+<label>Original manufacturing accounting date (open month)
+<input type="date" name="accounting_date" value="{{ old('accounting_date',$case->source_date) }}"
+max="{{ $historicalBatchDispatches->min('dispatch_date') }}" required></label>
+<label>Original accounting reconciliation and signed authorization reference
+<input name="source_authorization_reference" required minlength="4" maxlength="180"
+value="{{ old('source_authorization_reference') }}"></label>
+<label>Independent source reconciliation notes
+<textarea name="source_reconciliation_notes" rows="5" minlength="60" maxlength="5000" required
+placeholder="Identify QC release, originally posted supplier stock cost, original currency, WIP/finished inventory source GL, all matched customer invoices, original open posting periods, and why no prior historical cost journals exist.">{{ old('source_reconciliation_notes') }}</textarea></label>
+<label style="display:flex;align-items:center;gap:8px">
+<input type="checkbox" name="confirm_all_original_invoices" value="1" required style="width:auto">
+Every physical dispatch in this batch has a real and posted original invoice with no customer returns, and no inventory or COGS cost has previously been recognized for this batch.
+</label>
+<button class="btn" type="submit">Submit full-source historical batch recovery</button>
+</form>
+@else
+<p class="hfcs-alert">No eligible proposal can be submitted with the current batch/source evidence, or this record is not independently approved. Missing or disputed original accounting must remain unresolved.</p>
+@endif
+</section>
+@endif
+
 @if($case->case_type==='opening_fifo_unvalued' && $openingPosting)
 <section class="hfcs-card">
 <h2>Original opening-stock valuation journal</h2>
