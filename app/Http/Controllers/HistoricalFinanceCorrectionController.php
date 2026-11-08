@@ -97,9 +97,32 @@ class HistoricalFinanceCorrectionController extends Controller
         $this->gate($request);
         $row=DB::table('finance_historical_correction_cases')->where('id',$case)->first();
         abort_unless($row,404);
+        $openingEquityLedgers=collect();
+        $currencies=collect();
+        $openingPosting=null;
+        if($row->case_type==='opening_fifo_unvalued'){
+            $openingPosting=DB::table('finance_opening_fifo_valuations as source')
+                ->join('journal_entries as journal',
+                    'journal.id','=','source.journal_entry_id')
+                ->where('source.finance_historical_correction_case_id',$row->id)
+                ->select('source.*','journal.number as journal_number',
+                    'journal.status as journal_status')->first();
+            if($row->status==='approved' &&
+                $request->user()->canAny(['finance.update','administration.update'])){
+                $openingEquityLedgers=\App\Models\LedgerAccount::query()
+                    ->where('type','equity')->where('is_active',true)
+                    ->where('is_group',false)->orderBy('code')
+                    ->get(['id','code','name']);
+                $currencies=\App\Models\Currency::query()
+                    ->where('is_active',true)->orderBy('code')
+                    ->get(['id','code']);
+            }
+        }
         return view('finance.historical-correction-show',[
             'case'=>$row,'types'=>HistoricalFinanceCorrectionService::TYPES,
             'events'=>$service->activity($row->id),
+            'openingEquityLedgers'=>$openingEquityLedgers,
+            'currencies'=>$currencies,'openingPosting'=>$openingPosting,
         ]);
     }
 
@@ -126,6 +149,26 @@ class HistoricalFinanceCorrectionController extends Controller
         $service->withdraw($case,$data['reason'],(int)$request->user()->id);
         return back()->with('success',
             'Correction case withdrawn with permanent source and reviewer history. No accounting journal or physical stock was changed.');
+    }
+
+    public function postOpeningStock(Request $request,int $case,
+        \App\Services\HistoricalOpeningStockValuationService $service)
+    {
+        $this->gate($request,true);
+        $data=$request->validate([
+            'currency_id'=>['required','integer','exists:currencies,id'],
+            'opening_equity_ledger_id'=>['required','integer','exists:ledger_accounts,id'],
+            'original_cost'=>['required','regex:/^(?:0|[1-9][0-9]{0,15})(?:\\.[0-9]{1,4})?$/','numeric','gt:0'],
+            'posting_date'=>['required','date','before_or_equal:today'],
+            'evidence_reference'=>['required','string','min:4','max:180'],
+            'reconciliation_notes'=>['required','string','min:40','max:5000'],
+            'confirm_no_prior_gl'=>['accepted'],
+            'confirm_physical_source'=>['accepted'],
+        ]);
+        $posting=$service->post($case,$data,(int)$request->user()->id);
+        return back()->with('success',
+            'Original opening FIFO valuation and independent asset/equity journal posted (journal #'.
+            $posting->journal_entry_id.'). The physical stock receipt and quantity were not changed.');
     }
 
     public function execute(Request $request,int $case,HistoricalFinanceCorrectionService $service)
