@@ -58,6 +58,9 @@ class HistoricalFinanceCorrectionController extends Controller
                 'posted.goods_receipt_landed_cost_id','=','cost.id')
             ->whereNull('posted.id')->orderByDesc('cost.id')
             ->limit(20)->pluck('cost.id');
+        $historicalQuarantineCases=DB::table('sales_return_quarantines')
+            ->whereIn('status',['quarantined','scrapped'])
+            ->orderByDesc('id')->limit(20)->pluck('id');
         $historicalReleasedReturns=DB::table('sales_return_quarantines as qc')
             ->leftJoin('production_return_cost_postings as posted',
                 'posted.sales_return_quarantine_id','=','qc.id')
@@ -79,6 +82,7 @@ class HistoricalFinanceCorrectionController extends Controller
                 'landed_cost_unreconciled'=>$unreconciledLanded,
                 'supplier_return_unreconciled'=>$pendingSupplierCredits,
                 'released_return_missing_cost'=>$historicalReleasedReturns,
+                'customer_return_disposition'=>$historicalQuarantineCases,
             ],
         ]);
     }
@@ -103,6 +107,67 @@ class HistoricalFinanceCorrectionController extends Controller
         $this->gate($request);
         $row=DB::table('finance_historical_correction_cases')->where('id',$case)->first();
         abort_unless($row,404);
+        $historicalDispositionPlan=null;
+        $historicalDispositionQc=null;
+        $historicalDispositionCredit=null;
+        $historicalDispositionInvoice=null;
+        $historicalDispositionCOGS=null;
+        $historicalDispositionLedgers=collect();
+        if($row->case_type==='customer_return_disposition'){
+            $historicalDispositionPlan=DB::table('finance_historical_customer_return_disposition_reviews as plan')
+                ->leftJoin('journal_entries as journal',
+                    'journal.id','=','plan.journal_entry_id')
+                ->leftJoin('currencies as currency',
+                    'currency.id','=','plan.currency_id')
+                ->leftJoin('ledger_accounts as loss',
+                    'loss.id','=','plan.loss_ledger_id')
+                ->where('plan.finance_historical_correction_case_id',$row->id)
+                ->select('plan.*','journal.number as journal_number',
+                    'journal.status as journal_status',
+                    'currency.code as currency_code',
+                    'loss.code as loss_ledger_code',
+                    'loss.name as loss_ledger_name')->first();
+            $historicalDispositionQc=DB::table('sales_return_quarantines')
+                ->where('id',$row->source_id)->first();
+            if($historicalDispositionQc){
+                $historicalDispositionCredit=DB::table('sales_credit_note_lines as credit')
+                    ->join('sales_credit_notes as note',
+                        'note.id','=','credit.sales_credit_note_id')
+                    ->where('credit.id',$historicalDispositionQc->sales_credit_note_line_id)
+                    ->select('credit.*','note.number as credit_number',
+                        'note.credit_date','note.journal_entry_id as credit_journal_id',
+                        'note.created_by as credit_author_id')->first();
+                if($historicalDispositionCredit){
+                    $historicalDispositionInvoice=DB::table('sales_invoice_lines as sale')
+                        ->join('sales_invoices as invoice',
+                            'invoice.id','=','sale.sales_invoice_id')
+                        ->where('sale.id',$historicalDispositionCredit->sales_invoice_line_id)
+                        ->select('sale.*','invoice.number as invoice_number',
+                            'invoice.status as invoice_status',
+                            'invoice.invoice_date')->first();
+                    $historicalDispositionCOGS=DB::table('production_invoice_cogs_postings as cost')
+                        ->join('production_batch_cost_postings as batch',
+                            'batch.id','=','cost.production_batch_cost_posting_id')
+                        ->leftJoin('currencies as currency',
+                            'currency.id','=','batch.currency_id')
+                        ->where('cost.sales_invoice_line_id',
+                            $historicalDispositionCredit->sales_invoice_line_id)
+                        ->select('cost.*','batch.currency_id',
+                            'currency.code as currency_code')->first();
+                }
+            }
+            if($row->status==='approved' &&
+                $historicalDispositionQc?->status==='scrapped' &&
+                $request->user()->canAny(['finance.update','administration.update'])){
+                $reserved=DB::table('manufacturing_cost_ledger_policies')
+                    ->pluck('cogs_ledger_id')->all();
+                $historicalDispositionLedgers=\App\Models\LedgerAccount::query()
+                    ->where('type','expense')
+                    ->where('is_active',true)->where('is_group',false)
+                    ->whereNotIn('id',$reserved)
+                    ->orderBy('code')->get(['id','code','name']);
+            }
+        }
         $historicalReturnPlan=null;
         $historicalReturnQc=null;
         $historicalReturnCredit=null;
@@ -347,6 +412,12 @@ class HistoricalFinanceCorrectionController extends Controller
         return view('finance.historical-correction-show',[
             'case'=>$row,'types'=>HistoricalFinanceCorrectionService::TYPES,
             'events'=>$service->activity($row->id),
+            'historicalDispositionPlan'=>$historicalDispositionPlan,
+            'historicalDispositionQc'=>$historicalDispositionQc,
+            'historicalDispositionCredit'=>$historicalDispositionCredit,
+            'historicalDispositionInvoice'=>$historicalDispositionInvoice,
+            'historicalDispositionCOGS'=>$historicalDispositionCOGS,
+            'historicalDispositionLedgers'=>$historicalDispositionLedgers,
             'historicalReturnPlan'=>$historicalReturnPlan,
             'historicalReturnQc'=>$historicalReturnQc,
             'historicalReturnCredit'=>$historicalReturnCredit,
@@ -416,6 +487,49 @@ class HistoricalFinanceCorrectionController extends Controller
         );
         return back()->with('success',
             'Supplier-offered short credit documented against immutable original return price. No financial liability, receivable or loss was posted; approved accounting treatment is still outstanding.');
+    }
+
+    public function submitHistoricalReturnDisposition(Request $request,int $case,
+        \App\Services\HistoricalCustomerReturnDispositionService $service)
+    {
+        $this->gate($request,true);
+        $data=$request->validate([
+            'loss_ledger_id'=>['nullable','integer','exists:ledger_accounts,id'],
+            'evidence_reference'=>['required','string','min:4','max:180'],
+            'reconciliation_notes'=>['required','string','min:60','max:5000'],
+            'confirm_no_saleable_stock'=>['accepted'],
+            'confirm_no_duplicate_loss'=>['accepted'],
+        ]);
+        $service->submit($case,$data,(int)$request->user()->id);
+        return back()->with('success',
+            'Original customer credit/QC disposition submitted for independent finance review. No inventory, customer document, loss or GL changed.');
+    }
+
+    public function reviewHistoricalReturnDisposition(Request $request,int $case,
+        \App\Services\HistoricalCustomerReturnDispositionService $service)
+    {
+        $this->gate($request,true);
+        $data=$request->validate([
+            'decision'=>['required',Rule::in(['approve','reject'])],
+            'approval_reference'=>['required','string','min:4','max:180'],
+            'approval_notes'=>['required','string','min:60','max:5000'],
+            'confirm_independent_disposition_review'=>['accepted'],
+        ]);
+        $plan=$service->approve($case,$data,(int)$request->user()->id);
+        return back()->with('success',$plan->status==='held'
+            ?'Original customer credit and QC quarantine independently documented as a held return. NO stock asset, COGS reversal or loss GL was posted.'
+            :'Independent QC scrapped-return finance decision recorded. Separate authorized execution is still required for a loss reclassification.');
+    }
+
+    public function postHistoricalReturnScrap(Request $request,int $case,
+        \App\Services\HistoricalCustomerReturnDispositionService $service)
+    {
+        $this->gate($request,true);
+        $request->validate(['confirm_source_loss_reclass'=>['accepted']]);
+        $plan=$service->post($case,(int)$request->user()->id);
+        return back()->with('success',
+            'Source-linked scrapped customer return expense reclassification posted to GL journal #'.
+            $plan->journal_entry_id.'. No finished-stock asset, customer credit, refund or physical warehouse movement was created.');
     }
 
     public function submitHistoricalCustomerReturn(Request $request,int $case,
