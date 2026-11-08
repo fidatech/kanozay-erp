@@ -137,6 +137,18 @@ Extended the existing `en`/`fa`/`ps` interface locale support for the dashboard,
 
 **Status: source development advanced, not production-ready.** No automated tests, migrations, runtime browser inspection, MySQL checks or deployment were performed. Reports describe recorded source documents; they are not independently certified financial statements.
 
+## Finished-goods dispatch cost reconciliation and continued localization
+
+Added a permission-gated, original-currency finished-goods dispatch cost reconciliation report with filters and full CSV export. Each gross dispatch line checks released batch status, QC-accepted quantity, complete frozen material FIFO value, one source currency, independent overhead approvals, and whether expense journals existed and had valid evidence as of the dispatch date. This is a **nonposting indicative source-cost report**, not COGS or booked finished-goods inventory. Invalid historical cost records are explicitly blocked from valuations rather than guessed.
+
+Overhead cannot now be submitted/approved after its batch has been dispatched or rejected. Finished-goods dispatch is blocked while production overhead is pending review. Finance month-close readiness warns about dispatched finished-goods lines that need WIP, finished inventory and COGS GL reconciliation; it does not invent accounting postings.
+
+Expanded Pashto/Dari report navigation and labels for the dispatch cost review while retaining fallback to English where full transactional translations are pending.
+
+[Finished-goods dispatch cost reconciliation update](finished-goods-dispatch-cost-reconciliation-2026-11-08.md) documents the source-level implementation and the **unresolved** full acquisition-to-WIP-to-finished-stock-to-COGS posting chain, historic source-document reconciliation and accounting acceptance.
+
+**Status: cost evidence and review advanced; full finished-goods GL capitalization/COGS development outstanding.** No automated tests, migrations, browser UAT, source syntax lint, MySQL verification or deployment performed at user's direction.
+
 ## Acceptance and release gates
 
 1. Passing SQLite feature suite and isolated regression suite on the latest commit.
