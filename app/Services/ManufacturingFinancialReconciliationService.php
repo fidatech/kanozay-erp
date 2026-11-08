@@ -51,6 +51,15 @@ class ManufacturingFinancialReconciliationService
         $cogs=DB::table('production_invoice_cogs_postings')
             ->whereIn('production_batch_cost_posting_id',$posted->pluck('id'))
             ->get()->groupBy('production_batch_cost_posting_id');
+        $nonSale=DB::table('finance_historical_dispatch_cost_lines as expense')
+            ->join('finance_historical_dispatch_cost_settlements as settlement',
+                'settlement.id','=','expense.finance_historical_dispatch_cost_settlement_id')
+            ->whereIn('expense.production_batch_cost_posting_id',$posted->pluck('id'))
+            ->where('settlement.status','posted')
+            ->select('expense.*','settlement.business_purpose',
+                'settlement.finished_good_dispatch_id',
+                'settlement.finance_historical_dispatch_disposition_id')
+            ->get()->groupBy('production_batch_cost_posting_id');
         $sourceIds=$cogs->flatten()->pluck('id');
         $returns=DB::table('production_return_cost_postings')
             ->whereIn('production_invoice_cogs_posting_id',$sourceIds)
@@ -94,6 +103,7 @@ class ManufacturingFinancialReconciliationService
             }
             $physical=0;$sold=0;$recovered=0;$restoredCost=BigDecimal::zero();
             $costedCost=BigDecimal::zero();
+            $nonSaleQty=0;$nonSaleCost=BigDecimal::zero();
             foreach($dispatches->get($batch->id,collect()) as $movement){
                 $physical+=(int)$movement->quantity_packages;
             }
@@ -223,19 +233,54 @@ class ManufacturingFinancialReconciliationService
                         }
                     }
                 }
+                foreach($nonSale->get($capital->id,collect()) as $expense){
+                    $physicalLine=DB::table('finished_good_dispatch_lines')
+                        ->where('id',$expense->finished_good_dispatch_line_id)->first();
+                    $signed=DB::table('finance_historical_dispatch_dispositions')
+                        ->where('id',$expense->finance_historical_dispatch_disposition_id)->first();
+                    if(!$physicalLine ||
+                        (int)$physicalLine->production_batch_id!==(int)$batch->id ||
+                        (int)$physicalLine->finished_good_dispatch_id!==(int)$expense->finished_good_dispatch_id ||
+                        (int)$physicalLine->quantity_packages!==(int)$expense->quantity_packages ||
+                        !$signed ||
+                        (int)$signed->finished_good_dispatch_id!==(int)$expense->finished_good_dispatch_id ||
+                        $signed->business_purpose!==$expense->business_purpose ||
+                        !in_array($expense->business_purpose,[
+                            'promotional_sample','production_loss','internal_consumption',
+                        ],true)){
+                        $issues[]='One historical non-sale expense lacks its signed original physical dispatch and quantity.';
+                    }
+                    $nonSaleQty+=(int)$expense->quantity_packages;
+                    $nonSaleCost=$nonSaleCost->plus((string)$expense->source_cost_amount);
+                    $account=DB::table('ledger_accounts')
+                        ->where('id',$expense->expense_ledger_id)->first();
+                    if((int)$expense->currency_id!==(int)$capital->currency_id ||
+                        !$account || $account->type!=='expense' ||
+                        (int)$expense->expense_ledger_id===(int)($policy?->cogs_ledger_id??0) ||
+                        !$this->journalIsValid((int)$expense->journal_entry_id) ||
+                        !$policy ||
+                        !$this->ledgerNet((int)$expense->journal_entry_id,
+                            (int)$expense->expense_ledger_id)
+                            ->isEqualTo((string)$expense->source_cost_amount) ||
+                        !$this->ledgerNet((int)$expense->journal_entry_id,
+                            (int)$policy->finished_inventory_ledger_id)
+                            ->isEqualTo($this->decimal($expense->source_cost_amount)->negated())){
+                        $issues[]='A posted non-sale batch expense fails original currency, purpose-specific expense debit or finished-inventory credit GL reconciliation.';
+                    }
+                }
                 if($invoices->get($batch->id,collect())->count()!==$postings->count()){
                     $issues[]='Some sales invoice lines do not have exactly one original-currency COGS posting.';
                 }
             }
             $netPhysical=$received+$returnQty+$legacyQty-$physical;
-            $netCosted=$sold-$recovered;
+            $netCosted=$sold+$nonSaleQty-$recovered;
             $bookPackages=$capital?($originalPackages-$netCosted):null;
-            $remaining=$amount?->minus($costedCost)->plus($restoredCost);
+            $remaining=$amount?->minus($costedCost)->minus($nonSaleCost)->plus($restoredCost);
             if($netPhysical<0 || ($capital && $bookPackages<0)){
                 $issues[]='Physical or costed finished-goods stock is negative.';
             }
-            if($capital && $physical!==$sold){
-                $issues[]='Gross physical dispatches do not equal the number of packages charged to COGS.';
+            if($capital && $physical!==$sold+$nonSaleQty){
+                $issues[]='Gross physical dispatches do not equal packages charged to authentic sales COGS plus approved non-sale batch expenses.';
             }
             if($capital && $returnQty!==$recovered){
                 $issues[]='QC-restocked packages do not match costed return asset recoveries.';
@@ -253,12 +298,14 @@ class ManufacturingFinancialReconciliationService
                 'status'=>$batch->status,'currency'=>$currency,
                 'accepted'=>$originalPackages,'received'=>$received,'dispatched'=>$physical,
                 'qc_returns'=>$returnQty,'costed_sales'=>$sold,
+                'costed_non_sale'=>$nonSaleQty,
                 'costed_recoveries'=>$recovered,'net_physical'=>$netPhysical,
                 'remaining_costed'=>$bookPackages,
                 'gross_material_source_cost'=>$capital?(string)$this->decimal($capital->material_amount)->toScale(4):null,
                 'abnormal_waste_expensed'=>$capital?(string)$this->decimal($capital->abnormal_waste_amount)->toScale(4):null,
                 'total_capitalized'=>$amount?(string)$amount->toScale(4):null,
                 'posted_cogs'=>$capital?(string)$costedCost->toScale(4):null,
+                'posted_non_sale_expense'=>$capital?(string)$nonSaleCost->toScale(4):null,
                 'returned_cost'=>$capital?(string)$restoredCost->toScale(4):null,
                 'remaining_asset_value'=>$remaining?(string)$remaining->toScale(4):null,
                 'issues'=>array_values(array_unique($issues)),
