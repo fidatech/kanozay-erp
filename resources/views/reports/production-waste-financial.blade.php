@@ -31,8 +31,8 @@
 <label>{{ $t('to') }}<input type="date" name="to" value="{{ $filters['to']??'' }}"></label>
 <label>{{ $t('production_waste_treatment') }}<select name="treatment">
 <option value="">{{ $t('production_waste_all') }}</option>
-@foreach(['pending'=>'Pending review','normal_process_loss'=>'Reviewed normal process loss','abnormal_loss'=>'Abnormal loss: finance expense required','rework_required'=>'Rework required'] as $value=>$label)
-<option value="{{ $value }}" @selected(($filters['treatment']??'')===$value)>{{ $label }}</option>
+@foreach(['pending'=>'production_waste_pending','normal_process_loss'=>'production_waste_normal','abnormal_loss'=>'production_waste_abnormal','rework_required'=>'production_waste_rework'] as $value=>$label)
+<option value="{{ $value }}" @selected(($filters['treatment']??'')===$value)>{{ $t($label) }}</option>
 @endforeach
 </select></label>
 <button type="submit" class="btn">{{ $t('apply_filters') }}</button>
@@ -59,13 +59,13 @@
 <td>{{ $row->reason }}</td><td>{{ $row->created_at }}</td>
 <td>
 @if($row->treatment==='normal_process_loss')
-<span class="pwr-normal">Normal process loss, independently reviewed</span>
+<span class="pwr-normal">{{ $t('production_waste_normal') }}</span>
 @elseif($row->treatment==='abnormal_loss')
-<span class="pwr-alert">Abnormal loss — separate FIFO and expense recognition required</span>
+<span class="pwr-alert">{{ $t('production_waste_abnormal') }}</span>
 @elseif($row->treatment==='rework_required')
-<span class="pwr-alert">Rework pending — warehouse release blocked</span>
+<span class="pwr-alert">{{ $t('production_waste_rework') }}</span>
 @else
-<span class="pwr-alert">Independent finance review required</span>
+<span class="pwr-alert">{{ $t('production_waste_pending') }}</span>
 @endif
 @if($row->review_notes)<div class="muted">{{ $row->review_notes }}</div>@endif
 </td>
