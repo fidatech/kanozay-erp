@@ -25,7 +25,8 @@
 @else{{ $bookValues[$asset->id]['book_value'] }}@endif
 @if($asset->status==='disposed')<div class="muted">Physically disposed; not active PPE</div>@endif
 </td>
-<td>@if($bookValues[$asset->id]['capitalized'])<span style="color:#176b42">Source linked</span>
+<td>@if($bookValues[$asset->id]['source_current'])<span style="color:#176b42">Posted GL source linked</span>
+@elseif($bookValues[$asset->id]['capitalized'])<strong style="color:#ae352c">Linked GL source reversed / unposted</strong>
 @else<a href="{{ route('assets.show',$asset) }}" style="color:#ac621e">Needs GL matching</a>@endif</td>
 <td>{{ $policy?->expenseLedger?->code??'—' }} / {{ $policy?->accumulatedLedger?->code??'—' }}</td></tr>
 @empty<tr><td colspan="9">No registered assets.</td></tr>@endforelse
