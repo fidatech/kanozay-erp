@@ -16,6 +16,11 @@ class ModulePageController extends Controller
         if ($module==='manufacturing' && $page==='costing') {
             return app(ProductionCostAllocationController::class)->index($request);
         }
+        if($module==='manufacturing' && $page==='cost-accounting'){
+            return app(ManufacturingCostAccountingController::class)->index(
+                $request,app(\App\Services\ProductionCostReadinessService::class)
+            );
+        }
 
         if ($module==='purchases' && $page==='supplier-advances') {
             return app(SupplierAdvanceController::class)->index($request,app(\App\Services\SupplierAdvanceService::class));
