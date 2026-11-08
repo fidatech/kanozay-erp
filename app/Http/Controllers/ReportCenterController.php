@@ -12,6 +12,12 @@ use App\Models\ProductionBatchCost;
 use App\Models\ProductionOrder;
 use App\Models\PurchaseOrder;
 use App\Models\SalesInvoice;
+use App\Models\SalesDeliveryNote;
+use App\Models\SalesCreditNote;
+use App\Models\QualitySample;
+use App\Models\QualityNonconformance;
+use App\Support\ErpInterfaceLabels;
+use App\Support\ReportingLabels;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -71,14 +77,15 @@ class ReportCenterController extends Controller
             });
         }
 
-        $columns = $definition['columns'];
+        $columns = array_map([ReportingLabels::class,'column'],$definition['columns']);
         $formatter = $definition['format'];
-        $title = config('erp_pages.reports.pages.'.$report);
+        $title = ErpInterfaceLabels::page('reports',$report);
         $note = $definition['note'];
 
         if (($filters['export'] ?? null) === 'csv') {
             return response()->streamDownload(function () use ($query, $columns, $formatter) {
                 $out = fopen('php://output', 'w');
+                fwrite($out,"\xEF\xBB\xBF");
                 fputcsv($out, $columns);
 
                 (clone $query)->reorder('id')->chunkById(250, function ($chunk) use ($out, $formatter) {
@@ -127,7 +134,7 @@ class ReportCenterController extends Controller
                 'query' => InventoryMaterial::query(),
                 'date' => null, 'search' => ['sku', 'name'],
                 'columns' => ['SKU', 'Material', 'Unit', 'On hand', 'Reserved', 'Available', 'Type'],
-                'note' => 'Current company-wide stock snapshot. Date filters do not apply; individual warehouse stock is not tracked by this ledger.',
+                'note' => 'Current company-wide material on-hand and reservation snapshot. Individual warehouse balances and FIFO lot locations are tracked in the warehouse stock and valuation registers. Date filters do not apply here.',
                 'format' => fn (InventoryMaterial $r) => $this->row([
                     $r->sku, $r->name, $r->unit, (string) $r->on_hand_quantity,
                     (string) $r->reserved_quantity, (string) $r->available_quantity,
@@ -159,7 +166,7 @@ class ReportCenterController extends Controller
                 'query' => ProductionBatchCheck::query()->with(['batch.order']),
                 'date' => 'created_at', 'search' => ['test_name'],
                 'columns' => ['Test date', 'Batch', 'Production order', 'Test', 'Result', 'Specification', 'Observation'],
-                'note' => 'Immutable laboratory test observations, including failed tests. No test result is inferred.',
+                'note' => 'Production-batch quick checks, including failures. Formal collected laboratory sample results and independently reviewed specifications are listed in the separate Laboratory Sample report.',
                 'format' => fn (ProductionBatchCheck $r) => $this->row([
                     $r->created_at?->format('Y-m-d') ?? '',
                     $r->batch?->batch_number ?? '',
@@ -192,14 +199,16 @@ class ReportCenterController extends Controller
             'costing' => [
                 'query' => ProductionBatchCost::query()->with(['batch.order']),
                 'date' => 'created_at', 'search' => [],
-                'columns' => ['Batch', 'Production order', 'Currency', 'Raw-material cost', 'Costed quantity', 'Unvalued quantity'],
-                'note' => 'Frozen raw-material cost snapshots for released batches, separated by source currency. This does not include labor, factory overhead or a complete finished-goods unit cost.',
+                'columns' => ['Batch', 'Production order', 'Currency', 'Ingredient cost', 'Packaging cost', 'Total material cost', 'Costed quantity', 'Unvalued quantity'],
+                'note' => 'Frozen material cost snapshots, with ingredients and packaging separated where the source record captured them. Legacy category splits remain unknown. No cross-currency aggregation, complete labor/overhead valuation or fabricated finished-goods unit cost is provided.',
                 'format' => fn (ProductionBatchCost $r) => $this->row([
                     $r->batch?->batch_number ?? '',
                     $r->batch?->order?->number ?? '',
                     $r->currency_code ?? 'Unvalued',
-                    $r->material_cost === null ? 'Unknown' : (string) $r->material_cost,
-                    (string) $r->consumed_quantity, (string) $r->unvalued_quantity,
+                    $r->ingredient_cost === null ? 'Legacy / unavailable' : (string)$r->ingredient_cost,
+                    $r->packaging_cost === null ? 'Legacy / unavailable' : (string)$r->packaging_cost,
+                    $r->material_cost === null ? 'Unknown' : (string)$r->material_cost,
+                    (string)$r->consumed_quantity,(string)$r->unvalued_quantity,
                 ], $r->batch?->production_order_id
                     ? route('production.orders.show', $r->batch->production_order_id) : null),
             ],
@@ -218,7 +227,7 @@ class ReportCenterController extends Controller
                 'query' => ProductionBatch::query()->with(['order', 'finishedGood', 'dispatchLines']),
                 'date' => 'created_at', 'search' => ['batch_number'],
                 'columns' => ['Batch', 'Product SKU', 'Production order', 'QC status', 'Reported packages', 'Accepted packages', 'Rejected packages', 'Gross dispatched'],
-                'note' => 'Batch to production-order and dispatch trace. Gross dispatched packages do not subtract customer returns. Supplier raw-material lot trace remains incomplete.',
+                'note' => 'Finished-batch status and original gross dispatch. Gross dispatch does not subtract customer-credit returns. Detailed original supplier/GRN/FIFO input-lot provenance is available from batch and reverse source-lot traceability; historical source gaps remain explicitly unresolved.',
                 'format' => fn (ProductionBatch $r) => $this->row([
                     $r->batch_number, $r->finishedGood?->sku ?? '',
                     $r->order?->number ?? '', $r->status,
@@ -227,6 +236,53 @@ class ReportCenterController extends Controller
                     (string) $r->dispatchLines->sum('quantity_packages'),
                 ], $r->production_order_id
                     ? route('production.orders.show', $r->production_order_id) : null),
+            ],
+            'delivery-notes'=>[
+                'query'=>SalesDeliveryNote::query()->with('invoice'),
+                'date'=>'delivery_date','search'=>['number','received_by','reference'],
+                'columns'=>['Delivery note','Original invoice','Delivery date','Status','Received by','Proof reference'],
+                'note'=>'Delivery notes describe logistics documentation and customer-confirmed receipt, not additional inventory issues. Returned and cancelled notes remain visible for audit.',
+                'format'=>fn(SalesDeliveryNote $r)=>$this->row([
+                    $r->number,$r->invoice?->number??'',
+                    $r->delivery_date?->toDateString()??'',
+                    $r->status,$r->received_by??'Awaiting receipt',
+                    $r->reference??'See tracking evidence',
+                ],route('sales.delivery-notes.show',$r)),
+            ],
+            'sales-credits'=>[
+                'query'=>SalesCreditNote::query()->with('invoice'),
+                'date'=>'credit_date','search'=>['number','reason'],
+                'columns'=>['Credit note','Original invoice','Credit date','Currency','Amount','Description'],
+                'note'=>'Posted customer credit notes in their source currency. A credit reverses an invoiced amount but does not prove cash refund or the physical return of saleable finished-goods stock.',
+                'format'=>fn(SalesCreditNote $r)=>$this->row([
+                    $r->number,$r->invoice?->number??'',
+                    $r->credit_date?->toDateString()??'',
+                    $r->currency_code,(string)$r->total,$r->reason,
+                ],route('sales.credit-notes.show',$r)),
+            ],
+            'qc-samples'=>[
+                'query'=>QualitySample::query(),
+                'date'=>'collected_on','search'=>['number','source_type','status'],
+                'columns'=>['Sample','Source','Date','Status','Reference'],
+                'note'=>'Formal source-linked laboratory samples. Approval reflects the current review decision; required specification versions were frozen for new samples, while legacy sample history may lack that evidence.',
+                'format'=>fn(QualitySample $r)=>$this->row([
+                    $r->number,$r->source_type,
+                    $r->collected_on?->toDateString()??'',
+                    $r->status,
+                    $r->production_batch_id?'Production batch #'.$r->production_batch_id:'GRN line #'.$r->goods_receipt_line_id,
+                ],route('laboratory.samples.show',$r->id)),
+            ],
+            'nonconformances'=>[
+                'query'=>QualityNonconformance::query(),
+                'date'=>'opened_on','search'=>['number','severity','status'],
+                'columns'=>['NCR','Severity','Opened','Review due','Status','Description'],
+                'note'=>'Recorded quality nonconformance investigations and corrective actions. Closing an investigation never directly releases rejected materials, a held FIFO lot or affected finished goods.',
+                'format'=>fn(QualityNonconformance $r)=>$this->row([
+                    $r->number,$r->severity,
+                    $r->opened_on?->toDateString()??'',
+                    $r->due_on?->toDateString()??'',
+                    $r->status,$r->description,
+                ],route('workspace.page',['laboratory','nonconformances'])),
             ],
             default => null,
         };
