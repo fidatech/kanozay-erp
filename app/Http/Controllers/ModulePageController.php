@@ -181,6 +181,11 @@ class ModulePageController extends Controller
             return app(PurchaseOrderController::class)->index($request);
         }
 
+        if($module==='reports' && $page==='overview'){
+            return app(OperationsAnalyticsController::class)->index(
+                $request,app(\App\Services\OperationsAnalyticsService::class)
+            );
+        }
         if ($module === 'reports' && $page !== 'overview') {
             return app(ReportCenterController::class)->show($request, $page);
         }
