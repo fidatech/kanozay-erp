@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\FinancialAccount;
-use App\Models\LedgerAccount;
 use App\Models\PurchaseOrder;
 use App\Models\TradeDocument;
 use App\Services\SupplierAdvanceService;
@@ -38,10 +37,9 @@ class SupplierAdvanceController extends Controller
    ->orderByDesc('a.id')->limit(100)->get();
   $orders=PurchaseOrder::with(['supplier','currency'])->where('status','confirmed')->latest('id')->limit(500)->get();
   $accounts=FinancialAccount::with('currency')->where('is_active',true)->orderBy('name')->get();
-  $ledgers=LedgerAccount::where('type','asset')->where('is_active',true)->where('is_group',false)->orderBy('code')->get();
   $payables=TradeDocument::with(['party','currency'])->where('type','payable')
    ->orderByDesc('id')->limit(500)->get();
-  return view('purchases.supplier-advances',compact('advances','applications','orders','accounts','ledgers','payables'));
+  return view('purchases.supplier-advances',compact('advances','applications','orders','accounts','payables'));
  }
 
  public function pay(Request $request,SupplierAdvanceService $service)
@@ -51,7 +49,6 @@ class SupplierAdvanceController extends Controller
    'purchase_order_id'=>['required',Rule::exists('purchase_orders','id')->where('status','confirmed')],
    'submission_token'=>['required','uuid'],
    'source_account_id'=>['required',Rule::exists('financial_accounts','id')->where('is_active',true)],
-   'advance_ledger_id'=>['required','exists:ledger_accounts,id'],
    'paid_on'=>['required','date','before_or_equal:today'],
    'amount'=>['required','numeric','gt:0','decimal:0,4','max:999999999999.9999'],
    'reference'=>['required','string','min:3','max:120'],
