@@ -39,8 +39,8 @@ class SalesReturnQuarantineController extends Controller {
       ->whereIn('reviewed.status',['submitted','approved','held','posted'])
       ->select('reviewed.*','journal.number as journal_number',
           'journal.status as journal_status','currency.code as currency_code')
-      ->orderBy('reviewed.id')->limit(1500)->get()
-      ->keyBy('sales_return_quarantine_id');
+      ->orderByDesc('reviewed.id')->limit(1500)->get()
+      ->reverse()->keyBy('sales_return_quarantine_id');
   }
   return view('sales.return-quarantine',[
    'mayViewCosts'=>$mayViewCosts,'returnCosts'=>$returnCosts,
