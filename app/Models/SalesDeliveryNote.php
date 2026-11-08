@@ -18,4 +18,5 @@ class SalesDeliveryNote extends Model
     public function invoice(){return $this->belongsTo(SalesInvoice::class,'sales_invoice_id');}
     public function lines(){return $this->hasMany(SalesDeliveryNoteLine::class,'sales_delivery_note_id');}
     public function creator(){return $this->belongsTo(User::class,'created_by');}
+    public function deliveryProof(){return $this->hasOne(SalesDeliveryTrackingEvent::class,'sales_delivery_note_id')->where('status','delivered')->latestOfMany('id');}
 }
