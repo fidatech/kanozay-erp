@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\InventoryMaterial;
+use App\Models\ActivityLog;
 use App\Models\ProductionOrder;
 use Brick\Math\BigDecimal;
 use Illuminate\Support\Facades\DB;
@@ -54,6 +55,9 @@ class ProductionMaterialService
                 $line->update(['reserved_quantity' => (string) $line->required_quantity]);
             }
             $order->update(['status' => 'reserved']);
+            ActivityLog::record('production.materials.reserved','production_order',$order->id,
+                'Material quantities reserved without posting a physical stock issue.',
+                ['material_lines'=>$lines->count(),'unique_materials'=>count($requirements)]);
         });
     }
 
@@ -133,6 +137,11 @@ class ProductionMaterialService
                 }
             }
             $order->update(['status' => 'issued']);
+            ActivityLog::record('production.materials.issued','production_order',$order->id,
+                'Actual material quantities issued and unused global reservations released.',
+                ['material_lines'=>$lines->count(),'issued_at'=>$date,
+                 'sourced_locations'=>array_values(array_unique(array_map(
+                     fn($id)=>$id===null?'unassigned':(string)$id,$warehouseIds)))]);
         });
     }
 
@@ -142,6 +151,8 @@ class ProductionMaterialService
             $order = ProductionOrder::query()->lockForUpdate()->findOrFail($order->id);
             if ($order->status === 'planned') {
                 $order->update(['status' => 'cancelled']);
+                ActivityLog::record('production.order.cancelled','production_order',$order->id,
+                    'Unreserved production plan cancelled.');
                 return;
             }
             $this->assertStatus($order, 'reserved');
@@ -160,6 +171,8 @@ class ProductionMaterialService
                 $line->update(['reserved_quantity' => '0.000000']);
             }
             $order->update(['status' => 'cancelled']);
+            ActivityLog::record('production.order.cancelled','production_order',$order->id,
+                'Reserved production plan cancelled and unused material reservations released.');
         });
     }
 
