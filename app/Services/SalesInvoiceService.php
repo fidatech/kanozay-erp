@@ -101,6 +101,12 @@ class SalesInvoiceService
                         $this->reject('Invoice quantity exceeds the remaining quantity on the selected sales order line.');
                     }
                 }
+                // A released physical batch is not automatically GL-valued.
+                // Source-cost capitalization is required before its next
+                // customer dispatch; otherwise stock and COGS diverge.
+                app(FinishedGoodsCostPostingService::class)->assertCapitalized(
+                    (int)$batch->id,$data['invoice_date']
+                );
                 $dispatch = $this->dispatches->post(
                     (int) $batch->finished_good_id,
                     (int) $batch->id,
@@ -114,7 +120,7 @@ class SalesInvoiceService
                     ],
                     $actorId,
                 );
-                $invoice->lines()->create([
+                $invoiceLine=$invoice->lines()->create([
                     'sales_order_line_id' => $orderLineId,
                     'finished_good_id' => $batch->finished_good_id,
                     'production_batch_id' => $batch->id,
@@ -123,6 +129,11 @@ class SalesInvoiceService
                     'unit_price' => (string) BigDecimal::of((string) $line['unit_price'])->toScale(4, RoundingMode::HalfUp),
                     'line_total' => (string) $item['total']->toScale(4, RoundingMode::HalfUp),
                 ]);
+                // The sales posting and original-currency COGS entries share
+                // this DB transaction. On failure every dispatch and journal
+                // rolls back with the invoice, avoiding half-posted sales.
+                app(FinishedGoodsCostPostingService::class)
+                    ->postInvoiceLine($invoiceLine,$actorId);
             }
 
             $journal = JournalEntry::create([
