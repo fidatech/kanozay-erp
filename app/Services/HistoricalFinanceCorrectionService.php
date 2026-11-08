@@ -224,6 +224,12 @@ class HistoricalFinanceCorrectionService
             $case=DB::table('finance_historical_correction_cases')
                 ->where('id',$caseId)->lockForUpdate()->first();
             abort_unless($case,404);
+            if(DB::table('finance_historical_dispatch_dispositions')
+                   ->where('finance_historical_correction_case_id',$caseId)->exists() ||
+               DB::table('finance_supplier_return_credit_disputes')
+                   ->where('finance_historical_correction_case_id',$caseId)->exists()){
+                $this->fail('This case already contains independently signed physical dispatch or supplier dispute evidence. It cannot be withdrawn without a dedicated source-document amendment workflow.');
+            }
             if($case->status==='submitted'){
                 if((int)$case->requested_by!==$actorId)
                     $this->fail('Only the original requester may withdraw an unreviewed case.');
