@@ -88,7 +88,7 @@
  @endif
  @endcanany
  <div class="table-wrap"><table>
-  <thead><tr><th>Deposit</th><th>Date</th><th>Currency</th><th>Original</th><th>Unapplied</th><th>Apply to invoice</th></tr></thead><tbody>
+  <thead><tr><th>Deposit</th><th>Date</th><th>Currency</th><th>Original</th><th>Unapplied</th><th>Apply to invoice</th><th>Refund unused</th></tr></thead><tbody>
   @forelse($customerAdvances as $advance)
   <tr>
    <td><strong>{{ $advance->number }}</strong><small style="display:block">{{ $advance->reference }}</small></td>
@@ -116,8 +116,28 @@
     @endif
     @endcanany
    </td>
+   <td>
+    @canany(['administration.update','finance.update'])
+    @if(\Brick\Math\BigDecimal::of((string)$advance->remaining)->isPositive() && $cashboxes->contains(fn($cash)=>(int)$cash->currency_id===(int)$advance->currency_id))
+    <form method="POST" action="{{ route('finance.customers.advances.refund',['party'=>$party,'advance'=>$advance->id]) }}" style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
+     @csrf<input type="hidden" name="submission_token" value="{{ (string)\Illuminate\Support\Str::uuid() }}">
+     <input type="date" name="refunded_on" value="{{ date('Y-m-d') }}" required aria-label="Refund date" style="max-width:145px">
+     <select name="source_account_id" required aria-label="Refund source" style="max-width:180px"><option value="">Payment account</option>
+      @foreach($cashboxes as $account)
+       @if((int)$account->currency_id===(int)$advance->currency_id)
+        <option value="{{ $account->id }}">{{ ucfirst($account->type) }}: {{ $account->name }}</option>
+       @endif
+      @endforeach
+     </select>
+     <input name="amount" type="text" inputmode="decimal" maxlength="25" required placeholder="Amount" aria-label="Refund amount" style="max-width:110px">
+     <input name="reference" maxlength="120" required placeholder="Refund reference" aria-label="Refund reference" style="max-width:150px">
+     <button type="submit" class="btn btn-light">Refund</button>
+    </form>
+    @endif
+    @endcanany
+   </td>
   </tr>
-  @empty<tr><td colspan="6">No customer advance deposits recorded.</td></tr>
+  @empty<tr><td colspan="7">No customer advance deposits recorded.</td></tr>
   @endforelse
   </tbody></table></div>
 </section>
