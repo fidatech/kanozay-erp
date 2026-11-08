@@ -130,6 +130,7 @@ Route::middleware('auth')->get('/sales/quotations/{quotation}', [\App\Http\Contr
 Route::middleware('auth')->post('/sales/quotations/{quotation}/accept', [\App\Http\Controllers\SalesOrderController::class, 'accept'])->name('sales.orders.accept');
 Route::middleware('auth')->get('/sales/orders', [\App\Http\Controllers\SalesOrderController::class, 'index'])->name('sales.orders.index');
 Route::middleware('auth')->get('/sales/orders/{order}', [\App\Http\Controllers\SalesOrderController::class, 'show'])->name('sales.orders.show');
+Route::middleware('auth')->post('/sales/orders/{order}/cancel', [\App\Http\Controllers\SalesOrderController::class, 'cancel'])->name('sales.orders.cancel');
 Route::middleware('auth')->post('/production/finished-goods', [\App\Http\Controllers\FinishedGoodController::class, 'store'])->name('production.finished-goods.store');
 Route::middleware('auth')->post('/production/orders/{order}/batches', [\App\Http\Controllers\ProductionBatchController::class, 'store'])->name('production.orders.batches.store');
 Route::middleware('auth')->post('/production/orders/{order}/batches/{batch}/checks', [\App\Http\Controllers\ProductionBatchController::class, 'check'])->name('production.orders.batches.checks.store');
