@@ -75,7 +75,8 @@ class InventoryLotLocationService
         ?int $fromId,
         int $toId,
         BigDecimal $quantity,
-        int $warehouseMovementId
+        int $warehouseMovementId,
+        string $movementDate
     ): void {
         $needed = $quantity;
         $layers = InventoryCostLayer::where('inventory_material_id', $material->id)
@@ -86,6 +87,22 @@ class InventoryLotLocationService
             ->whereIn('inventory_cost_layer_id',$layers->pluck('id'))
             ->where('location_key',$this->key($fromId))
             ->lockForUpdate()->get()->keyBy('inventory_cost_layer_id');
+        // Unknown historical positions cannot be bypassed when selecting
+        // newer lots for FIFO transfers.
+        $allPositions = DB::table('inventory_cost_layer_locations')
+            ->whereIn('inventory_cost_layer_id',$layers->pluck('id'))
+            ->lockForUpdate()->get()->groupBy('inventory_cost_layer_id');
+        foreach($layers as $layer){
+            $sum=BigDecimal::zero();
+            foreach($allPositions->get($layer->id,collect()) as $position){
+                $sum=$sum->plus((string)$position->quantity);
+            }
+            if(!$sum->isEqualTo((string)$layer->remaining_quantity)){
+                throw ValidationException::withMessages([
+                    'quantity'=>'Unreconciled lot locations or excess positions detected. Reconcile historical cost layers before warehouse transfers.',
+                ]);
+            }
+        }
         $changes = [];
         foreach ($layers as $layer) {
             if (! $needed->isPositive()) break;
@@ -95,6 +112,11 @@ class InventoryLotLocationService
             $atSource = BigDecimal::of((string)$position->quantity);
             if (! $atSource->isPositive()) continue;
             $take = $atSource->isLessThan($needed) ? $atSource : $needed;
+            if($movementDate < $layer->received_on->toDateString()){
+                throw ValidationException::withMessages([
+                    'occurred_on'=>'A transfer cannot be dated before the original FIFO lot was received.',
+                ]);
+            }
             $changes[] = [$layer,$position,$take];
             $needed = $needed->minus($take);
         }
