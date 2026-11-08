@@ -133,7 +133,11 @@ class ProductionOrderController extends Controller {
             ? FinishedGood::where('is_active', true)->orderBy('sku')->get()
             : collect();
         $warehouses=\App\Models\CompanyWarehouse::where('is_active',true)->orderBy('name')->get();
-        return view('production.order-show', compact('order', 'materials', 'catalogMaterials', 'finishedGoods','warehouses'));
+        $wasteReviewSummary=app(\App\Services\ProductionWasteFinancialReviewService::class)
+            ->summaryForOrder($order->id);
+        return view('production.order-show', compact(
+            'order','materials','catalogMaterials','finishedGoods','warehouses','wasteReviewSummary'
+        ));
     }
 
     public function linkMaterial(Request $request, ProductionOrder $order, ProductionOrderMaterial $materialLine) {
@@ -192,6 +196,27 @@ class ProductionOrderController extends Controller {
         ]);
         $service->record($order, $materialLine, $data['quantity'], $data['reason'], $data['submission_token'], $request->user()->id);
         return back()->with('success', 'Material waste recorded against the issued quantity. Stock was not deducted again.');
+    }
+
+    public function reviewWaste(Request $request, ProductionOrder $order,
+        \App\Models\ProductionMaterialWaste $waste,
+        \App\Services\ProductionWasteFinancialReviewService $service)
+    {
+        abort_unless($request->user()->can('administration.update') ||
+            ($request->user()->can('finance.update') &&
+             $request->user()->can('manufacturing.view')),403);
+        abort_unless((int)$waste->materialLine->production_order_id===(int)$order->id,404);
+        $data=$request->validate([
+            'treatment'=>['required',\Illuminate\Validation\Rule::in([
+                'normal_process_loss','abnormal_loss','rework_required',
+            ])],
+            'approval_reference'=>['required','string','min:4','max:180'],
+            'review_notes'=>['required','string','min:20','max:3000'],
+            'confirm_no_second_stock_issue'=>['accepted'],
+        ]);
+        $service->review($waste->id,$data,$request->user()->id);
+        return back()->with('success',
+            'Recorded issued-material loss classified with independent financial evidence. No additional stock issue or unsupported GL journal was created.');
     }
 
     public function cancel(Request $request, ProductionOrder $order, ProductionMaterialService $service) {
