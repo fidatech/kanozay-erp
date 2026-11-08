@@ -56,7 +56,7 @@ class QualityNonconformanceController extends Controller
                 throw ValidationException::withMessages(['submission_token'=>'This nonconformance submission is already recorded.']);
             }
             $id=DB::table('quality_nonconformances')->insertGetId([
-                'number'=>'NCR-PENDING-'.Str::uuid(),
+                'number'=>'TMP-'.Str::uuid(),
                 'submission_token'=>$data['submission_token'],
                 'quality_sample_id'=>$sample?->id,
                 'inventory_cost_layer_id'=>$lot?->id,
