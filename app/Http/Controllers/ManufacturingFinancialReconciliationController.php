@@ -31,7 +31,10 @@ class ManufacturingFinancialReconciliationController extends Controller
                     'Packages costed to COGS','Packages costed to non-sale expenses','Costed QC returns',
                     'Physical remaining packages','Financial remaining packages',
                     'Gross source material cost','Abnormal FIFO loss expensed',
-                    'Net capitalized value','Posted COGS','Posted non-sale inventory expenses','Returned inventory cost',
+                    'Net capitalized value','Original gross COGS','Posted non-sale inventory expenses',
+                    'QC scrapped-return loss reclassification','QC scrapped packages',
+                    'Net sales COGS after return recoveries and scrap reclassification',
+                    'Returned inventory cost',
                     'Financial remaining asset value','Reconciliation exceptions']);
                 $query->orderBy('id')->chunkById(75,function($batches)use($service,$out){
                     foreach($service->rows($batches) as $row){
@@ -43,7 +46,10 @@ class ManufacturingFinancialReconciliationController extends Controller
                             $row['gross_material_source_cost'],
                             $row['abnormal_waste_expensed'],
                             $row['total_capitalized'],$row['posted_cogs'],
-                            $row['posted_non_sale_expense'],$row['returned_cost'],$row['remaining_asset_value'],
+                            $row['posted_non_sale_expense'],
+                            $row['posted_scrapped_return_loss'],$row['qc_scrapped_packages'],
+                            $row['net_sales_cogs_after_returns_and_scrap'],
+                            $row['returned_cost'],$row['remaining_asset_value'],
                             implode(' | ',$row['issues']),
                         ];
                         fputcsv($out,array_map(
