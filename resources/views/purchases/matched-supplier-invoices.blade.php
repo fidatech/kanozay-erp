@@ -19,7 +19,7 @@
 <p class="si-note">Posting recognizes a verified supplier liability; it does not receive stock again. Unit prices are frozen at the GRN and must match the purchase order. Shipping, tax, discounts, FX and advances require separate reconciliation.</p>
 </section>
 @if($receipt)
-@canany(['administration.update','purchases.update'])
+@if(auth()->user()->can('administration.update') || (auth()->user()->can('purchases.update') && auth()->user()->can('finance.update')))
 <section class="si-panel"><h2>Match supplier invoice against {{ $receipt->number }}</h2>
 <p>Supplier: {{ $receipt->purchaseOrder?->supplier?->name }} · PO {{ $receipt->purchaseOrder?->number }} · Currency {{ $receipt->purchaseOrder?->currency?->code }}</p>
 <form method="POST" class="si-grid" action="{{ route('purchases.matched-supplier-invoices.store') }}">@csrf
@@ -35,7 +35,7 @@
 <td><input name="quantities[{{ $l->id }}]" inputmode="decimal" aria-label="Bill quantity for {{ $l->material?->name }}" placeholder="0"></td></tr>@endforeach
 </tbody></table></div>
 <div><button class="btn" type="submit" onclick="return confirm('Post source-matched supplier invoice to payables?')">Post matched payable</button></div>
-</form></section>@endcanany
+</form></section>@endif
 @endif
 <section class="si-panel"><h2>Matched supplier invoices</h2><div class="si-wrap"><table><thead><tr><th>Our number</th><th>Supplier invoice</th><th>Supplier</th><th>GRN</th><th>Currency</th><th>Payable amount</th><th>GL document</th></tr></thead><tbody>
 @forelse($invoices as $i)<tr><td><a href="{{ route('purchases.matched-supplier-invoices.show',$i) }}">{{ $i->number }}</a></td><td>{{ $i->supplier_invoice_number }}</td><td>{{ $i->supplier?->name }}</td><td>{{ $i->receipt?->number }}</td><td>{{ $i->currency?->code }}</td><td>{{ $i->total }}</td><td>{{ $i->payable?->number }}</td></tr>
