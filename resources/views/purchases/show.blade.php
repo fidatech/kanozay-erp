@@ -57,7 +57,28 @@ $hasSubtotal=$subtotal->compareTo(\Brick\Math\BigDecimal::zero())>0;
 <div class="po-card"><small>Items subtotal</small><strong><x-finance-amount :amount="$subtotal" /> {{ $currency }}</strong></div>
 <div class="po-card"><small>Purchase expenses</small><strong><x-finance-amount :amount="$expenses" /> {{ $currency }}</strong></div>
 <div class="po-card"><small>Estimated landed cost</small><strong><x-finance-amount :amount="$landed" /> {{ $currency }}</strong></div>
-<div class="po-card"><small>Supplier balance (unposted)</small><strong><x-finance-amount :amount="$balance" /> {{ $currency }}</strong></div>
+<div class="po-card"><small>Draft estimate minus PO advance notes</small><strong><x-finance-amount :amount="$balance" /> {{ $currency }}</strong></div>
+</div>
+<div class="panel">
+<h2>Posted supplier invoice and advance summary</h2>
+<p class="muted">Only actual GRN-matched payable invoices and posted supplier advance payments for this PO are included. Estimates and draft advance notes are excluded.</p>
+<div class="po-cards">
+<div class="po-card"><small>Posted invoice amount</small><strong><x-finance-amount :amount="$purchaseFinanceSnapshot['invoiced']" /> {{ $currency }}</strong></div>
+<div class="po-card"><small>Remaining supplier payable</small><strong><x-finance-amount :amount="$purchaseFinanceSnapshot['outstanding']" /> {{ $currency }}</strong></div>
+<div class="po-card"><small>Unapplied supplier advances</small><strong><x-finance-amount :amount="$purchaseFinanceSnapshot['unapplied_advances']" /> {{ $currency }}</strong></div>
+<div class="po-card"><small>Matched invoices</small><strong>{{ $matchedInvoices->count() }}</strong></div>
+</div>
+@if($matchedInvoices->isNotEmpty())
+<div class="table-wrap"><table>
+<thead><tr><th>Matched invoice</th><th>Supplier invoice</th><th>GRN</th><th>Invoice amount</th><th>Payable document</th></tr></thead><tbody>
+@foreach($matchedInvoices as $invoice)
+<tr><td><a href="{{ route('purchases.matched-supplier-invoices.show',$invoice) }}">{{ $invoice->number }}</a></td>
+<td>{{ $invoice->supplier_invoice_number }}</td>
+<td>{{ $invoice->receipt?->number }}</td><td><x-finance-amount :amount="$invoice->total" /></td>
+<td>{{ $invoice->payable?->number }}</td></tr>
+@endforeach
+</tbody></table></div>
+@endif
 </div>
 <div class="panel"><h2>Items and Estimated Landed Cost</h2><div class="table-wrap"><table>
 <thead><tr><th>Description</th><th>Inventory material</th><th>Quantity</th><th>Unit Price</th><th>Line Total</th><th>Allocated Expenses</th><th>Estimated Landed Total</th><th>Actions</th></tr></thead>
@@ -116,7 +137,7 @@ $hasSubtotal=$subtotal->compareTo(\Brick\Math\BigDecimal::zero())>0;
 @canany(['purchases.view','inventory.view','administration.view'])
 <p><a class="btn btn-light" href="{{ route('workspace.page',['purchases','purchase-returns']) }}">Return goods to supplier</a></p>
 @endcanany
-<p class="muted">Only confirmed orders can receive goods. Quantities use the linked material's unit. Posting a GRN increases inventory immediately and freezes purchase prices in the order currency. These snapshots exclude other landed costs and accounting entries. A base-currency purchase equivalent is shown only when an explicit direct historical exchange rate was available on the receipt date; it is not an inventory valuation.</p>
+<p class="muted">Only confirmed orders can receive goods. Quantities use the linked material's unit. Posting a GRN increases warehouse/unassigned stock and creates inventory cost layers. Purchase unit-price snapshots are frozen in the order currency, while landed-cost adjustments are recorded separately. The GRN alone does not create a supplier payable journal. A base-currency purchase equivalent is shown only when an explicit direct historical exchange rate was available on the receipt date; it is not an inventory valuation.</p>
 @if(in_array($order->status,['confirmed','partially_received'],true))
 @can('inventory.update')
 <form method="POST" action="{{ route('purchases.orders.receipts.store',$order) }}" style="margin:16px 0">@csrf
@@ -142,7 +163,7 @@ $hasSubtotal=$subtotal->compareTo(\Brick\Math\BigDecimal::zero())>0;
 </form>
 @endcan
 @endif
-<div class="table-wrap"><table><thead><tr><th>GRN number</th><th>Date</th><th>Supplier reference</th><th>Lines</th><th>Purchase value snapshot</th><th>Base purchase equivalent</th><th>Status</th></tr></thead><tbody>
+<div class="table-wrap"><table><thead><tr><th>GRN number</th><th>Date</th><th>Supplier reference</th><th>Lines</th><th>Purchase value snapshot</th><th>Base purchase equivalent</th><th>Status</th><th>Next step</th></tr></thead><tbody>
 @forelse($order->receipts as $receipt)
 
 <tr><td><strong>{{ $receipt->number }}</strong></td><td>{{ $receipt->received_on->format('Y-m-d') }}</td><td>{{ $receipt->supplier_reference ?? '—' }}</td><td>{{ $receipt->lines->count() }}</td><td>{{ $receipt->purchase_value_snapshot ?? 'Not captured' }}</td><td>
@@ -150,8 +171,13 @@ $hasSubtotal=$subtotal->compareTo(\Brick\Math\BigDecimal::zero())>0;
 @if($receipt->fx_rate_snapshot !== null)
 <small style="display:block;color:#648099">Rate: {{ $receipt->fx_rate_snapshot }}@if($receipt->fx_rate_effective_date) · {{ $receipt->fx_rate_effective_date->format('Y-m-d') }}@else · base currency @endif</small>
 @endif
-</td><td>{{ ucfirst($receipt->status) }}</td></tr>
-@empty<tr><td colspan="7" class="muted">No goods received yet.</td></tr>@endforelse
+</td><td>{{ ucfirst($receipt->status) }}</td>
+<td style="white-space:nowrap">
+<a href="{{ route('workspace.page',['purchases','goods-receipts','receipt_id'=>$receipt->id]) }}">Match invoice</a>
+<span class="muted"> · </span>
+<a href="{{ route('workspace.page',['purchases','purchase-returns','receipt_id'=>$receipt->id]) }}">Return</a>
+</td></tr>
+@empty<tr><td colspan="8" class="muted">No goods received yet.</td></tr>@endforelse
 </tbody></table></div>
 @foreach($order->receipts as $receipt)
 @if($receipt->status === 'posted' && $receipt->cost_currency_code && $receipt->lines->isNotEmpty() && $receipt->lines->every(fn ($line) => $line->line_subtotal_snapshot !== null))
