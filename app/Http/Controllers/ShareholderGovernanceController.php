@@ -27,7 +27,32 @@ class ShareholderGovernanceController extends Controller {
  }
  public function index(Request $request,string $page){
   abort_unless(in_array($page,self::PAGES,true),404);$this->check($request);
+  $filters=$request->validate(['as_of'=>['nullable','date','before_or_equal:today']]);
+  $asOf=$filters['as_of']??today()->toDateString();
+  // These are actual board-approved ownership event values, not a derived
+  // inference from historic capital contributions or journal balances.
+  $history=DB::table('shareholder_ownership_changes as change')
+    ->join('shareholder_ownership_records as current',
+      'current.id','=','change.ownership_record_id')
+    ->join('shareholders as owner','owner.id','=','current.shareholder_id')
+    ->whereDate('change.effective_on','<=',$asOf)
+    ->orderBy('change.ownership_record_id')
+    ->orderByDesc('change.effective_on')->orderByDesc('change.id')
+    ->select('change.*','current.share_class','owner.name as shareholder_name')
+    ->get()->unique('ownership_record_id')->values();
+  $ownershipSnapshot=$history->filter(fn($row)=>BigDecimal::of((string)$row->new_percentage)->isPositive());
+  $classTotals=[];
+  foreach($ownershipSnapshot as $row){
+    $code=mb_strtoupper($row->share_class);
+    $classTotals[$code]=isset($classTotals[$code])
+      ?$classTotals[$code]->plus((string)$row->new_percentage)
+      :BigDecimal::of((string)$row->new_percentage);
+  }
+  foreach($classTotals as $class=>$total)$classTotals[$class]=(string)$total->toScale(4);
   return view('shareholders.governance',[
+   'ownershipAsOf'=>$asOf,
+   'ownershipSnapshot'=>$ownershipSnapshot,
+   'ownershipClassTotals'=>$classTotals,
    'page'=>$page,'pageTitle'=>config('erp_pages.shareholders.pages.'.$page),
    'shareholders'=>Shareholder::where('is_active',true)->orderBy('name')->get(),
    'ownership'=>DB::table('shareholder_ownership_records as o')
@@ -58,7 +83,7 @@ class ShareholderGovernanceController extends Controller {
   $data=$request->validate([
    'shareholder_id'=>['required','integer',Rule::exists('shareholders','id')->where('is_active',true)],
    'share_class'=>['required','string','max:60','regex:/^[A-Za-z0-9 _-]+$/'],
-   'percentage'=>['required','numeric','gt:0','lte:100','decimal:0,4'],
+   'percentage'=>['required','numeric','gte:0','lte:100','decimal:0,4'],
    'effective_on'=>['required','date','before_or_equal:today'],
    'approval_reference'=>['required','string','min:4','max:180'],
   ]);
@@ -66,10 +91,25 @@ class ShareholderGovernanceController extends Controller {
    $shareClass=trim($data['share_class']);
    // Serialize cap table amendments to avoid concurrent allocations exceeding 100%.
    DB::table('shareholders')->where('id','>=',0)->orderBy('id')->lockForUpdate()->get();
+   // Share class names are case-insensitive for ownership arithmetic.
+   // Reject retroactive class amendments after later documented board events.
+   $classKey=mb_strtolower($shareClass);
+   $latestAmendment=DB::table('shareholder_ownership_changes as change')
+    ->join('shareholder_ownership_records as current',
+      'current.id','=','change.ownership_record_id')
+    ->whereRaw('LOWER(current.share_class) = ?',[$classKey])
+    ->max('change.effective_on');
+   if($latestAmendment && $data['effective_on']<$latestAmendment){
+    throw ValidationException::withMessages([
+     'effective_on'=>'Ownership amendments within a share class must be recorded chronologically. Enter a current effective date.',
+    ]);
+   }
    $existing=DB::table('shareholder_ownership_records')
-    ->where('shareholder_id',$data['shareholder_id'])->where('share_class',$shareClass)->first();
+    ->where('shareholder_id',$data['shareholder_id'])
+    ->whereRaw('LOWER(share_class) = ?',[$classKey])->first();
    $total=BigDecimal::zero();
-   foreach(DB::table('shareholder_ownership_records')->where('share_class',$shareClass)->get() as $record){
+   foreach(DB::table('shareholder_ownership_records')
+     ->whereRaw('LOWER(share_class) = ?',[$classKey])->get() as $record){
     if($existing && $record->id===$existing->id)continue;
     $total=$total->plus((string)$record->percentage);
    }
