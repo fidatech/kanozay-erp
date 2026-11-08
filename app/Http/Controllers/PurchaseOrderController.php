@@ -160,11 +160,51 @@ class PurchaseOrderController extends Controller {
    foreach($applicationAmounts->get($advance->id,collect()) as $application)$left=$left->minus((string)$application->amount);
    if($left->isPositive())$unappliedAdvances=$unappliedAdvances->plus($left);
   }
+  $landedCosts=\App\Models\GoodsReceiptLandedCost::with('allocations')
+    ->whereIn('goods_receipt_id',$order->receipts->pluck('id'))->get();
+  $landedPostings=DB::table('goods_receipt_landed_cost_postings as posting')
+    ->join('journal_entries as journal','journal.id','=','posting.journal_entry_id')
+    ->whereIn('posting.goods_receipt_landed_cost_id',$landedCosts->pluck('id'))
+    ->select('posting.*','journal.number as journal_number',
+        'journal.status as journal_status')
+    ->get()->keyBy('goods_receipt_landed_cost_id');
+  $expenseCandidates=collect();
+  if($landedCosts->isNotEmpty() &&
+      ($request->user()->can('administration.update') ||
+       ($request->user()->can('finance.update') && $request->user()->can('purchases.view')))){
+   $expenseCandidates=DB::table('journal_lines as line')
+    ->join('journal_entries as entry','entry.id','=','line.journal_entry_id')
+    ->join('ledger_accounts as ledger','ledger.id','=','line.ledger_account_id')
+    ->leftJoin('journal_entries as reversed','reversed.reversal_of_id','=','entry.id')
+    ->leftJoin('goods_receipt_landed_cost_postings as used',
+      'used.source_expense_journal_line_id','=','line.id')
+    ->where('entry.status','posted')->whereNull('entry.reversal_of_id')
+    ->whereNull('reversed.id')->whereNull('used.id')
+    ->where('entry.currency_id',$order->currency_id)
+    ->where('ledger.type','expense')->where('ledger.is_group',false)
+    ->where('ledger.is_active',true)
+    ->where('line.credit',0)
+    ->whereIn('line.debit',$landedCosts->pluck('amount')->unique()->values()->all())
+    ->whereNotExists(function($q){
+      $q->select(DB::raw(1))->from('production_overhead_allocations as overhead')
+        ->whereColumn('overhead.source_journal_line_id','line.id')
+        ->whereIn('overhead.status',['submitted','approved']);
+    })
+    ->select('line.id','line.debit','entry.entry_date',
+        'entry.number as journal_number','ledger.code as ledger_code')
+    ->orderByDesc('entry.entry_date')->limit(200)->get();
+  }
+  $landedExpenseCandidatesByAmount=$expenseCandidates->groupBy(
+    fn($row)=>(string)BigDecimal::of((string)$row->debit)->toScale(2)
+  );
   return view('purchases.show', [
    'order'=>$order,
    'materials'=>\App\Models\InventoryMaterial::where('is_active',true)->orderBy('name')->get(),
    'warehouses'=>\App\Models\CompanyWarehouse::where('is_active',true)->orderBy('code')->get(),
    'matchedInvoices'=>$matchedInvoices,
+   'landedCostsByReceipt'=>$landedCosts->groupBy('goods_receipt_id'),
+   'landedPostings'=>$landedPostings,
+   'landedExpenseCandidatesByAmount'=>$landedExpenseCandidatesByAmount,
    'receiptQcSummary'=>$receiptQcSummary,
    'purchaseFinanceSnapshot'=>[
     'invoiced'=>(string)$invoiced->toScale(4),
