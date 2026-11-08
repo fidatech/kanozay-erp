@@ -20,7 +20,7 @@
 @if($invoice)
 <section class="panel dn-form-panel">
 <h2>Invoice {{ $invoice->number }} / {{ $invoice->customer?->name }}</h2>
-<p class="muted">Available quantities reflect previous non-cancelled delivery notes. Issuing this document creates no extra stock issue, sales journal or customer debt.</p>
+<p class="muted">Available quantities subtract previous non-cancelled delivery notes and already credited customer returns. Issuing this document creates no extra stock issue, sales journal or customer debt.</p>
 <form method="POST" action="{{ route('sales.delivery-notes.store') }}" style="display:block">@csrf
 <input type="hidden" name="sales_invoice_id" value="{{ $invoice->id }}">
 <input type="hidden" name="submission_token" value="{{ old('submission_token',(string)\Illuminate\Support\Str::uuid()) }}">
@@ -32,12 +32,12 @@
 <label>Customer reference<input name="reference" maxlength="100" value="{{ old('reference') }}"></label>
 <label>Notes<input name="notes" maxlength="2000" value="{{ old('notes') }}"></label>
 </div>
-<div class="dn-table" style="margin-top:18px"><table><thead><tr><th>Finished product</th><th>Batch</th><th>Invoiced</th><th>Previously allocated</th><th>Available to note</th><th>Deliver now</th></tr></thead><tbody>
+<div class="dn-table" style="margin-top:18px"><table><thead><tr><th>Finished product</th><th>Batch</th><th>Invoiced</th><th>Documented or credited</th><th>Available to note</th><th>Deliver now</th></tr></thead><tbody>
 @foreach($invoice->lines as $line)
 @php($available=$remaining[$line->id]??0)
 <tr><td>{{ $line->finishedGood?->name }}</td><td>{{ $line->batch?->batch_number }}</td><td>{{ $line->quantity_packages }}</td>
 <td>{{ $line->quantity_packages-$available }}</td><td>{{ $available }}</td><td>
-@if($available>0)<input type="number" name="quantities[{{ $line->id }}]" min="0" max="{{ $available }}" step="1" value="{{ old('quantities.'.$line->id) }}" placeholder="0">@else <span class="muted">Fully allocated</span>@endif
+@if($available>0)<input type="text" name="quantities[{{ $line->id }}]" inputmode="numeric" min="0" max="{{ $available }}" step="1" value="{{ old('quantities.'.$line->id) }}" placeholder="0">@else <span class="muted">Already documented or credited</span>@endif
 </td></tr>
 @endforeach
 </tbody></table></div>
