@@ -83,7 +83,7 @@
  </tbody></table></div>
  @if($order->materials->sum(fn ($line) => $line->wastes->count()) > 0)
  <h3>Recorded material waste and finance disposition</h3>
- <p class="muted">Waste has already been included in the original raw-material issue; reviewing it never reduces stock twice. A different authorized finance reviewer must classify each loss before QC warehouse release. Normal process loss remains included in approved output cost only with documented policy evidence. Abnormal loss and unresolved rework must not be capitalized to saleable finished goods until a separate verified disposition and GL correction workflow exists.</p>
+ <p class="muted">Waste has already been included in the original raw-material issue; reviewing it never reduces stock twice. A different authorized finance reviewer must classify each loss before QC warehouse release. Normal process loss remains included in approved output cost only with documented policy evidence. An independently FIFO-valued abnormal loss is expensed at batch capitalization and excluded from finished-goods value. Unreviewed losses and unresolved rework remain blocked.</p>
  <p class="muted">Unreviewed: {{ $wasteReviewSummary['pending'] }} · Abnormal: {{ $wasteReviewSummary['abnormal'] }} · Rework pending: {{ $wasteReviewSummary['rework'] }}</p>
  <div class="table-wrap"><table><thead><tr><th>Material</th><th>Rejected quantity</th><th>Unit</th><th>Reason</th><th>Recorded at</th><th>Financial treatment</th></tr></thead><tbody>
  @foreach($order->materials as $line)
@@ -104,6 +104,50 @@
     } }}
    </strong>
    <div class="muted">Evidence: {{ $financialReview->approval_reference }}</div>
+   @if($financialReview->treatment==='abnormal_loss')
+    @php($abnormalCost=$abnormalCostReviews->get($waste->id))
+    @if($abnormalCost)
+     <div style="color:#176e48;font-weight:650;margin:7px 0">Exact FIFO source cost approved:
+     {{ \App\Support\ReportingLabels::decimal($abnormalCost->source_cost_amount) }}
+     (currency #{{ $abnormalCost->currency_id }})</div>
+     <div class="muted">Source approval: {{ $abnormalCost->approval_reference }}. The expense debit will post only with batch capitalization; no second stock issue is created.</div>
+    @elseif(in_array($order->status,['issued','pending_qc','qc_approved'],true) &&
+      (auth()->user()->can('administration.update') ||
+       (auth()->user()->can('finance.update') && auth()->user()->can('manufacturing.view'))))
+     <details style="margin:9px 0"><summary style="cursor:pointer">Allocate abnormal loss to original FIFO lots</summary>
+     <p class="muted">Assign exact lost quantities to the already-issued FIFO consumption entries. All quantities must add up to {{ $waste->quantity }} {{ $line->unit }}. Source amounts are original-currency records; no blended price will be guessed.</p>
+     <form method="POST" action="{{ route('production.orders.waste.cost-approve',[$order,$waste]) }}"
+       style="display:grid;gap:9px;min-width:240px;margin-top:8px">
+      @csrf
+      @foreach($abnormalSourceLots->get($line->id,collect()) as $source)
+       <label style="display:grid;gap:4px;font-size:12px">
+        FIFO issue #{{ $source->id }} · lot #{{ $source->inventory_cost_layer_id??'Unknown' }}
+        · issued {{ $source->quantity }} {{ $line->unit }} 
+        @if($source->is_valued)· source amount {{ $source->amount }} {{ $source->currency_code }}@else· Unvalued, cannot approve@endif
+        <input type="text" inputmode="decimal" name="allocations[{{ $source->id }}]" value="0"
+            placeholder="Source lost quantity" required @disabled(!$source->is_valued)>
+       </label>
+      @endforeach
+      <label style="display:grid;gap:4px">Approved abnormal-loss expense ledger
+       <select name="expense_ledger_id" required><option value="">Select independent expense account</option>
+        @foreach($abnormalExpenseAccounts as $expenseLedger)
+         <option value="{{ $expenseLedger->id }}">{{ $expenseLedger->code }} — {{ $expenseLedger->name }}</option>
+        @endforeach
+       </select></label>
+      <label>Signed loss cost authorization<input name="approval_reference" minlength="4" maxlength="180" required></label>
+      <label>Verified FIFO source and loss evidence
+       <textarea name="source_evidence" minlength="20" maxlength="3000" required rows="3"></textarea>
+      </label>
+      <label style="display:flex;gap:7px;align-items:center;font-size:12px">
+       <input type="checkbox" name="confirm_original_fifo" value="1" required>
+       Every allocated quantity has been matched to the original physically issued material lot.
+      </label>
+      <button type="submit" class="btn" onclick="return confirm('Approve frozen original-currency FIFO loss cost? The expense journal posts together with batch capitalization.')">Approve abnormal-loss source cost</button>
+     </form></details>
+    @else
+     <div class="muted" style="color:#a35a25">Abnormal loss needs a separate approved FIFO cost attribution before warehouse release.</div>
+    @endif
+   @endif
    @if($financialReview->treatment==='rework_required' &&
       in_array($order->status,['issued','pending_qc'],true) &&
       (auth()->user()->can('administration.update') ||
