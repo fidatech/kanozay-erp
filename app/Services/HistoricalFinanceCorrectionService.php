@@ -419,6 +419,91 @@ class HistoricalFinanceCorrectionService
         });
     }
 
+    /**
+     * Capture source-priced, original-currency supplier short-credit
+     * evidence. It never posts a supplier payable, receivable, expense,
+     * or physical inventory entry. Those require independently approved,
+     * purpose-specific accounting documents.
+     */
+    public function classifySupplierCreditDispute(int $caseId,array $data,int $actorId):object
+    {
+        return DB::transaction(function()use($caseId,$data,$actorId){
+            $case=DB::table('finance_historical_correction_cases')
+                ->where('id',$caseId)->lockForUpdate()->first();
+            abort_unless($case,404);
+            if($case->case_type!=='supplier_return_unreconciled' ||
+                $case->status!=='approved'){
+                $this->fail('Only an independently approved historical supplier-return credit dispute case can receive a short-credit review.');
+            }
+            if((int)$case->requested_by===$actorId){
+                $this->fail('The employee who submitted the original correction case cannot approve its supplier-credit dispute evidence.');
+            }
+            $source=$this->source($case->case_type,(int)$case->source_id);
+            if(!hash_equals($source['fingerprint'],$case->source_fingerprint)){
+                $this->fail('Original supplier return source changed since case approval. Withdraw the stale case before recording a dispute.');
+            }
+            $return=DB::table('purchase_return_records')
+                ->where('id',$case->source_id)->lockForUpdate()->first();
+            if(!$return || $return->status!=='posted_pending_credit' ||
+                $return->financial_status!=='supplier_credit_pending' ||
+                DB::table('supplier_debit_notes')
+                    ->where('purchase_return_record_id',$case->source_id)->exists()){
+                $this->fail('Only a physically posted original-currency supplier return without a credited payable can be investigated for a short-credit dispute.');
+            }
+            $lines=DB::table('purchase_return_record_lines')
+                ->where('purchase_return_record_id',$return->id)->get();
+            if($lines->isEmpty()){
+                $this->fail('Source return has no original GRN-priced physical material lines.');
+            }
+            $expected=BigDecimal::zero();
+            foreach($lines as $line){
+                if($line->supplier_credit_value_snapshot===null ||
+                    !BigDecimal::of((string)$line->quantity)->isPositive()){
+                    $this->fail('Original source quantity or unit-price snapshot is absent. The supplier difference cannot be valued reliably.');
+                }
+                $expected=$expected->plus((string)$line->supplier_credit_value_snapshot);
+            }
+            $expected=$expected->toScale(4,\Brick\Math\RoundingMode::HalfUp);
+            $offered=BigDecimal::of((string)$data['supplier_offered_credit'])
+                ->toScale(4,\Brick\Math\RoundingMode::Unnecessary);
+            if(!$expected->isPositive() || $expected->isGreaterThan('9999999999999999.9999') ||
+                $offered->isNegative() || $offered->isGreaterThanOrEqualTo($expected)){
+                $this->fail('Document a genuine short-credit offer in the original supplier return currency. Full credits use the normal supplier debit-note workflow.');
+            }
+            $difference=$expected->minus($offered);
+            $permitted=['supplier_claim_pending','potential_nonrecoverable_loss','unresolved'];
+            if(!in_array($data['requested_treatment'],$permitted,true)){
+                $this->fail('Choose a supported supplier short-credit investigation outcome.');
+            }
+            if(DB::table('finance_supplier_return_credit_disputes')
+                ->where('purchase_return_record_id',$return->id)->exists()){
+                $this->fail('This physical supplier return already has immutable signed dispute evidence. Do not record overlapping claimed credits.');
+            }
+            $id=DB::table('finance_supplier_return_credit_disputes')->insertGetId([
+                'finance_historical_correction_case_id'=>$caseId,
+                'purchase_return_record_id'=>$return->id,
+                'currency_id'=>$return->currency_id,
+                'source_base_return_value'=>(string)$expected,
+                'supplier_offered_credit'=>(string)$offered,
+                'unresolved_difference'=>(string)$difference,
+                'requested_treatment'=>$data['requested_treatment'],
+                'supplier_document_reference'=>trim($data['supplier_document_reference']),
+                'source_evidence'=>trim($data['source_evidence']),
+                'remaining_approval_action'=>trim($data['remaining_approval_action']),
+                'reviewed_by'=>$actorId,'created_at'=>now(),'updated_at'=>now(),
+            ]);
+            $this->log($caseId,'short_credit_reviewed',$source,
+                'Original physical return base value '.$expected.
+                '; supplier offered '.$offered.'; disputed difference '.$difference.
+                ' in original currency #'.$return->currency_id.
+                '. No payable, receivable or loss journal posted. '.
+                trim($data['remaining_approval_action']),
+                $actorId,$data['supplier_document_reference']);
+            return DB::table('finance_supplier_return_credit_disputes')
+                ->where('id',$id)->first();
+        });
+    }
+
     public function activity(int $caseId):\Illuminate\Support\Collection
     {
         return DB::table('finance_historical_correction_events')
