@@ -1,5 +1,6 @@
 @extends('layouts.kanozay')
 @section('content')
+@php($t=fn(string $key)=>\App\Support\ReportingLabels::text($key))
 <style>
 .k-dashboard .k-dashboard-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:18px}
 .k-dashboard .k-dashboard-hero h1{margin:0 0 6px;color:#17395f;font-size:24px}
@@ -22,31 +23,31 @@
 </style>
 <div class="k-dashboard">
     <div class="k-dashboard-hero">
-        <div><h1>Good {{ now()->hour < 12 ? 'morning' : (now()->hour < 17 ? 'afternoon' : 'evening') }}, {{ explode(' ', auth()->user()->name)[0] }}.</h1><p>Kanozay operations recorded from {{ $from }} through {{ $to }}.</p></div>
+        <div><h1>{{ $t('good_'.(now()->hour < 12 ? 'morning' : (now()->hour < 17 ? 'afternoon' : 'evening'))) }}, {{ explode(' ', auth()->user()->name)[0] }}.</h1><p>{{ $t('dashboard_operations') }}: {{ $from }} — {{ $to }}.</p></div>
         <form class="k-dashboard-filters" method="GET" action="{{ route('dashboard') }}">
-            <label>From<input type="date" name="from" value="{{ $from }}" required></label>
-            <label>To<input type="date" name="to" value="{{ $to }}" required></label>
-            <button class="btn" type="submit"><i class="fa-solid fa-filter"></i> Apply</button>
+            <label>{{ $t('from') }}<input type="date" name="from" value="{{ $from }}" required></label>
+            <label>{{ $t('to') }}<input type="date" name="to" value="{{ $to }}" required></label>
+            <button class="btn" type="submit"><i class="fa-solid fa-filter"></i> {{ $t('apply_filters') }}</button>
         </form>
     </div>
 
     @if(count($cards))
         <div class="k-dashboard-cards">
             @foreach($cards as $card)
-                <a class="k-dashboard-card" href="{{ $card['url'] }}"><span class="k-dashboard-icon"><i class="fa-solid {{ $card['icon'] }}"></i></span><span><span class="k-dashboard-label">{{ $card['label'] }}</span><strong class="k-dashboard-value">{{ is_numeric($card['value']) ? number_format((int)$card['value']) : $card['value'] }}</strong><small class="k-dashboard-hint">{{ $card['hint'] }}</small></span></a>
+                <a class="k-dashboard-card" href="{{ $card['url'] }}"><span class="k-dashboard-icon"><i class="fa-solid {{ $card['icon'] }}"></i></span><span><span class="k-dashboard-label">{{ \App\Support\ReportingLabels::dashboardCard($card['label']) }}</span><strong class="k-dashboard-value">{{ is_numeric($card['value']) ? number_format((int)$card['value']) : $card['value'] }}</strong><small class="k-dashboard-hint">{{ \App\Support\ReportingLabels::dashboardCard($card['hint']) }}</small></span></a>
             @endforeach
         </div>
     @else
-        <section class="panel"><div class="k-empty-state"><div class="k-empty-icon"><i class="fa-solid fa-gauge-high"></i></div><strong>No dashboard data is available for your permissions</strong><p>Ask an administrator to assign access to the modules you use.</p></div></section>
+        <section class="panel"><div class="k-empty-state"><div class="k-empty-icon"><i class="fa-solid fa-gauge-high"></i></div><strong>{{ $t('no_permission_cards') }}</strong><p>Ask an administrator to assign access to the modules you use.</p></div></section>
     @endif
 
     <section class="panel k-dashboard-table">
-        <div class="k-dashboard-table-head"><div><h2>Recent recorded activity</h2><small>Operational records and posted journals in the selected period.</small></div></div>
-        <div class="table-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Reference</th><th>Party / Description</th><th>Status / Currency</th><th>Open</th></tr></thead><tbody>
+        <div class="k-dashboard-table-head"><div><h2>{{ $t('recent_activity') }}</h2><small>{{ $t('recent_activity_note') }}</small></div></div>
+        <div class="table-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Reference</th><th>{{ $t('party_description') }}</th><th>{{ $t('status_currency') }}</th><th>{{ $t('view_record') }}</th></tr></thead><tbody>
             @forelse($recent as $row)
-                <tr><td>{{ $row['date'] }}</td><td>{{ $row['type'] }}</td><td><strong>{{ $row['reference'] }}</strong></td><td>{{ $row['party'] }}</td><td>{{ $row['status'] }}</td><td><a class="btn btn-light" href="{{ $row['url'] }}">View</a></td></tr>
+                <tr><td>{{ $row['date'] }}</td><td>{{ \App\Support\ReportingLabels::dashboardCard($row['type']) }}</td><td><strong>{{ $row['reference'] }}</strong></td><td>{{ $row['party'] }}</td><td>{{ $row['status'] }}</td><td><a class="btn btn-light" href="{{ $row['url'] }}">{{ $t('view_record') }}</a></td></tr>
             @empty
-                <tr><td colspan="6"><div class="k-empty-state" role="status"><div class="k-empty-icon"><i class="fa-solid fa-receipt"></i></div><strong>No recent activity found</strong><p>Accessible records will appear here when transactions are entered.</p></div></td></tr>
+                <tr><td colspan="6"><div class="k-empty-state" role="status"><div class="k-empty-icon"><i class="fa-solid fa-receipt"></i></div><strong>{{ $t('no_recent_activity') }}</strong><p>{{ $t('accessible_records') }}</p></div></td></tr>
             @endforelse
         </tbody></table></div>
     </section>
