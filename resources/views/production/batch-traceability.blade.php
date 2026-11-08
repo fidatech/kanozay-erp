@@ -69,10 +69,13 @@
 </section>
 <section class="trace-panel">
 <h2>Frozen material costs</h2>
-<div class="trace-table"><table><thead><tr><th>Currency</th><th>Material value</th><th>Valued quantity</th><th>Unvalued quantity</th></tr></thead><tbody>
+<div class="trace-table"><table><thead><tr><th>Currency</th><th>Ingredient cost</th><th>Packaging cost</th><th>Total material</th><th>Valued quantity</th><th>Unvalued quantity</th></tr></thead><tbody>
 @forelse($batch->costs as $cost)
-<tr><td>{{ $cost->currency_code??'Unvalued' }}</td><td>{{ $cost->material_cost??'—' }}</td><td>{{ $cost->consumed_quantity }}</td><td>{{ $cost->unvalued_quantity }}</td></tr>
-@empty<tr><td colspan="4">No frozen material cost snapshot yet. Costs are captured at release, not at planning.</td></tr>@endforelse
+<tr><td>{{ $cost->currency_code??'Unvalued' }}</td>
+<td>{{ $cost->ingredient_cost??'Legacy / unavailable' }}</td>
+<td>{{ $cost->packaging_cost??'Legacy / unavailable' }}</td>
+<td>{{ $cost->material_cost??'—' }}</td><td>{{ $cost->consumed_quantity }}</td><td>{{ $cost->unvalued_quantity }}</td></tr>
+@empty<tr><td colspan="6">No frozen material cost snapshot yet. Costs are captured at release, not at planning.</td></tr>@endforelse
 </tbody></table></div>
 <p class="muted">Material source currencies are kept separate. Additional approved production overhead is managed in the costing workspace; this report does not create a valuation or capitalization journal.</p>
 </section>
