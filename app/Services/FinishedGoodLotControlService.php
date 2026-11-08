@@ -4,13 +4,42 @@ namespace App\Services;
 
 use App\Models\ActivityLog;
 use App\Models\ProductionBatch;
+use App\Models\InventoryCostLayer;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class FinishedGoodLotControlService
 {
+ /**
+  * A quality hold placed after production release must still restrict every
+  * downstream batch containing that source material or packaging FIFO lot.
+  */
+ public function assertSourceLotsClear(ProductionBatch $batch):void
+ {
+  $materialLineIds=DB::table('production_order_materials')
+   ->where('production_order_id',$batch->production_order_id)->pluck('id');
+  if($materialLineIds->isEmpty())return;
+  $lotIds=DB::table('inventory_cost_consumptions as consumption')
+   ->join('inventory_stock_movements as movement',
+     'movement.id','=','consumption.inventory_stock_movement_id')
+   ->where('movement.reference_type','production_order_material')
+   ->whereIn('movement.reference_id',$materialLineIds)
+   ->whereNotNull('consumption.inventory_cost_layer_id')
+   ->distinct()->pluck('consumption.inventory_cost_layer_id');
+  $holds=app(QualityMaterialHoldService::class);
+  foreach(InventoryCostLayer::whereIn('id',$lotIds)->get() as $layer){
+   if($holds->isLayerHeld($layer)){
+    throw ValidationException::withMessages([
+     'dispatch'=>'Finished-good batch uses incoming lot #'.$layer->id.
+      ' currently held by QC. Halt dispatch and request a documented quality review.',
+    ]);
+   }
+  }
+ }
+
  public function assertDispatchAllowed(ProductionBatch $batch,string $date):void
  {
+  $this->assertSourceLotsClear($batch);
   $control=DB::table('finished_good_lot_controls')->where('production_batch_id',$batch->id)->first();
   if(!$control)return; // Legacy batches remain subject to existing release/QC safeguards.
   if($control->status!=='active')
@@ -67,6 +96,8 @@ class FinishedGoodLotControlService
    if(!in_array($next,$allowed[$record->status]??[],true))
     throw ValidationException::withMessages(['action'=>'Invalid lot release or recall transition. Recalled lots cannot be reopened.']);
    if($next==='release'){
+    $this->assertSourceLotsClear($batch);
+    app(FinishedBatchQualityGate::class)->assertApproved($batch);
     if($record->registered_by===$actorId || $record->last_decided_by===$actorId)
      throw ValidationException::withMessages(['action'=>'A different QC reviewer must authorize releasing this held batch.']);
     if($record->expires_on!==null && $record->expires_on<=today()->toDateString())
