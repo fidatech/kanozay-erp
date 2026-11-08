@@ -52,6 +52,19 @@ class ReportingLabels
             'view_record'=>'View',
             'party_description'=>'Party / Description',
             'status_currency'=>'Status / Currency',
+            'production_waste_report'=>'Production waste and rework financial review',
+            'production_waste_description'=>'Posted material issues, loss classifications and unresolved financial exceptions.',
+            'production_waste_accounting_warning'=>'No duplicate material issue or unsupported waste-expense journal is created.',
+            'production_waste_treatment'=>'Financial treatment',
+            'production_waste_all'=>'All classifications',
+            'production_waste_pending'=>'Independent review pending',
+            'production_waste_normal'=>'Reviewed normal process loss',
+            'production_waste_abnormal'=>'Abnormal loss — expense treatment required',
+            'production_waste_rework'=>'Rework required',
+            'production_order'=>'Production order','production_batch'=>'Production batch',
+            'material'=>'Material','waste_quantity'=>'Waste quantity',
+            'reason'=>'Reason','recorded_at'=>'Recorded at',
+            'approval_reference'=>'Approval reference',
         ];
         return (string)(config('erp_reporting_labels.'.app()->getLocale().'.'.$key)
             ??$english[$key]??$key);
