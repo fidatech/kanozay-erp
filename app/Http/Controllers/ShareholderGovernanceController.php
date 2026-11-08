@@ -152,7 +152,7 @@ class ShareholderGovernanceController extends Controller {
    'title'=>['required','string','max:180'],
    'purpose'=>['required',Rule::in(['distribution','governance'])],
    'currency_id'=>['nullable','required_if:purpose,distribution',Rule::exists('currencies','id')->where('is_active',true)],
-   'distribution_cap'=>['nullable','required_if:purpose,distribution','numeric','gt:0','decimal:0,4'],
+   'distribution_cap'=>['nullable','required_if:purpose,distribution','numeric','gt:0','decimal:0,4','max:9999999999999999.9999'],
    'resolution_on'=>['required','date','before_or_equal:today'],
    'document_reference'=>['required','string','min:4','max:180'],
    'notes'=>['nullable','string','max:5000'],
@@ -182,7 +182,7 @@ class ShareholderGovernanceController extends Controller {
    if((int)$item->created_by===$request->user()->id)
     throw ValidationException::withMessages(['decision'=>'An independent reviewer must approve or reject the board resolution.']);
    if($data['decision']==='approved'){
-    app(ShareholderDistributionAllocationService::class)->assertReadyForApproval($item);
+    app(ShareholderDistributionAllocationService::class)->assertReadyForApproval($item,$request->user()->id);
    }
    DB::table('shareholder_resolutions')->where('id',$resolution)->update([
     'status'=>$data['decision'],'reviewed_by'=>$request->user()->id,'reviewed_at'=>now(),'updated_at'=>now(),
