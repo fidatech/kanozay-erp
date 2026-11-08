@@ -52,8 +52,27 @@ class LaboratoryQualityController extends Controller
    ->join('quality_specifications as spec','spec.id','=','r.quality_specification_id')
    ->whereIn('r.quality_sample_id',$sampleIds)->select('r.*','spec.test_name','spec.unit')
    ->orderBy('r.id')->get()->groupBy('quality_sample_id');
+  $nonconformances=collect();
+  $ncrRecentSamples=collect();
+  $ncrLots=collect();
+  if($page==='nonconformances'){
+   $nonconformances=DB::table('quality_nonconformances as n')
+    ->leftJoin('quality_samples as sample','sample.id','=','n.quality_sample_id')
+    ->leftJoin('inventory_cost_layers as lot','lot.id','=','n.inventory_cost_layer_id')
+    ->leftJoin('inventory_materials as material','material.id','=','lot.inventory_material_id')
+    ->select('n.*','sample.number as sample_number','material.sku as material_sku')
+    ->orderByRaw("CASE WHEN n.status='closed' THEN 1 ELSE 0 END")
+    ->orderByDesc('n.id')->limit(150)->get();
+   $ncrRecentSamples=DB::table('quality_samples')
+    ->orderByDesc('id')->limit(200)->get(['id','number','source_type','status']);
+   $ncrLots=\App\Models\InventoryCostLayer::with('material')
+    ->where('source_type','goods_receipt_line')->orderByDesc('id')->limit(200)->get();
+  }
   return view('laboratory.quality',[
    'page'=>$page,'pageTitle'=>config('erp_pages.laboratory.pages.'.$page),
+   'nonconformances'=>$nonconformances,
+   'ncrRecentSamples'=>$ncrRecentSamples,
+   'ncrLots'=>$ncrLots,
    'samples'=>$samples,'results'=>$results,
    'specs'=>DB::table('quality_specifications')->where('is_active',true)->orderBy('test_name')->get(),
    'materials'=>InventoryMaterial::where('is_active',true)->orderBy('name')->get(),
