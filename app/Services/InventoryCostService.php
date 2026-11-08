@@ -76,6 +76,7 @@ class InventoryCostService
             $receipt?->cost_currency_code,
             $receipt?->received_on?->toDateString() ?? now()->toDateString(),
             $actorId,
+            $receipt?->company_warehouse_id,
         );
     }
 
@@ -99,74 +100,101 @@ class InventoryCostService
             $code,
             $movement->occurred_on->toDateString(),
             $actorId,
+            $movement->company_warehouse_id,
         );
     }
 
     public function consume(InventoryStockMovement $movement): void
     {
         if (InventoryCostConsumption::where('inventory_stock_movement_id', $movement->id)->exists()) return;
-        if($movement->reference_type==='purchase_return_line'){
-            $line=\App\Models\PurchaseReturnRecordLine::findOrFail($movement->reference_id);
-            $origin=InventoryCostLayer::where('source_type','goods_receipt_line')
+        $locations = app(InventoryLotLocationService::class);
+        $warehouseId = $movement->company_warehouse_id === null
+            ? null : (int)$movement->company_warehouse_id;
+
+        if ($movement->reference_type === 'purchase_return_line') {
+            $line = \App\Models\PurchaseReturnRecordLine::findOrFail($movement->reference_id);
+            $origin = InventoryCostLayer::where('source_type','goods_receipt_line')
                 ->where('source_id',$line->goods_receipt_line_id)->lockForUpdate()->first();
-            if($origin){
-                $originalRemaining=BigDecimal::of((string)$origin->remaining_quantity);
-                $returnQty=BigDecimal::of((string)$movement->quantity);
-                if($originalRemaining->isLessThan($returnQty))
-                    throw ValidationException::withMessages(['quantity'=>'This receipt lot no longer contains sufficient stock to return to its supplier.']);
-                InventoryCostConsumption::create([
-                    'inventory_stock_movement_id'=>$movement->id,
-                    'inventory_cost_layer_id'=>$origin->id,
-                    'quantity'=>(string)$returnQty->toScale(6),
-                    'amount'=>$this->amountForConsumption($origin,$returnQty),
-                    'currency_id'=>$origin->currency_id,'currency_code'=>$origin->currency_code,
-                    'is_valued'=>$origin->original_cost!==null && $origin->currency_id!==null,
-                ]);
-                $origin->update(['remaining_quantity'=>(string)$originalRemaining->minus($returnQty)->toScale(6)]);
-            }else{
-                InventoryCostConsumption::create([
-                    'inventory_stock_movement_id'=>$movement->id,
-                    'inventory_cost_layer_id'=>null,'quantity'=>$movement->quantity,'amount'=>null,
-                    'currency_id'=>null,'currency_code'=>null,'is_valued'=>false,
+            if (!$origin) {
+                throw ValidationException::withMessages([
+                    'quantity'=>'The source goods receipt lot is missing its FIFO cost layer. Reconcile the receipt before returning physical stock.',
                 ]);
             }
+            $remaining = BigDecimal::of((string)$origin->remaining_quantity);
+            $returnQty = BigDecimal::of((string)$movement->quantity);
+            if ($remaining->isLessThan($returnQty)) {
+                throw ValidationException::withMessages([
+                    'quantity'=>'The source receipt lot no longer contains enough stock for this supplier return.',
+                ]);
+            }
+            $locations->consume($origin,$warehouseId,$returnQty);
+            InventoryCostConsumption::create([
+                'inventory_stock_movement_id'=>$movement->id,
+                'inventory_cost_layer_id'=>$origin->id,
+                'quantity'=>(string)$returnQty->toScale(6),
+                'amount'=>$this->amountForConsumption($origin,$returnQty),
+                'currency_id'=>$origin->currency_id,'currency_code'=>$origin->currency_code,
+                'is_valued'=>$origin->original_cost!==null && $origin->currency_id!==null,
+            ]);
+            $origin->update(['remaining_quantity'=>(string)$remaining->minus($returnQty)->toScale(6)]);
             return;
         }
-        $quantityToConsume = BigDecimal::of((string) $movement->quantity);
-            $layers = InventoryCostLayer::query()->where('inventory_material_id', $movement->inventory_material_id)
-                ->where('remaining_quantity', '>', 0)->orderBy('received_on')->orderBy('id')->lockForUpdate()->get();
 
-            foreach ($layers as $layer) {
-                if(! $quantityToConsume->isGreaterThan(0)) break;
-                if(app(QualityMaterialHoldService::class)->isLayerHeld($layer))continue;
-                $remaining = BigDecimal::of((string) $layer->remaining_quantity);
-                $quantity = $remaining->compareTo($quantityToConsume) <= 0 ? $remaining : $quantityToConsume;
-                $amount = $this->amountForConsumption($layer, $quantity);
-                InventoryCostConsumption::create([
-                    'inventory_stock_movement_id' => $movement->id,
-                    'inventory_cost_layer_id' => $layer->id,
-                    'quantity' => (string) $quantity->toScale(6),
-                    'amount' => $amount,
-                    'currency_id' => $layer->currency_id,
-                    'currency_code' => $layer->currency_code,
-                    'is_valued' => $layer->original_cost !== null && $layer->currency_id !== null,
-                ]);
-                $layer->update(['remaining_quantity' => (string) $remaining->minus($quantity)->toScale(6)]);
-                $quantityToConsume = $quantityToConsume->minus($quantity);
-            }
+        $needed = BigDecimal::of((string)$movement->quantity);
+        $layers = InventoryCostLayer::where('inventory_material_id',$movement->inventory_material_id)
+            ->where('remaining_quantity','>',0)
+            ->orderBy('received_on')->orderBy('id')->lockForUpdate()->get();
+        $positionRows = DB::table('inventory_cost_layer_locations')
+            ->whereIn('inventory_cost_layer_id',$layers->pluck('id'))
+            ->lockForUpdate()->get()->groupBy('inventory_cost_layer_id');
 
-            if ($quantityToConsume->isGreaterThan(0)) {
-                // Physical balances may predate valuation-layer tracking. Keep the issue posted and expose this quantity as unvalued.
-                InventoryCostConsumption::create([
-                    'inventory_stock_movement_id' => $movement->id,
-                    'inventory_cost_layer_id' => null,
-                    'quantity' => (string) $quantityToConsume->toScale(6),
-                    'amount' => null,
-                    'currency_id' => null,
-                    'currency_code' => null,
-                    'is_valued' => false,
+        foreach($layers as $layer){
+            $positions=$positionRows->get($layer->id,collect());
+            $located=BigDecimal::zero();
+            foreach($positions as $position)$located=$located->plus((string)$position->quantity);
+            // Historical layers must be physically reconciled before FIFO may
+            // skip them in favour of newer, positioned receipts.
+            if($located->isLessThan((string)$layer->remaining_quantity)){
+                throw ValidationException::withMessages([
+                    'quantity'=>'Material has historical FIFO lots with unknown locations. Reconcile remaining lot locations before issuing or adjusting stock.',
                 ]);
             }
+            if($located->isGreaterThan((string)$layer->remaining_quantity)){
+                throw ValidationException::withMessages([
+                    'quantity'=>'FIFO lot positions exceed their remaining material quantity. Reconcile lot accounting before posting.',
+                ]);
+            }
+        }
+        foreach($layers as $layer){
+            if(!$needed->isPositive())break;
+            if(app(QualityMaterialHoldService::class)->isLayerHeld($layer))continue;
+            $position=$positionRows->get($layer->id,collect())
+                ->firstWhere('location_key',$warehouseId===null?'unassigned':'wh:'.$warehouseId);
+            $available=BigDecimal::of((string)($position->quantity??'0'));
+            if(!$available->isPositive())continue;
+            $layerRemaining=BigDecimal::of((string)$layer->remaining_quantity);
+            $qty=$available->isLessThan($needed)?$available:$needed;
+            if($layerRemaining->isLessThan($qty))$qty=$layerRemaining;
+            if(!$qty->isPositive())continue;
+
+            $amount=$this->amountForConsumption($layer,$qty);
+            $locations->consume($layer,$warehouseId,$qty);
+            InventoryCostConsumption::create([
+                'inventory_stock_movement_id'=>$movement->id,
+                'inventory_cost_layer_id'=>$layer->id,
+                'quantity'=>(string)$qty->toScale(6),
+                'amount'=>$amount,'currency_id'=>$layer->currency_id,
+                'currency_code'=>$layer->currency_code,
+                'is_valued'=>$layer->original_cost!==null && $layer->currency_id!==null,
+            ]);
+            $layer->update(['remaining_quantity'=>(string)$layerRemaining->minus($qty)->toScale(6)]);
+            $needed=$needed->minus($qty);
+        }
+        if($needed->isPositive()){
+            throw ValidationException::withMessages([
+                'quantity'=>'Insufficient physically attributed, quality-released FIFO stock at the selected warehouse or unassigned pool. No quantity or cost was posted.',
+            ]);
+        }
     }
 
     public function assertLandedCostAllowed(int $lineId): void
@@ -181,9 +209,9 @@ class InventoryCostService
         }
     }
 
-    private function createLayer(int $materialId, string $sourceType, int $sourceId, string $quantity, ?string $cost, ?int $currencyId, ?string $currencyCode, string $date, ?int $actorId): InventoryCostLayer
+    private function createLayer(int $materialId, string $sourceType, int $sourceId, string $quantity, ?string $cost, ?int $currencyId, ?string $currencyCode, string $date, ?int $actorId, ?int $warehouseId): InventoryCostLayer
     {
-        return InventoryCostLayer::firstOrCreate(
+        $layer = InventoryCostLayer::firstOrCreate(
             ['source_type' => $sourceType, 'source_id' => $sourceId],
             [
                 'inventory_material_id' => $materialId,
@@ -196,6 +224,12 @@ class InventoryCostService
                 'created_by' => $actorId,
             ],
         );
+        if($layer->wasRecentlyCreated){
+            app(InventoryLotLocationService::class)->recordNew($layer,$warehouseId);
+        }
+        // Existing layers were not retroactively assigned to warehouses:
+        // their historic movements need source-ledger reconciliation.
+        return $layer;
     }
 
     private function amountForConsumption(InventoryCostLayer $layer, BigDecimal $quantity): ?string
