@@ -15,16 +15,32 @@ use Illuminate\Validation\ValidationException;
 class QualityMaterialHoldService {
  public function isLayerHeld(InventoryCostLayer $layer):bool {
   if($layer->source_type!=='goods_receipt_line')return false;
-  $required=DB::table('quality_specifications')->where('subject_type','material')
-    ->where('subject_id',$layer->inventory_material_id)->where('is_active',true)
-    ->pluck('id')->map(fn($id)=>(int)$id)->all();
-  $sample=DB::table('quality_samples')->where('goods_receipt_line_id',$layer->source_id)
-    ->orderByDesc('id')->first();
-  if(!$sample)return count($required)>0;
+  // An explicit safety hold has priority over prior passing samples.
+  if(DB::table('quality_material_lot_holds')
+    ->where('inventory_cost_layer_id',$layer->id)->where('status','held')->exists())return true;
+
+  $active=DB::table('quality_specifications')
+    ->where('subject_type','material')
+    ->where('subject_id',$layer->inventory_material_id)
+    ->where('is_active',true)->pluck('id')->map(fn($id)=>(int)$id)->all();
+  $sample=DB::table('quality_samples')
+    ->where('goods_receipt_line_id',$layer->source_id)->orderByDesc('id')->first();
+  if(!$sample)return count($active)>0;
   if($sample->status!=='approved')return true;
+
+  // Newly collected samples retain the specification versions assigned
+  // when collected. Later specification edits cannot rewrite historic
+  // approved test evidence. Legacy records without a frozen set still
+  // require today's active specification versions as a conservative gate.
+  $frozen=DB::table('quality_sample_required_specifications')
+    ->where('quality_sample_id',$sample->id)->pluck('quality_specification_id')
+    ->map(fn($id)=>(int)$id)->all();
+  $required=$frozen?:$active;
   if(!$required)return false;
-  $passed=DB::table('quality_sample_results')->where('quality_sample_id',$sample->id)
-    ->where('outcome','pass')->pluck('quality_specification_id')->map(fn($id)=>(int)$id)->all();
+  $passed=DB::table('quality_sample_results')
+    ->where('quality_sample_id',$sample->id)->where('outcome','pass')
+    ->whereIn('quality_specification_id',$required)
+    ->pluck('quality_specification_id')->map(fn($id)=>(int)$id)->all();
   return count(array_diff($required,$passed))>0;
  }
  public function heldQuantity(InventoryMaterial $material):BigDecimal {
