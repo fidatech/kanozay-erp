@@ -19,7 +19,7 @@ class HistoricalFinanceCorrectionService
         'invoice_missing_cogs'=>'Posted invoice missing COGS',
         'batch_uncapitalized'=>'Released batch without verified capitalization',
         'standalone_dispatch'=>'Historic warehouse dispatch without invoice',
-        'opening_fifo_unvalued'=>'Historical FIFO opening/adjustment with unknown cost',
+        'opening_fifo_unvalued'=>'Unvalued FIFO stock lot requiring original-cost reconciliation',
         'landed_cost_unreconciled'=>'Historic GRN landed cost without GL evidence',
         'supplier_return_unreconciled'=>'Historic supplier return / short credit discrepancy',
     ];
