@@ -48,6 +48,7 @@ class FixedAssetDepreciationController extends Controller
     public function savePolicy(Request $request,FixedAsset $asset,FixedAssetDepreciationService $service)
     {
         abort_unless($request->user()->canAny(['finance.update','administration.update']),403);
+        $request->merge(['salvage_value'=>\App\Support\LocalizedDecimal::normalize($request->input('salvage_value'))]);
         $data=$request->validate([
             'useful_life_months'=>['required','integer','between:1,1200'],
             'salvage_value'=>['required','regex:/^(?:0|[1-9][0-9]{0,15})(?:\.[0-9]{1,4})?$/'],
