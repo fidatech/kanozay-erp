@@ -135,8 +135,30 @@ class ProductionOrderController extends Controller {
         $warehouses=\App\Models\CompanyWarehouse::where('is_active',true)->orderBy('name')->get();
         $wasteReviewSummary=app(\App\Services\ProductionWasteFinancialReviewService::class)
             ->summaryForOrder($order->id);
+        $allWasteIds=$order->materials->flatMap(fn($item)=>$item->wastes->pluck('id'))->all();
+        $abnormalCostReviews=DB::table('production_abnormal_waste_cost_reviews')
+            ->whereIn('production_material_waste_id',$allWasteIds)
+            ->get()->keyBy('production_material_waste_id');
+        $abnormalSourceLots=collect();
+        $abnormalExpenseAccounts=collect();
+        if($request->user()->can('administration.update') ||
+          ($request->user()->can('finance.update') &&
+           $request->user()->can('manufacturing.view'))){
+            $allocator=app(\App\Services\ProductionAbnormalWasteCostService::class);
+            foreach($order->materials as $line){
+                if($line->wastes->contains(fn($waste)=>
+                    $wasteReviewSummary['reviews']->get($waste->id)?->treatment==='abnormal_loss')){
+                    $abnormalSourceLots->put($line->id,$allocator->candidates($line->id));
+                }
+            }
+            $abnormalExpenseAccounts=\App\Models\LedgerAccount::query()
+                ->where('type','expense')->where('is_active',true)
+                ->where('is_group',false)->orderBy('code')->get(['id','code','name']);
+        }
         return view('production.order-show', compact(
-            'order','materials','catalogMaterials','finishedGoods','warehouses','wasteReviewSummary'
+            'order','materials','catalogMaterials','finishedGoods','warehouses',
+            'wasteReviewSummary','abnormalCostReviews','abnormalSourceLots',
+            'abnormalExpenseAccounts'
         ));
     }
 
@@ -218,6 +240,30 @@ class ProductionOrderController extends Controller {
         $service->review($waste->id,$data,$request->user()->id);
         return back()->with('success',
             'Recorded issued-material loss classified with independent financial evidence. No additional stock issue or unsupported GL journal was created.');
+    }
+
+    public function approveAbnormalWasteCost(Request $request,ProductionOrder $order,
+        \App\Models\ProductionMaterialWaste $waste,
+        \App\Services\ProductionAbnormalWasteCostService $service)
+    {
+        abort_unless($request->user()->can('administration.update') ||
+            ($request->user()->can('finance.update') &&
+             $request->user()->can('manufacturing.view')),403);
+        abort_unless((int)$waste->materialLine->production_order_id===(int)$order->id,404);
+        $request->merge([
+            'allocations'=>LocalizedDecimal::quantities($request->input('allocations')),
+        ]);
+        $data=$request->validate([
+            'allocations'=>['required','array','min:1','max:100'],
+            'allocations.*'=>['required','regex:/^(?:0|[1-9][0-9]{0,13})(?:\\.[0-9]{1,6})?$/'],
+            'expense_ledger_id'=>['required','integer','exists:ledger_accounts,id'],
+            'approval_reference'=>['required','string','min:4','max:180'],
+            'source_evidence'=>['required','string','min:20','max:3000'],
+            'confirm_original_fifo'=>['accepted'],
+        ]);
+        $service->approve($waste->id,$data,$request->user()->id);
+        return back()->with('success',
+            'Exact original-currency FIFO waste cost independently approved. The expense debit will be posted together with WIP and finished-goods journals, without another physical stock issue.');
     }
 
     public function resolveWasteRework(Request $request, ProductionOrder $order,
