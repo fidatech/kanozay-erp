@@ -778,26 +778,89 @@ final class HistoricalBatchCapitalizationService
                 (int)$cost->accepted_packages!==(int)$s['batch']->accepted_packages)
                 $this->fail('Actual source-backed manufacturing GL costs differ from independently approved original-currency batch value.');
 
-            $costedSales=0;$costedNonSale=0;
+            $costedSales=0;$costedNonSale=0;$costedReturns=0;
             $approvedLines=$this->allocationRecords($record,$s);
-            foreach($s['lines'] as $row){
+            $approvedReturns=$this->returnRecords($record,$s);
+            // Rebuild the immutable original-date accounting sequence:
+            // physical sales and independently signed non-sale dispatches
+            // before already QC-released customer returns on the same day.
+            // This lets original COGS exist before its return recovery, and
+            // prevents a later sale from being costed ahead of an earlier QC.
+            $events=[];
+            foreach($s['lines'] as $physical){
+                $events[]=[
+                    'type'=>'dispatch','date'=>(string)$physical->dispatch_date,
+                    'id'=>(int)$physical->physical_line_id,'source'=>$physical,
+                ];
+            }
+            foreach($s['returns'] as $returned){
+                $events[]=[
+                    'type'=>'return','date'=>$returned['date'],
+                    'id'=>$returned['qc_id'],'source'=>$returned,
+                ];
+            }
+            usort($events,fn($x,$y)=>[
+                $x['date'],$x['type']==='dispatch'?0:1,$x['id'],
+            ] <=> [
+                $y['date'],$y['type']==='dispatch'?0:1,$y['id'],
+            ]);
+            foreach($events as $event){
+                if($event['type']==='return'){
+                    $returned=$event['source'];
+                    $approved=$approvedReturns[$returned['qc_id']]??null;
+                    if(!$approved)
+                        $this->fail('A previously QC-released return is missing its original finance-approved, immutable source cost allocation.');
+                    $actual=app(FinishedGoodsCostPostingService::class)
+                        ->postReturnRecovery(
+                            \App\Models\SalesReturnQuarantine::findOrFail($returned['qc_id']),
+                            $returned['date'],$actorId,null,(int)$record->id
+                        );
+                    $sourceCog=DB::table('production_invoice_cogs_postings')
+                        ->where('sales_invoice_line_id',$returned['sales_invoice_line_id'])
+                        ->first();
+                    $sourceJournal=DB::table('journal_entries')
+                        ->where('id',$actual->journal_entry_id)->first();
+                    if(!$sourceCog || !$sourceJournal ||
+                        (int)$sourceCog->production_batch_cost_posting_id!==(int)$cost->id ||
+                        (int)$actual->production_invoice_cogs_posting_id!==(int)$sourceCog->id ||
+                        (int)$actual->quantity_packages!==$returned['quantity'] ||
+                        (int)$actual->sales_return_quarantine_id!==$returned['qc_id'] ||
+                        $sourceJournal->status!=='posted' ||
+                        (string)$sourceJournal->entry_date!==$returned['date'] ||
+                        (int)$sourceJournal->currency_id!==$s['currency_id'] ||
+                        !BigDecimal::of((string)$actual->amount)
+                            ->isEqualTo((string)$approved->original_return_cost_amount) ||
+                        !BigDecimal::of((string)$actual->amount)
+                            ->isEqualTo($returned['expected_cost']) ||
+                        !BigDecimal::of((string)$sourceCog->amount)
+                            ->isEqualTo($returned['original_sale_cost']))
+                        $this->fail('Historical QC recovery differs from the signed original customer sale, manufacturing currency, batch cost, recoverable amount or actual posted GL journal.');
+                    DB::table('finance_historical_batch_return_allocations')
+                        ->where('id',$approved->id)->update([
+                            'production_return_cost_posting_id'=>$actual->id,
+                            'journal_entry_id'=>$actual->journal_entry_id,
+                            'updated_at'=>now(),
+                        ]);
+                    $costedReturns++;
+                    continue;
+                }
+                $row=$event['source'];
                 $physicalId=(int)$row->physical_line_id;
                 $signedLine=$approvedLines[$physicalId]??null;
                 if($row->invoice_line_id){
-                    // Existing genuine customer revenue and receivable stay
-                    // unchanged. Original COGS is posted on its actual date.
+                    // Existing posted customer revenue is never recreated.
                     $cogs=app(FinishedGoodsCostPostingService::class)->postInvoiceLine(
                         SalesInvoiceLine::findOrFail($row->invoice_line_id),$actorId);
                     if($signedLine &&
                         ((int)$signedLine->sales_invoice_line_id!==(int)$row->invoice_line_id ||
                          !BigDecimal::of((string)$cogs->amount)
                              ->isEqualTo((string)$signedLine->source_cost_amount)))
-                        $this->fail('Original invoice COGS differs from the approved physical source line allocation.');
+                        $this->fail('Historical invoice COGS differs from its independently approved original source cost allocation.');
                     $journalId=(int)$cogs->journal_entry_id;
                     $costedSales++;
                 }else{
                     if(!$signedLine)
-                        $this->fail('An original non-sale dispatch has no separately approved expense account and source cost.');
+                        $this->fail('An original non-sale dispatch has no independently authorized expense source line.');
                     $journal=$this->postNonSale($row,$signedLine,$s,$record,$cost,$actorId);
                     $journalId=(int)$journal->id;
                     $costedNonSale++;
@@ -810,12 +873,14 @@ final class HistoricalBatchCapitalizationService
                 }
             }
             if($costedSales!==$s['sale_count'] ||
-                $costedNonSale!==count($s['non_sale']))
-                $this->fail('The posted COGS/non-sale count differs from every approved original dispatch source.');
+                $costedNonSale!==count($s['non_sale']) ||
+                $costedReturns!==count($s['returns']))
+                $this->fail('The posting count differs from the independently approved physical dispatch, invoice and QC-return sources.');
             DB::table('finance_historical_batch_capitalizations')->where('id',$record->id)->update([
                 'status'=>'posted','production_batch_cost_posting_id'=>$cost->id,
                 'posted_invoice_cogs_lines'=>$costedSales,
                 'posted_non_sale_lines'=>$costedNonSale,
+                'posted_return_lines'=>$costedReturns,
                 'executed_by'=>$actorId,'executed_at'=>now(),'updated_at'=>now(),
             ]);
             DB::table('finance_historical_correction_cases')->where('id',$caseId)->update([
@@ -824,7 +889,8 @@ final class HistoricalBatchCapitalizationService
                 'resolution_reference'=>$record->approval_reference,
                 'resolution_notes'=>'Original production capitalization and '.$costedSales.
                     ' invoice COGS lines + '.$costedNonSale.
-                    ' independently authorized non-sale dispatch expenses posted in open original periods. '.
+                    ' independently authorized non-sale dispatch expenses and '.
+                    $costedReturns.' previously QC-released customer-return inventory recoveries posted in their open original periods. '.
                     $record->source_reconciliation_notes,
                 'posted_cogs_lines'=>$costedSales,
                 'executed_by'=>$actorId,'executed_at'=>now(),'updated_at'=>now(),
@@ -838,17 +904,19 @@ final class HistoricalBatchCapitalizationService
                 'notes'=>'Original production WIP and finished inventory capitalized at '.
                     $s['amount'].' (currency #'.$s['currency_id'].') on '.$s['date'].
                     '; '.$costedSales.' original invoice COGS lines and '.$costedNonSale.
-                    ' signed historical non-sale expense lines posted. '.
+                    ' signed historical non-sale expense lines and '.
+                    $costedReturns.' original QC-return asset/COGS restorations posted. '.
                     'Original physical movements and sales revenue unchanged. '.
                     $record->source_authorization_reference,
                 'actor_id'=>$actorId,'created_at'=>now(),'updated_at'=>now(),
             ]);
             ActivityLog::record('finance.historical_batch_capitalization.posted',
                 'finance_historical_batch_capitalization',$record->id,
-                'Frozen batch source cost, original invoice COGS and independently signed non-sale expense journals posted atomically.',
+                'Frozen batch source cost, original invoice COGS, signed non-sale expense and independently QC-released return-cost restorations posted atomically.',
                 ['batch_id'=>$s['batch']->id,'capitalization_id'=>$cost->id,
                     'currency_id'=>$s['currency_id'],'cogs_lines'=>$costedSales,
-                    'non_sale_lines'=>$costedNonSale]);
+                    'non_sale_lines'=>$costedNonSale,
+                    'returned_lines'=>$costedReturns]);
             return DB::table('finance_historical_batch_capitalizations')
                 ->where('id',$record->id)->first();
         });
