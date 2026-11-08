@@ -213,6 +213,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/finance/suppliers/{party}', [\App\Http\Controllers\TradePartyController::class,'showSupplier'])->name('finance.suppliers.show');
     Route::post('/finance/customers/{party}/advances', [\App\Http\Controllers\CustomerAdvanceController::class,'receive'])->name('finance.customers.advances.receive');
     Route::post('/finance/customers/{party}/advances/{advance}/apply', [\App\Http\Controllers\CustomerAdvanceController::class,'apply'])->whereNumber('advance')->name('finance.customers.advances.apply');
+    Route::post('/finance/customers/{party}/advances/{advance}/refund', [\App\Http\Controllers\CustomerAdvanceController::class,'refund'])->whereNumber('advance')->name('finance.customers.advances.refund');
     Route::get('/finance/parties/{party}/statement', [\App\Http\Controllers\TradePartyController::class,'statement'])->name('finance.parties.statement');
     Route::get('/finance/parties/{party}/statement.csv', [\App\Http\Controllers\TradePartyController::class,'statement'])->name('finance.parties.statement.export');
     Route::delete('/finance/parties/{party}', [\App\Http\Controllers\TradePartyController::class,'destroy'])->name('finance.parties.destroy');
