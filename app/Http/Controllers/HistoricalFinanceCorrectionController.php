@@ -146,6 +146,8 @@ class HistoricalFinanceCorrectionController extends Controller
         $historicalBatchPosting=null;
         $historicalBatchDispatches=collect();
         $historicalBatchAllocations=collect();
+        $historicalBatchReturns=collect();
+        $historicalBatchReturnAllocations=collect();
         $historicalBatchExpenseLedgers=collect();
         $historicalBatchReadiness=null;
         if($row->case_type==='batch_uncapitalized'){
@@ -157,6 +159,18 @@ class HistoricalFinanceCorrectionController extends Controller
                 ->select('plan.*','cost.issue_journal_id','cost.capitalization_journal_id',
                     'currency.code as currency_code')->first();
             if($historicalBatchPosting){
+                $historicalBatchReturnAllocations=DB::table('finance_historical_batch_return_allocations as reserved')
+                    ->leftJoin('journal_entries as journal',
+                        'journal.id','=','reserved.journal_entry_id')
+                    ->leftJoin('currencies as currency',
+                        'currency.id','=','reserved.currency_id')
+                    ->where('reserved.finance_historical_batch_capitalization_id',
+                        $historicalBatchPosting->id)
+                    ->select('reserved.*','journal.number as journal_number',
+                        'journal.status as journal_status',
+                        'currency.code as currency_code')
+                    ->orderBy('reserved.original_qc_date')
+                    ->orderBy('reserved.sales_return_quarantine_id')->get();
                 $historicalBatchAllocations=DB::table('finance_historical_batch_dispatch_allocations as posting')
                     ->leftJoin('ledger_accounts as ledger','ledger.id','=','posting.expense_ledger_id')
                     ->leftJoin('journal_entries as journal','journal.id','=','posting.journal_entry_id')
@@ -195,6 +209,25 @@ class HistoricalFinanceCorrectionController extends Controller
                     'signed.reviewed_by as purpose_reviewed_by',
                     'dispatch_case.status as purpose_case_status')
                 ->orderBy('dispatch.dispatch_date')->orderBy('source.id')->get();
+            $historicalBatchReturns=DB::table('sales_return_quarantines as qc')
+                ->join('sales_credit_note_lines as credit',
+                    'credit.id','=','qc.sales_credit_note_line_id')
+                ->join('sales_credit_notes as note',
+                    'note.id','=','credit.sales_credit_note_id')
+                ->join('sales_invoice_lines as sale',
+                    'sale.id','=','credit.sales_invoice_line_id')
+                ->leftJoin('production_return_cost_postings as cost',
+                    'cost.sales_return_quarantine_id','=','qc.id')
+                ->where('qc.production_batch_id',$row->source_id)
+                ->select('qc.id as qc_id','qc.status as qc_status',
+                    'qc.quantity_packages','qc.decided_on',
+                    'qc.quality_reference','qc.registered_by','qc.decided_by',
+                    'qc.released_warehouse_id',
+                    'credit.id as credit_line_id',
+                    'sale.id as sales_invoice_line_id',
+                    'note.number as credit_number','note.credit_date',
+                    'cost.amount as recorded_asset_recovery')
+                ->orderBy('qc.decided_on')->orderBy('qc.id')->get();
             $batch=\App\Models\ProductionBatch::with(['costs','finishedGood'])
                 ->find($row->source_id);
             if($batch){
@@ -324,6 +357,8 @@ class HistoricalFinanceCorrectionController extends Controller
             'historicalBatchDispatches'=>$historicalBatchDispatches,
             'historicalBatchReadiness'=>$historicalBatchReadiness,
             'historicalBatchAllocations'=>$historicalBatchAllocations,
+            'historicalBatchReturns'=>$historicalBatchReturns,
+            'historicalBatchReturnAllocations'=>$historicalBatchReturnAllocations,
             'historicalBatchExpenseLedgers'=>$historicalBatchExpenseLedgers,
             'openingEquityLedgers'=>$openingEquityLedgers,
             'currencies'=>$currencies,'openingPosting'=>$openingPosting,
@@ -464,8 +499,9 @@ class HistoricalFinanceCorrectionController extends Controller
         $posting=$service->post($case,(int)$request->user()->id);
         return back()->with('success',
             'Source-backed manufacturing WIP, finished inventory, '.
-            $posting->posted_invoice_cogs_lines.' genuine invoice COGS line(s) and '.
-            $posting->posted_non_sale_lines.' signed non-sale expense line(s) posted atomically. No physical stock or sales revenue was changed.');
+            $posting->posted_invoice_cogs_lines.' genuine sale COGS, '.
+            $posting->posted_non_sale_lines.' signed non-sale expense and '.
+            $posting->posted_return_lines.' already released QC-return cost journal(s) posted in original date order. No physical stock, customer credit or sales revenue changed.');
     }
 
     public function submitDispatchCost(Request $request,int $case,
