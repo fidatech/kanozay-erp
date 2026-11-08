@@ -30,6 +30,10 @@ class CustomerAdvanceService
             ->where('customer_advance_receipt_id', $receiptId)->pluck('amount') as $amount) {
             $left = $left->minus((string) $amount);
         }
+        foreach (DB::table('customer_advance_refunds')
+            ->where('customer_advance_receipt_id', $receiptId)->pluck('amount') as $amount) {
+            $left = $left->minus((string) $amount);
+        }
 
         return $left;
     }
@@ -223,4 +227,94 @@ class CustomerAdvanceService
             return DB::table('customer_advance_applications')->where('id', $id)->first();
         });
     }
+    public function refund(int $receiptId, array $data, int $actorId): object
+    {
+        return DB::transaction(function () use ($receiptId, $data, $actorId) {
+            $receipt = DB::table('customer_advance_receipts')
+                ->where('id', $receiptId)->lockForUpdate()->first();
+            abort_unless($receipt, 404);
+            $value = BigDecimal::of((string) $data['amount'])->toScale(4, RoundingMode::Unnecessary);
+            $old = DB::table('customer_advance_refunds')
+                ->where('submission_token', $data['submission_token'])->first();
+            if ($old) {
+                if ((int) $old->customer_advance_receipt_id === $receiptId
+                    && (int) $old->source_account_id === (int) $data['source_account_id']
+                    && $old->refunded_on === $data['refunded_on']
+                    && $old->reference === $data['reference']
+                    && BigDecimal::of((string) $old->amount)->isEqualTo($value)) {
+                    return $old;
+                }
+                throw ValidationException::withMessages(['submission_token' => 'Refund token was already used with different details.']);
+            }
+            if ($data['refunded_on'] < $receipt->received_on) {
+                throw ValidationException::withMessages(['refunded_on' => 'Refund date cannot precede receipt date.']);
+            }
+            if (! $value->isPositive() || $value->isGreaterThan($this->remaining($receiptId))) {
+                throw ValidationException::withMessages(['amount' => 'Refund exceeds the unapplied and unrefunded customer deposit balance.']);
+            }
+            $source = FinancialAccount::whereKey($data['source_account_id'])
+                ->lockForUpdate()->firstOrFail();
+            if (! $source->is_active || ! in_array($source->type, ['cashbox','bank','sarafi'], true)
+                || (int) $source->currency_id !== (int) $receipt->currency_id) {
+                throw ValidationException::withMessages(['source_account_id' => 'Choose an active payment account in the original deposit currency.']);
+            }
+            $cashLedgerId = DB::table('entity_ledger_accounts')->where([
+                'entity_type' => $source->type, 'entity_id' => $source->id,
+                'currency_id' => $receipt->currency_id, 'purpose' => 'cash',
+            ])->value('ledger_account_id');
+            $advanceLedgerId = DB::table('entity_ledger_accounts')->where([
+                'entity_type' => 'customer', 'entity_id' => $receipt->customer_id,
+                'currency_id' => $receipt->currency_id, 'purpose' => 'advance',
+            ])->value('ledger_account_id');
+            $cash = $cashLedgerId ? LedgerAccount::find($cashLedgerId) : null;
+            $advance = $advanceLedgerId ? LedgerAccount::find($advanceLedgerId) : null;
+            if (! $cash || ! $advance || $advance->type !== 'liability'
+                || (int) $advance->id !== (int) $receipt->advance_ledger_id
+                || ! $cash->is_active || ! $advance->is_active
+                || $cash->is_group || $advance->is_group || $cash->id === $advance->id) {
+                throw ValidationException::withMessages(['source_account_id' => 'Refund cash or customer liability mapping needs reconciliation.']);
+            }
+            DocumentSequence::firstOrCreate(['document_type' => 'customer_advance_refund'], [
+                'prefix' => 'CAF-', 'next_number' => 1, 'padding' => 6, 'is_active' => true,
+            ]);
+            $number = DocumentSequence::issue('customer_advance_refund');
+            $journal = JournalEntry::create([
+                'number' => $number, 'entry_date' => $data['refunded_on'],
+                'reference' => $data['reference'],
+                'description' => 'Refund unallocated customer deposit '.$receipt->number,
+                'currency_id' => $receipt->currency_id,
+                'created_by' => $actorId, 'status' => 'draft',
+            ]);
+            $journal->lines()->createMany([
+                ['ledger_account_id' => $advance->id, 'debit' => (string) $value, 'credit' => '0', 'memo' => 'Reverse unused customer advance liability'],
+                ['ledger_account_id' => $cash->id, 'debit' => '0', 'credit' => (string) $value, 'memo' => 'Cash/bank returned to customer'],
+            ]);
+            $this->journals->post($journal, $actorId);
+            $money = MoneyTransaction::create([
+                'submission_token' => $data['submission_token'],
+                'type' => 'payment', 'transaction_date' => $data['refunded_on'],
+                'source_account_id' => $source->id, 'destination_account_id' => null,
+                'counterpart_ledger_account_id' => $advance->id,
+                'currency_id' => $receipt->currency_id,
+                'amount' => (string) $value, 'reference' => $data['reference'],
+                'description' => 'Customer deposit refund '.$receipt->number,
+                'journal_entry_id' => $journal->id, 'created_by' => $actorId,
+            ]);
+            $id = DB::table('customer_advance_refunds')->insertGetId([
+                'number' => $number, 'submission_token' => $data['submission_token'],
+                'customer_advance_receipt_id' => $receiptId,
+                'source_account_id' => $source->id,
+                'money_transaction_id' => $money->id, 'journal_entry_id' => $journal->id,
+                'refunded_on' => $data['refunded_on'], 'amount' => (string) $value,
+                'reference' => $data['reference'], 'created_by' => $actorId,
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+            ActivityLog::record('customer.advance.refunded', 'customer_advance_refund', $id,
+                'Unused customer deposit refunded with posted liability and cash journal.',
+                ['deposit_id' => $receiptId, 'amount' => (string) $value,
+                 'currency_id' => $receipt->currency_id, 'journal_id' => $journal->id]);
+            return DB::table('customer_advance_refunds')->where('id', $id)->first();
+        });
+    }
+
 }
