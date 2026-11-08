@@ -4,6 +4,9 @@ namespace App\Services;
 
 use App\Models\FinishedGood;
 use App\Models\ActivityLog;
+use App\Models\InventoryCostLayer;
+use App\Models\InventoryCostConsumption;
+use App\Models\InventoryStockMovement;
 use App\Models\ProductionBatch;
 use App\Models\ProductionOrder;
 use Brick\Math\BigDecimal;
@@ -162,6 +165,10 @@ class ProductionBatchService
             if ($good->on_hand_packages > PHP_INT_MAX - $batch->accepted_packages) {
                 $this->reject('Finished goods balance exceeds the supported range.');
             }
+            // QC can change between material issue and finished-product
+            // release. Never release packages whose input FIFO sources have
+            // since become held or whose posted usage cannot be traced.
+            $this->assertSourceLotsReleased($batch);
             app(ProductionCostService::class)->snapshot($batch);
             $good->movements()->create([
                 'production_batch_id' => $batch->id,
@@ -180,6 +187,45 @@ class ProductionBatchService
                 ['warehouse_id'=>$warehouseId,'packages'=>$batch->accepted_packages,
                  'released_on'=>$date,'cost_snapshot_rows'=>$batch->costs()->count()]);
         });
+    }
+
+    private function assertSourceLotsReleased(ProductionBatch $batch): void
+    {
+        $materialLineIds=$batch->order->materials()->pluck('id');
+        if($materialLineIds->isEmpty()){
+            $this->reject('Production batch has no frozen material requirements to trace.');
+        }
+        $movements=InventoryStockMovement::where('reference_type','production_order_material')
+            ->whereIn('reference_id',$materialLineIds)->orderBy('id')->get();
+        if($movements->isEmpty()){
+            $this->reject('No posted raw-material or packaging issues are linked to this production batch.');
+        }
+        $consumptions=InventoryCostConsumption::whereIn(
+            'inventory_stock_movement_id',$movements->pluck('id')
+        )->get()->groupBy('inventory_stock_movement_id');
+        $lotIds=$consumptions->flatten()->pluck('inventory_cost_layer_id')->filter()->unique();
+        $layers=InventoryCostLayer::whereIn('id',$lotIds)->get()->keyBy('id');
+        $holds=app(QualityMaterialHoldService::class);
+        foreach($movements as $movement){
+            $records=$consumptions->get($movement->id,collect());
+            $tracked=BigDecimal::zero();
+            foreach($records as $record){
+                $tracked=$tracked->plus((string)$record->quantity);
+                if(!$record->inventory_cost_layer_id){
+                    $this->reject('A production input issue has no verifiable FIFO source lot. Reconcile its historical provenance before warehouse release.');
+                }
+                $lot=$layers->get($record->inventory_cost_layer_id);
+                if(!$lot || (int)$lot->inventory_material_id!==(int)$movement->inventory_material_id){
+                    $this->reject('A production issue references a missing or mismatched source lot.');
+                }
+                if($holds->isLayerHeld($lot)){
+                    $this->reject('Input material FIFO lot '.$lot->id.' is currently on QC hold. Review the source lot and finished batch before release.');
+                }
+            }
+            if(!$tracked->isEqualTo((string)$movement->quantity)){
+                $this->reject('Material FIFO consumption differs from the posted physical issue. Reconcile original inventory records.');
+            }
+        }
     }
 
     private function assertStatus(ProductionOrder|ProductionBatch $record, string $status): void
