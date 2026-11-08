@@ -200,6 +200,34 @@ class FinanceCloseReadinessService
                 ' production cost overhead allocation(s) remain under review for finished batches released this month.';
         }
 
+        $unpostedLanded=DB::table('goods_receipt_landed_costs as cost')
+            ->join('goods_receipts as receipt','receipt.id','=','cost.goods_receipt_id')
+            ->leftJoin('goods_receipt_landed_cost_postings as posted',
+                'posted.goods_receipt_landed_cost_id','=','cost.id')
+            ->where(function($q)use($begin,$end){
+                $q->whereBetween('receipt.received_on',[$begin,$end])
+                  ->orWhereDate('cost.created_at','>=',$begin)
+                  ->whereDate('cost.created_at','<=',$end);
+            })->whereNull('posted.id')->count();
+        if($unpostedLanded){
+            $blockers[]=$unpostedLanded.
+                ' recorded landed-cost component(s) from this period have no verified expense-to-inventory GL capitalization. Reconcile source expense documents before close.';
+        }
+        $invalidLanded=DB::table('goods_receipt_landed_cost_postings as posted')
+            ->join('journal_entries as journal','journal.id','=','posted.journal_entry_id')
+            ->leftJoin('journal_entries as reversal',
+                'reversal.reversal_of_id','=','journal.id')
+            ->whereBetween('posted.accounting_date',[$begin,$end])
+            ->where(function($q){
+                $q->where('journal.status','!=','posted')
+                    ->orWhereNotNull('journal.reversal_of_id')
+                    ->orWhereNotNull('reversal.id');
+            })->distinct()->count('posted.id');
+        if($invalidLanded){
+            $blockers[]=$invalidLanded.
+                ' landed-cost capitalization(s) refer to missing, reversed or nonposted inventory GL journals.';
+        }
+
         $bankAccounts=DB::table('financial_accounts')
             ->where('type','bank')->where('is_active',true)->get(['id','name']);
         foreach($bankAccounts as $account){
