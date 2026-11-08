@@ -63,6 +63,128 @@ I am not the requester and independently checked the original source documentati
 <button class="btn" type="submit" onclick="return confirm('Record this independent finance decision? No original stock or GL value will change.')">Save independent finance review</button>
 </form></section>
 @endif
+@if($case->case_type==='released_return_missing_cost')
+<section class="hfcs-card">
+<h2>Previously QC-released customer return — missing original inventory cost</h2>
+<p class="hfcs-alert">Historical finance-only correction. The original customer credit note must remain posted, the real customer invoice must already have source-currency COGS, and an independent QC release must have physically restocked the exact packages in a named warehouse. This correction never creates a second customer credit, refund, QC decision or warehouse movement. It only debits original finished-goods inventory and credits the original COGS account for the verified returned fraction.</p>
+@if($historicalReturnQc)
+<div class="hfcs-grid">
+<div><small>Original customer invoice</small><div>
+@if($historicalReturnInvoice)
+<a href="{{ route('sales.invoices.show',$historicalReturnInvoice->sales_invoice_id) }}">{{ $historicalReturnInvoice->invoice_number }}</a>
+@else Not source-matched @endif</div></div>
+<div><small>Original posted credit note</small><div>{{ $historicalReturnCredit->credit_number??'Not source-matched' }}</div></div>
+<div><small>Credit-note date</small><div>{{ $historicalReturnCredit->credit_date??'Unknown' }}</div></div>
+<div><small>Original QC decision</small><div><strong>{{ ucfirst($historicalReturnQc->status) }}</strong> · {{ $historicalReturnQc->decided_on }} </div></div>
+<div><small>QC document</small><div>{{ $historicalReturnQc->quality_reference??'Missing' }}</div></div>
+<div><small>Independent QC approver</small><div>#{{ $historicalReturnQc->decided_by??'Unknown' }} · registrar #{{ $historicalReturnQc->registered_by }}</div></div>
+<div><small>Original physical returned packages</small><div>{{ number_format($historicalReturnQc->quantity_packages) }}</div></div>
+<div><small>Original receiving / released warehouse</small><div>#{{ $historicalReturnQc->received_warehouse_id??'Unassigned' }} / #{{ $historicalReturnQc->released_warehouse_id??'Unassigned' }}</div></div>
+<div><small>Original posted invoice COGS</small><div>
+@if($historicalReturnSourceCost)
+{{ $historicalReturnSourceCost->amount }} {{ $historicalReturnSourceCurrency }}
+@else <strong>Missing — blocked</strong> @endif
+</div></div>
+</div>
+<p><strong>Original QC disposition notes:</strong></p>
+<p style="white-space:pre-wrap">{{ $historicalReturnQc->decision_notes }}</p>
+@endif
+@if($historicalReturnPlan)
+<h3>Original-source customer return financial recovery</h3>
+<div class="hfcs-grid">
+<div><small>Independent review state</small><div><strong>{{ ucfirst($historicalReturnPlan->status) }}</strong></div></div>
+<div><small>Original QC / GL date</small><div>{{ $historicalReturnPlan->posting_date }}</div></div>
+<div><small>Original source COGS</small><div>{{ $historicalReturnPlan->original_cogs_amount }}</div></div>
+<div><small>Recoverable asset / COGS</small><div><strong>{{ $historicalReturnPlan->recoverable_original_cost }} (currency #{{ $historicalReturnPlan->currency_id }})</strong></div></div>
+<div><small>Original asset debit ledger</small><div>#{{ $historicalReturnPlan->finished_inventory_ledger_id }}</div></div>
+<div><small>Original COGS credit ledger</small><div>#{{ $historicalReturnPlan->cogs_ledger_id }}</div></div>
+<div><small>Restoration journal</small><div>{{ $historicalReturnPlan->journal_number??'Not posted' }} {{ $historicalReturnPlan->journal_status ? '('.$historicalReturnPlan->journal_status.')' : '' }}</div></div>
+<div><small>Approved by</small><div>{{ $historicalReturnPlan->approved_by ? '#'.$historicalReturnPlan->approved_by : 'Pending' }}</div></div>
+</div>
+<p><strong>Original signed evidence:</strong> {{ $historicalReturnPlan->source_evidence_reference }}</p>
+<p style="white-space:pre-wrap">{{ $historicalReturnPlan->source_reconciliation_notes }}</p>
+@if($historicalReturnPlan->status==='submitted' &&
+(auth()->user()->can('finance.update') || auth()->user()->can('administration.update')) &&
+(int)$historicalReturnPlan->submitted_by!==auth()->id() &&
+(int)$case->requested_by!==auth()->id() &&
+(int)$case->reviewed_by!==auth()->id() &&
+(int)$historicalReturnQc->registered_by!==auth()->id() &&
+(int)$historicalReturnQc->decided_by!==auth()->id())
+<h3>Independent original-currency QC return expense reversal approval</h3>
+<form method="POST" action="{{ route('finance.historical-corrections.historical-return-review',$case->id) }}" class="hfcs-form">
+@csrf
+<label>Financial decision
+<select name="decision" required>
+<option value="">Choose signed finance decision</option>
+<option value="approve">Approve recovered original inventory asset / reverse eligible COGS</option>
+<option value="reject">Reject unverified QC, credit, stock or source COGS</option>
+</select></label>
+<label>Independent financial approval reference
+<input name="approval_reference" required minlength="4" maxlength="180"></label>
+<label>Independent original credit note, QC warehouse movement, asset/COGS ledger and original-currency amount review
+<textarea name="approval_notes" rows="5" required minlength="60" maxlength="5000"
+placeholder="Verify genuine original customer invoice and credit note, posted credit journal and revenue, independent QC inspector, one original warehouse restock, original invoice COGS, prior return quantities, source currency, available cost and open original accounting date."></textarea></label>
+<label style="display:flex;align-items:center;gap:8px">
+<input type="checkbox" name="confirm_independent_return_review" value="1" required style="width:auto">
+I independently verified original customer, QC and warehouse evidence without assuming missing historical quantities or costs.
+</label>
+<button class="btn" type="submit">Record independent return accounting decision</button>
+</form>
+@endif
+@if($historicalReturnPlan->status==='approved' &&
+(auth()->user()->can('finance.update') || auth()->user()->can('administration.update')) &&
+(int)$historicalReturnPlan->submitted_by!==auth()->id() &&
+(int)$historicalReturnPlan->approved_by!==auth()->id() &&
+(int)$case->requested_by!==auth()->id() &&
+(int)$case->reviewed_by!==auth()->id() &&
+(int)$historicalReturnQc->registered_by!==auth()->id() &&
+(int)$historicalReturnQc->decided_by!==auth()->id())
+<h3>Post approved original COGS inventory restoration</h3>
+<form method="POST" action="{{ route('finance.historical-corrections.historical-return-post',$case->id) }}" class="hfcs-form">
+@csrf
+<p class="hfcs-alert">The final executor rechecks every source and the original open QC accounting month, then posts only Dr finished-goods inventory / Cr original COGS for the exact previously costed return packages. It neither changes physical inventory nor creates a customer credit, refund, receivable or additional QC decision. All source and journal references commit together or roll back.</p>
+<label style="display:flex;align-items:center;gap:8px">
+<input type="checkbox" name="confirm_original_qc_cogs" value="1" required style="width:auto">
+I verified that the original physical return already exists and this cost restoration has never been posted.
+</label>
+<button class="btn" type="submit"
+onclick="return confirm('Post the independently approved original-currency asset/COGS recovery WITHOUT any stock or customer credit changes?')">
+Post approved original QC return cost recovery</button>
+</form>
+@endif
+@elseif($case->status==='approved' && $historicalReturnQc &&
+$historicalReturnSourceCost &&
+(auth()->user()->can('finance.update') || auth()->user()->can('administration.update')) &&
+(int)$case->requested_by!==auth()->id() &&
+(int)$case->reviewed_by!==auth()->id() &&
+(int)$historicalReturnQc->registered_by!==auth()->id() &&
+(int)$historicalReturnQc->decided_by!==auth()->id())
+<h3>Propose historical original-cost inventory recovery</h3>
+<p class="hfcs-alert">A signed source document must establish that the same original customer credited items were physically received and independently QC-released into a verified warehouse. Posting is fixed to the original QC approval date in an open accounting month, with original factory COGS currency. If the earlier source invoice COGS is absent or the source financial month is closed, this financial correction will be blocked.</p>
+<form method="POST" action="{{ route('finance.historical-corrections.historical-return-submit',$case->id) }}" class="hfcs-form">
+@csrf
+<label>Original QC / credit-note / warehouse evidence reference
+<input name="source_evidence_reference" required minlength="4" maxlength="180"
+value="{{ old('source_evidence_reference') }}"></label>
+<label>Historical physical restock and original customer COGS reconciliation
+<textarea name="source_reconciliation_notes" rows="5" required minlength="60" maxlength="5000"
+placeholder="Record exact original credit note, customer source invoice, original cost journal, source currency, quantity, original signed QC release, warehouse movement, prior return credits and proof no earlier inventory asset recovery exists.">{{ old('source_reconciliation_notes') }}</textarea></label>
+<label style="display:flex;align-items:center;gap:8px">
+<input type="checkbox" name="confirm_original_restock" value="1" required style="width:auto">
+The original credit note and QC warehouse restock were already recorded and independently authorized; I am not recreating physical stock.
+</label>
+<label style="display:flex;align-items:center;gap:8px">
+<input type="checkbox" name="confirm_no_prior_inventory_gl" value="1" required style="width:auto">
+Finance verified the original customer COGS remains valid and no journal previously restored this exact QC-return finished inventory value.
+</label>
+<button class="btn" type="submit">Submit independently evidenced QC return cost restoration</button>
+</form>
+@else
+<p class="hfcs-alert">Historical recovery is not eligible with the currently recorded sources, already posted financial resolution or current reviewer separation. Keep disputed return values in the investigation ledger.</p>
+@endif
+</section>
+@endif
+
 @if($case->case_type==='batch_uncapitalized')
 <section class="hfcs-card">
 <h2>Historical mixed dispatch manufacturing cost and GL recovery</h2>
