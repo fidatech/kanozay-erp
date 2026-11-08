@@ -29,6 +29,10 @@ class SalesReturnQuarantineService {
     if($record->quantity_packages>PHP_INT_MAX-(int)$good->on_hand_packages)
       throw ValidationException::withMessages(['action'=>'Product stock exceeds supported quantity.']);
     $warehouseId=$data['company_warehouse_id']??$record->received_warehouse_id;
+    // Finance recognizes returned FG asset only when QC physically releases
+    // the product to saleable stock. A cash credit alone is insufficient.
+    app(FinishedGoodsCostPostingService::class)
+        ->postReturnRecovery($record,$data['decided_on'],$actorId);
     app(FinishedGoodWarehouseService::class)->restock(
       $batch,$warehouseId,$record->quantity_packages,$data['decided_on'],
       'Quarantined customer return QC '.$record->id,$actorId
