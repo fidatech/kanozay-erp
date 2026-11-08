@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\CompanyWarehouse;
+use App\Support\LocalizedDecimal;
 use App\Models\GoodsReceipt;
 use App\Models\PurchaseReturnRecord;
 use App\Services\PurchaseReturnService;
@@ -44,10 +45,7 @@ class PurchaseReturnController extends Controller
         abort_unless(
             $request->user()->can('administration.update') ||
             ($request->user()->can('purchases.update') && $request->user()->can('inventory.update')),403);
-        $request->merge(['quantities'=>array_map(
-            fn($q)=>is_string($q)?str_replace(',','',strtr($q,['٫'=>'.','٬'=>','])):$q,
-            (array)$request->input('quantities',[]),
-        )]);
+        $request->merge(['quantities'=>LocalizedDecimal::quantities($request->input('quantities'))]);
         $data=$request->validate([
             'goods_receipt_id'=>['required','integer',Rule::exists('goods_receipts','id')->where('status','posted')],
             'submission_token'=>['required','uuid'],
