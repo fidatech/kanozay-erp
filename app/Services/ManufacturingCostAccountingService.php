@@ -180,12 +180,16 @@ class ManufacturingCostAccountingService
             if(!$receipt || $receipt->occurred_on>$data['accounting_date']){
                 $this->reject('The cost capitalization date cannot precede the QC-approved physical finished goods receipt.');
             }
-            $priorInvoiceDate=DB::table('sales_invoice_lines as line')
-                ->join('sales_invoices as invoice','invoice.id','=','line.sales_invoice_id')
-                ->where('line.production_batch_id',$batchId)
-                ->min('invoice.invoice_date');
-            if($priorInvoiceDate && $priorInvoiceDate<$data['accounting_date']){
-                $this->reject('This batch was sold before the proposed capitalization date. Reconcile legacy opening finished inventory and COGS before backdating financial costs.');
+            // A legacy physical dispatch already removed packages without
+            // an original-cost COGS journal. Backdating capitalization does
+            // not recover that missing COGS and would overstate FG assets.
+            if(DB::table('finished_good_dispatch_lines')
+                ->where('production_batch_id',$batchId)->exists()){
+                $this->reject('This batch has existing physical dispatches. Complete a controlled legacy inventory and COGS backfill before initial capitalization. Backdating the asset journal alone is prohibited.');
+            }
+            if(DB::table('sales_invoice_lines')
+                ->where('production_batch_id',$batchId)->exists()){
+                $this->reject('This batch already has invoice lines. Reconcile the legacy cost trail before new capitalization.');
             }
             $costs=$batch->costs()->get();
             if($costs->count()!==1 || $costs->first()->currency_id===null ||
