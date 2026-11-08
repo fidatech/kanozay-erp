@@ -481,6 +481,178 @@ final class HistoricalBatchCapitalizationService
         });
     }
 
+    /**
+     * Consume one original source-batch inventory line for an independently
+     * evidenced NON-SALE historical dispatch. Reuse the existing dispatch
+     * expense settlement subledger so sales, reports and GL period checks
+     * see the identical original batch cost ledger.
+     */
+    private function postNonSale(object $sourceLine,object $allocation,
+        array $s,object $plan,object $cost,int $actorId): \App\Models\JournalEntry
+    {
+        $physicalId=(int)$sourceLine->physical_line_id;
+        $signed=$s['non_sale'][$physicalId]??null;
+        if(!$signed || $allocation->sales_invoice_line_id ||
+            (int)$allocation->finance_historical_dispatch_disposition_id!==$signed['disposition_id'])
+            $this->fail('An original customer sale cannot be disguised as a non-sale expense.');
+
+        $production=app(FinishedGoodsCostPostingService::class)
+            ->assertCapitalized((int)$s['batch']->id,(string)$sourceLine->dispatch_date);
+        if((int)$production->id!==(int)$cost->id)
+            $this->fail('The manufacturing source cost record differs from the approved historic batch proposal.');
+
+        $policy=app(ManufacturingLedgerPolicyService::class)->approved((int)$cost->currency_id);
+        $this->expenseLedger((int)$allocation->expense_ledger_id,$s);
+        if(DB::table('sales_invoice_lines')
+                ->where('dispatch_id',$sourceLine->dispatch_id)->exists() ||
+            DB::table('finance_historical_dispatch_cost_settlements')
+                ->where('finished_good_dispatch_id',$sourceLine->dispatch_id)->exists())
+            $this->fail('This non-sale source dispatch was already invoiced or separately financially expensed.');
+
+        $priorQty=0;$priorAmount=BigDecimal::zero();
+        foreach(DB::table('production_invoice_cogs_postings')
+            ->where('production_batch_cost_posting_id',$cost->id)
+            ->get(['quantity_packages','amount']) as $row){
+            $priorQty+=(int)$row->quantity_packages;
+            $priorAmount=$priorAmount->plus((string)$row->amount);
+        }
+        $existing=DB::table('finance_historical_dispatch_cost_lines as expense')
+            ->join('finance_historical_dispatch_cost_settlements as settlement',
+                'settlement.id','=','expense.finance_historical_dispatch_cost_settlement_id')
+            ->where('expense.production_batch_cost_posting_id',$cost->id)
+            ->where('settlement.status','posted')
+            ->get(['expense.quantity_packages','expense.source_cost_amount']);
+        foreach($existing as $row){
+            $priorQty+=(int)$row->quantity_packages;
+            $priorAmount=$priorAmount->plus((string)$row->source_cost_amount);
+        }
+        if(DB::table('production_return_cost_postings as recovered')
+            ->join('production_invoice_cogs_postings as sold',
+                'sold.id','=','recovered.production_invoice_cogs_posting_id')
+            ->where('sold.production_batch_cost_posting_id',$cost->id)->exists())
+            $this->fail('The historical batch now has an earlier customer return recovery. This mixed-dispatch path excludes returns.');
+        $qty=(int)$sourceLine->quantity_packages;
+        $total=BigDecimal::of((string)$cost->total_amount);
+        if($priorQty<0 || $priorQty+$qty>(int)$cost->accepted_packages ||
+            $priorAmount->isNegative() || $priorAmount->isGreaterThanOrEqualTo($total))
+            $this->fail('Historical sold and non-sale dispatched stock already consumes the original batch quantity or cost.');
+        $expected=$priorQty+$qty===(int)$cost->accepted_packages
+            ?$total->minus($priorAmount)
+            :$total->multipliedBy((string)$qty)
+                ->dividedBy((string)$cost->accepted_packages,4,RoundingMode::HalfUp);
+        if(!$expected->isPositive() ||
+            $expected->isGreaterThan($total->minus($priorAmount)) ||
+            !$expected->isEqualTo((string)$allocation->source_cost_amount) ||
+            !$expected->isEqualTo($s['allocations'][$physicalId]))
+            $this->fail('Non-sale original-currency financial cost differs from the independently authorized source allocation.');
+        $amount=(string)$expected->toScale(4,RoundingMode::HalfUp);
+
+        $assetBalance=BigDecimal::zero();
+        foreach(DB::table('journal_lines as gl')
+            ->join('journal_entries as journal','journal.id','=','gl.journal_entry_id')
+            ->where('journal.status','posted')
+            ->where('journal.currency_id',$cost->currency_id)
+            ->whereDate('journal.entry_date','<=',$sourceLine->dispatch_date)
+            ->where('gl.ledger_account_id',$policy->finished_inventory_ledger_id)
+            ->get(['gl.debit','gl.credit']) as $line){
+            $assetBalance=$assetBalance->plus((string)$line->debit)
+                ->minus((string)$line->credit);
+        }
+        if($assetBalance->isLessThan($amount))
+            $this->fail('Posted finished inventory ledger lacks sufficient original-currency asset value for the original non-sale dispatch date.');
+
+        \App\Models\DocumentSequence::firstOrCreate([
+            'document_type'=>'historical_dispatch_expense',
+        ],[
+            'prefix'=>'HDE-','next_number'=>1,'padding'=>7,'is_active'=>true,
+        ]);
+        $journal=\App\Models\JournalEntry::create([
+            'number'=>\App\Models\DocumentSequence::issue('historical_dispatch_expense'),
+            'entry_date'=>$sourceLine->dispatch_date,
+            'reference'=>substr($sourceLine->dispatch_number,0,100),
+            'description'=>'Original '.$signed['purpose'].' finished goods issue '.
+                $sourceLine->dispatch_number.' / batch '.$s['batch']->batch_number,
+            'currency_id'=>$cost->currency_id,'status'=>'draft',
+            'created_by'=>$actorId,
+        ]);
+        $journal->lines()->createMany([
+            [
+                'ledger_account_id'=>$allocation->expense_ledger_id,
+                'debit'=>$amount,'credit'=>'0',
+                'memo'=>'Original signed '.$signed['purpose'].' evidence '.$signed['document'],
+            ],
+            [
+                'ledger_account_id'=>$policy->finished_inventory_ledger_id,
+                'debit'=>'0','credit'=>$amount,
+                'memo'=>'Original posted batch inventory cost / physical dispatch '.$physicalId,
+            ],
+        ]);
+        app(\App\Services\Accounting\JournalPostingService::class)->post($journal,$actorId);
+
+        $settlementId=DB::table('finance_historical_dispatch_cost_settlements')
+            ->insertGetId([
+                'finance_historical_correction_case_id'=>$signed['case_id'],
+                'finance_historical_dispatch_disposition_id'=>$signed['disposition_id'],
+                'finished_good_dispatch_id'=>$sourceLine->dispatch_id,
+                'business_purpose'=>$signed['purpose'],
+                'status'=>'posted','posting_date'=>$sourceLine->dispatch_date,
+                'source_authorization_reference'=>$plan->source_authorization_reference,
+                'expense_recognition_evidence'=>$signed['evidence'].
+                    ' | Batch finance approval: '.$plan->approval_notes,
+                'approval_reference'=>$plan->approval_reference,
+                'approval_notes'=>$plan->approval_notes,
+                'submitted_by'=>$plan->submitted_by,
+                'approved_by'=>$plan->approved_by,
+                'posted_by'=>$actorId,'approved_at'=>$plan->approved_at,
+                'posted_at'=>now(),'created_at'=>now(),'updated_at'=>now(),
+            ]);
+        DB::table('finance_historical_dispatch_cost_lines')->insert([
+            'finance_historical_dispatch_cost_settlement_id'=>$settlementId,
+            'finished_good_dispatch_line_id'=>$physicalId,
+            'production_batch_cost_posting_id'=>$cost->id,
+            'currency_id'=>$cost->currency_id,
+            'finished_inventory_ledger_id'=>$policy->finished_inventory_ledger_id,
+            'expense_ledger_id'=>$allocation->expense_ledger_id,
+            'quantity_packages'=>$qty,
+            'original_batch_total'=>$cost->total_amount,
+            'source_cost_amount'=>$amount,
+            'journal_entry_id'=>$journal->id,
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        DB::table('finance_historical_correction_cases')
+            ->where('id',$signed['case_id'])
+            ->where('status','approved')->update([
+                'status'=>'resolved','open_key'=>null,
+                'source_currency_id'=>$cost->currency_id,
+                'resolution_reference'=>$plan->approval_reference,
+                'resolution_notes'=>'Original '.$signed['purpose'].
+                    ' finished-goods cost '.$amount.' source currency #'.
+                    $cost->currency_id.' recognized within approved mixed-batch WIP/COGS recovery. '.
+                    $plan->source_reconciliation_notes,
+                'executed_by'=>$actorId,'executed_at'=>now(),
+                'updated_at'=>now(),
+            ]);
+        DB::table('finance_historical_correction_events')->insert([
+            'finance_historical_correction_case_id'=>$signed['case_id'],
+            'action'=>'resolved',
+            'source_reference'=>$signed['source_reference'],
+            'source_fingerprint'=>$signed['source_fingerprint'],
+            'approval_reference'=>$plan->approval_reference,
+            'notes'=>'Approved original-currency '.$signed['purpose'].' inventory expense '.
+                $amount.' / journal '.$journal->number.' / batch '.
+                $s['batch']->batch_number.'; signed disposition '.$signed['document'].
+                '. Physical movement and customer sales unchanged.',
+            'actor_id'=>$actorId,
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        ActivityLog::record('finance.historical_mixed_dispatch.expensed',
+            'finance_historical_dispatch_cost_settlement',$settlementId,
+            'Previously dispatched finished batch expensed in its approved non-sale purpose, original currency and exact historical quantity.',
+            ['batch_id'=>$s['batch']->id,'source_line'=>$physicalId,
+                'journal_id'=>$journal->id,'amount'=>$amount]);
+        return $journal;
+    }
+
     public function post(int $caseId,int $actorId): object
     {
         return DB::transaction(function()use($caseId,$actorId){
@@ -526,27 +698,55 @@ final class HistoricalBatchCapitalizationService
                 (int)$cost->accepted_packages!==(int)$s['batch']->accepted_packages)
                 $this->fail('Actual source-backed manufacturing GL costs differ from independently approved original-currency batch value.');
 
-            $count=0;
+            $costedSales=0;$costedNonSale=0;
+            $approvedLines=$this->allocationRecords($record,$s);
             foreach($s['lines'] as $row){
-                // Each previously posted customer invoice remains unchanged.
-                // Only its missing original-currency COGS asset movement is added.
-                app(FinishedGoodsCostPostingService::class)->postInvoiceLine(
-                    SalesInvoiceLine::findOrFail($row->invoice_line_id),$actorId);
-                $count++;
+                $physicalId=(int)$row->physical_line_id;
+                $signedLine=$approvedLines[$physicalId]??null;
+                if($row->invoice_line_id){
+                    // Existing genuine customer revenue and receivable stay
+                    // unchanged. Original COGS is posted on its actual date.
+                    $cogs=app(FinishedGoodsCostPostingService::class)->postInvoiceLine(
+                        SalesInvoiceLine::findOrFail($row->invoice_line_id),$actorId);
+                    if($signedLine &&
+                        ((int)$signedLine->sales_invoice_line_id!==(int)$row->invoice_line_id ||
+                         !BigDecimal::of((string)$cogs->amount)
+                             ->isEqualTo((string)$signedLine->source_cost_amount)))
+                        $this->fail('Original invoice COGS differs from the approved physical source line allocation.');
+                    $journalId=(int)$cogs->journal_entry_id;
+                    $costedSales++;
+                }else{
+                    if(!$signedLine)
+                        $this->fail('An original non-sale dispatch has no separately approved expense account and source cost.');
+                    $journal=$this->postNonSale($row,$signedLine,$s,$record,$cost,$actorId);
+                    $journalId=(int)$journal->id;
+                    $costedNonSale++;
+                }
+                if($signedLine){
+                    DB::table('finance_historical_batch_dispatch_allocations')
+                        ->where('id',$signedLine->id)->update([
+                            'journal_entry_id'=>$journalId,'updated_at'=>now(),
+                        ]);
+                }
             }
+            if($costedSales!==$s['sale_count'] ||
+                $costedNonSale!==count($s['non_sale']))
+                $this->fail('The posted COGS/non-sale count differs from every approved original dispatch source.');
             DB::table('finance_historical_batch_capitalizations')->where('id',$record->id)->update([
                 'status'=>'posted','production_batch_cost_posting_id'=>$cost->id,
-                'posted_invoice_cogs_lines'=>$count,
+                'posted_invoice_cogs_lines'=>$costedSales,
+                'posted_non_sale_lines'=>$costedNonSale,
                 'executed_by'=>$actorId,'executed_at'=>now(),'updated_at'=>now(),
             ]);
             DB::table('finance_historical_correction_cases')->where('id',$caseId)->update([
                 'status'=>'resolved','open_key'=>null,
                 'source_currency_id'=>$s['currency_id'],
                 'resolution_reference'=>$record->approval_reference,
-                'resolution_notes'=>'Original production capitalization and '.$count.
-                    ' source-invoiced COGS lines posted in open original periods. '.
+                'resolution_notes'=>'Original production capitalization and '.$costedSales.
+                    ' invoice COGS lines + '.$costedNonSale.
+                    ' independently authorized non-sale dispatch expenses posted in open original periods. '.
                     $record->source_reconciliation_notes,
-                'posted_cogs_lines'=>$count,
+                'posted_cogs_lines'=>$costedSales,
                 'executed_by'=>$actorId,'executed_at'=>now(),'updated_at'=>now(),
             ]);
             DB::table('finance_historical_correction_events')->insert([
@@ -557,16 +757,18 @@ final class HistoricalBatchCapitalizationService
                 'approval_reference'=>$record->approval_reference,
                 'notes'=>'Original production WIP and finished inventory capitalized at '.
                     $s['amount'].' (currency #'.$s['currency_id'].') on '.$s['date'].
-                    '; '.$count.' independently sourced existing invoice COGS lines posted. '.
+                    '; '.$costedSales.' original invoice COGS lines and '.$costedNonSale.
+                    ' signed historical non-sale expense lines posted. '.
                     'Original physical movements and sales revenue unchanged. '.
                     $record->source_authorization_reference,
                 'actor_id'=>$actorId,'created_at'=>now(),'updated_at'=>now(),
             ]);
             ActivityLog::record('finance.historical_batch_capitalization.posted',
                 'finance_historical_batch_capitalization',$record->id,
-                'Frozen source-cost manufacturing and all previously invoiced COGS posted atomically.',
+                'Frozen batch source cost, original invoice COGS and independently signed non-sale expense journals posted atomically.',
                 ['batch_id'=>$s['batch']->id,'capitalization_id'=>$cost->id,
-                    'currency_id'=>$s['currency_id'],'cogs_lines'=>$count]);
+                    'currency_id'=>$s['currency_id'],'cogs_lines'=>$costedSales,
+                    'non_sale_lines'=>$costedNonSale]);
             return DB::table('finance_historical_batch_capitalizations')
                 ->where('id',$record->id)->first();
         });
