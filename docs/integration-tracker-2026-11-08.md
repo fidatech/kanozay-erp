@@ -175,6 +175,16 @@ Added cost accounting navigation and forms, protected COGS/asset journals agains
 
 **Status: source integration advanced; migration and runtime verification still deferred.** Costing policies and historic source evidence need signed factory approval. Live deployment must not be attempted until staging migrations, original-cost audit and controlled acceptance are complete.
 
+## Landed-cost GL journals and waste/rework accounting controls
+
+Added an independently approved original-purchase-currency landed-cost capitalization path: each immutable GRN freight/customs/handling component must match a unique, unreversed posted expense debit, a signed finance approval and the approved raw-inventory GL ledger. The resulting balanced journal debits inventory and credits original expense without a second stock receipt or FX conversion. FIFO lot issues and WIP capitalization now demand this source GL evidence for a landed-cost lot. Source expense lines cannot fund both landed cost and production overhead, and their source/reclassification journals cannot be reversed independently. The purchase-order receipt page offers finance the expense-match action and displays posted status. Supplier returns of such lots remain blocked until a dedicated asset write-off or recovered landed-cost credit exists; regular supplier debit notes cover only invoiced base purchase value.
+
+Added independent production material waste financial classification (normal process loss under signed policy, abnormal loss or rework pending). Abnormal losses and unreviewed/rework cases cannot be silently included in accepted finished-stock capitalization. Completed rework requires a separate authorized finance reviewer, append-only event history, physical completion and approved policy evidence, followed by a newly approved QC sample. The original material issue is never deducted twice. A company-wide waste/rework review report and safe CSV display missing source decisions and current evidence; relevant reporting navigation and filters are translated into Pashto and Dari. Cost-readiness, manufacturing GL reconciliation and month-close now identify these exceptions.
+
+[Landed-cost and Waste Financial Controls](landed-cost-and-waste-financial-controls-2026-11-08.md) documents implemented source and outstanding abnormal waste expense reclassification, historic landed-cost supplier-return corrections, legacy asset/COGS reconciliation and final translation.
+
+**Status: cross-module source controls advanced; source-currency abnormal loss expense and landed-cost supplier-return journals incomplete.** Tests, migrations, syntax lint, browser UAT, MySQL validation and deployment remain intentionally deferred.
+
 ## Acceptance and release gates
 
 1. Passing SQLite feature suite and isolated regression suite on the latest commit.
