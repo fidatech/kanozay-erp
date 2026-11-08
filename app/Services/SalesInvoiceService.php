@@ -27,7 +27,11 @@ class SalesInvoiceService
     {
         return DB::transaction(function () use ($data, $actorId) {
             $existing = SalesInvoice::where('submission_token', $data['submission_token'])->first();
-            if ($existing) return $existing->load(['customer', 'currency', 'lines.finishedGood', 'lines.batch', 'journal', 'tradeDocument']);
+            if ($existing){
+                $this->assertIdempotentReplay($existing,$data);
+                return $existing->load(['customer','currency','lines.finishedGood',
+                    'lines.batch','journal','tradeDocument']);
+            }
 
             $customer = TradeParty::query()->lockForUpdate()->findOrFail($data['customer_id']);
             $currency = Currency::whereKey($data['currency_id'])->where('is_active', true)->firstOrFail();
@@ -165,6 +169,49 @@ class SalesInvoiceService
 
             return $invoice->load(['customer', 'currency', 'lines.finishedGood', 'lines.batch', 'journal', 'tradeDocument']);
         });
+    }
+
+    private function assertIdempotentReplay(SalesInvoice $invoice,array $data):void
+    {
+        if($invoice->status!=='posted' ||
+            (int)$invoice->customer_id!==(int)$data['customer_id'] ||
+            (int)$invoice->currency_id!==(int)$data['currency_id'] ||
+            $invoice->invoice_date->toDateString()!==$data['invoice_date'] ||
+            $invoice->due_date->toDateString()!==$data['due_date'] ||
+            (string)($invoice->tradeDocument?->reference??'')!==
+                (string)($data['reference']??'')){
+            $this->reject('Invoice token already belongs to a different customer, currency, date or reference.');
+        }
+        $revenue=DB::table('journal_lines')
+            ->where('journal_entry_id',$invoice->journal_entry_id)
+            ->where('ledger_account_id',$data['income_ledger_id'])
+            ->where('credit','>',0)->get();
+        if($revenue->count()!==1 ||
+            !BigDecimal::of((string)$revenue->first()->credit)->isEqualTo((string)$invoice->total)){
+            $this->reject('Invoice token belongs to a document with a different income ledger or journal amount.');
+        }
+        $old=$invoice->lines()->orderBy('id')->get();
+        if($old->count()!==count($data['lines'])){
+            $this->reject('Invoice token already has a different number of sale lines.');
+        }
+        foreach(array_values($data['lines']) as $index=>$line){
+            $record=$old[$index];
+            $dispatch=DB::table('finished_good_dispatches')
+                ->where('id',$record->dispatch_id)->first();
+            $location=DB::table('finished_good_dispatch_lines')
+                ->where('finished_good_dispatch_id',$record->dispatch_id)
+                ->first();
+            if(!$dispatch || !$location ||
+                $dispatch->submission_token!==$line['dispatch_token'] ||
+                (int)$record->production_batch_id!==(int)$line['production_batch_id'] ||
+                (int)$record->quantity_packages!==(int)$line['quantity_packages'] ||
+                (int)($record->sales_order_line_id??0)!==(int)($line['sales_order_line_id']??0) ||
+                (int)($location->company_warehouse_id??0)!==
+                    (int)($line['company_warehouse_id']??0) ||
+                !BigDecimal::of((string)$record->unit_price)->isEqualTo((string)$line['unit_price'])){
+                $this->reject('Invoice token already has different quantities, batches, warehouse, dispatch tokens, order lines or sales prices.');
+            }
+        }
     }
 
     private function reject(string $message): never
