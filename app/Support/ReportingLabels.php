@@ -41,9 +41,26 @@ class ReportingLabels
             'filter'=>'Filter','report_register'=>'Report register','matching_records'=>'matching records',
             'no_filter_matches'=>'No records match these filters.',
             'reporting_note'=>'Report scope',
+            'period_close'=>'Monthly financial closing',
+            'good_morning'=>'Good morning','good_afternoon'=>'Good afternoon','good_evening'=>'Good evening',
+            'dashboard_operations'=>'Recorded Kanozay operations',
+            'recent_activity'=>'Recent recorded activity',
+            'recent_activity_note'=>'Operational documents and posted journals in the selected period.',
+            'no_permission_cards'=>'No dashboard data for your permissions',
+            'no_recent_activity'=>'No recent activity found',
+            'accessible_records'=>'Accessible source records will appear here when entered.',
+            'view_record'=>'View',
+            'party_description'=>'Party / Description',
+            'status_currency'=>'Status / Currency',
         ];
         return (string)(config('erp_reporting_labels.'.app()->getLocale().'.'.$key)
             ??$english[$key]??$key);
+    }
+
+    public static function dashboardCard(string $label):string
+    {
+        return (string)(config('erp_reporting_labels.'.app()->getLocale().'.dashboard.'.$label)
+            ??$label);
     }
 
     public static function column(string $column):string
