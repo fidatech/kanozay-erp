@@ -13,7 +13,10 @@
 @media(max-width:1000px){.wh-form{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:650px){.wh-form{grid-template-columns:1fr}}
 </style>
-<div class="heading"><div><h1>Warehouse stock allocation & transfers</h1><p>Raw materials / Warehouse FIFO lot provenance and transfers without duplicate inventory postings.</p></div><a class="btn btn-light" href="{{ route('admin.company.edit') }}">Manage warehouses</a></div>
+<div class="heading"><div><h1>Warehouse stock allocation & transfers</h1><p>Raw materials / Warehouse FIFO lot provenance and transfers without duplicate inventory postings.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap">
+<a class="btn btn-light" href="{{ route('inventory.warehouse-valuation.index') }}">FIFO valuation by location</a>
+<a class="btn btn-light" href="{{ route('admin.company.edit') }}">Manage warehouses</a>
+</div></div>
 @if(session('success'))<p class="notice">{{ session('success') }}</p>@endif
 @if($errors->any())<p class="notice notice-warning">{{ $errors->first() }}</p>@endif
 <section class="wh-panel"><h2>Company-wide stock reconciliation</h2>
