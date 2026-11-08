@@ -47,6 +47,82 @@
 <div class="panel"><h2>Opening Balances</h2><div class="table-wrap"><table><thead><tr><th>Currency</th><th>Amount</th><th>Direction</th></tr></thead><tbody>@forelse($openingBalances as $balance)<tr><td>{{ $party->currencies->firstWhere('id',$balance->currency_id)?->code ?: $balance->currency_id }}</td><td><x-finance-amount :amount="\Brick\Math\BigDecimal::of((string)$balance->amount)->abs()" /></td><td>{{ \Brick\Math\BigDecimal::of((string)$balance->amount)->compareTo(\Brick\Math\BigDecimal::zero()) >= 0 ? ($type==='customer'?'They owe us':'Advance paid') : ($type==='customer'?'Customer advance':'We owe them') }}</td></tr>@empty<tr><td colspan="3">No opening balances recorded.</td></tr>@endforelse</tbody></table></div></div>
 <div class="panel"><h2>Recent {{ $type==='customer'?'Receivables':'Payables' }}</h2><div class="table-wrap"><table><thead><tr><th>Document</th><th>Date</th><th>Due date</th><th>Outstanding after payments and credits</th><th>Currency</th></tr></thead><tbody>@forelse($documents as $document)<tr><td>{{ $document->number }}</td><td>{{ $document->document_date }}</td><td>{{ $document->due_date }}</td><td><x-finance-amount :amount="$document->outstanding_amount" /></td><td>{{ $party->currencies->firstWhere('id',$document->currency_id)?->code ?: $document->currency_id }}</td></tr>@empty<tr><td colspan="5">No financial documents recorded.</td></tr>@endforelse</tbody></table></div><p class="muted">Showing up to 100 recent documents.</p></div>
 
+@if($type==='customer')
+<section class="panel">
+ <h2>Customer deposits and advances</h2>
+ <p class="muted">A customer deposit is a liability until applied to an invoice. It is kept separate from ordinary receivable payments.</p>
+ @canany(['administration.update','finance.update'])
+ @if($party->is_active && $cashboxes->isNotEmpty())
+ <form method="POST" action="{{ route('finance.customers.advances.receive',$party) }}" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:18px">
+  @csrf<input type="hidden" name="submission_token" value="{{ (string)\Illuminate\Support\Str::uuid() }}">
+  <label>Deposit date<input type="date" name="received_on" value="{{ date('Y-m-d') }}" required></label>
+  <label>Currency<select name="currency_id" required id="customer-advance-currency">
+   <option value="">Select currency</option>
+   @foreach($party->currencies as $currency)<option value="{{ $currency->id }}">{{ $currency->code }}</option>@endforeach
+  </select></label>
+  <label>Received into<select name="destination_account_id" required id="customer-advance-financial">
+   <option value="">Select account</option>
+   @foreach($cashboxes as $account)
+   <option value="{{ $account->id }}" data-currency="{{ $account->currency_id }}">{{ ucfirst($account->type) }}: {{ $account->name }} — {{ $account->currency?->code }}</option>
+   @endforeach
+  </select></label>
+  <label>Deposit amount<input name="amount" type="text" inputmode="decimal" maxlength="25" placeholder="0.00" required></label>
+  <label>Receipt reference<input name="reference" maxlength="120" required placeholder="Bank receipt / deposit reference"></label>
+  <div style="display:flex;align-items:flex-end"><button type="submit" class="btn">Record deposit</button></div>
+ </form>
+ <script>
+ document.addEventListener('DOMContentLoaded',function(){
+  const currency=document.getElementById('customer-advance-currency');
+  const account=document.getElementById('customer-advance-financial');
+  if(!currency||!account)return;
+  currency.addEventListener('change',()=>{
+   [...account.options].forEach(option=>{if(option.value)option.hidden=!!currency.value&&option.dataset.currency!==currency.value;});
+   if(account.selectedOptions[0]?.hidden)account.value='';
+  });
+  account.addEventListener('change',()=>{
+   const current=account.selectedOptions[0]?.dataset.currency;
+   if(current)currency.value=current;
+  });
+ });
+ </script>
+ @endif
+ @endcanany
+ <div class="table-wrap"><table>
+  <thead><tr><th>Deposit</th><th>Date</th><th>Currency</th><th>Original</th><th>Unapplied</th><th>Apply to invoice</th></tr></thead><tbody>
+  @forelse($customerAdvances as $advance)
+  <tr>
+   <td><strong>{{ $advance->number }}</strong><small style="display:block">{{ $advance->reference }}</small></td>
+   <td>{{ $advance->received_on }}</td>
+   <td>{{ $party->currencies->firstWhere('id',$advance->currency_id)?->code }}</td>
+   <td><x-finance-amount :amount="$advance->amount" /></td>
+   <td><x-finance-amount :amount="$advance->remaining" /></td>
+   <td>
+    @canany(['administration.update','finance.update'])
+    @if(\Brick\Math\BigDecimal::of((string)$advance->remaining)->isPositive() && $openDocuments->contains(fn($doc)=>(int)$doc->currency_id===(int)$advance->currency_id))
+    <form method="POST" action="{{ route('finance.customers.advances.apply',['party'=>$party,'advance'=>$advance->id]) }}" style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
+     @csrf<input type="hidden" name="submission_token" value="{{ (string)\Illuminate\Support\Str::uuid() }}">
+     <input type="date" name="applied_on" required value="{{ date('Y-m-d') }}" aria-label="Application date" style="max-width:145px">
+     <select name="trade_document_id" required aria-label="Invoice" style="max-width:200px"><option value="">Choose invoice</option>
+      @foreach($openDocuments as $doc)
+       @if((int)$doc->currency_id===(int)$advance->currency_id)
+        <option value="{{ $doc->id }}">{{ $doc->number }} ({{ $doc->outstanding_amount }})</option>
+       @endif
+      @endforeach
+     </select>
+     <input name="amount" type="text" inputmode="decimal" maxlength="25" required placeholder="Amount" aria-label="Application amount" style="max-width:120px">
+     <button type="submit" class="btn">Apply</button>
+    </form>
+    @else <span class="muted">{{ \Brick\Math\BigDecimal::of((string)$advance->remaining)->isZero()?'Fully applied':'No open invoice in this currency' }}</span>
+    @endif
+    @endcanany
+   </td>
+  </tr>
+  @empty<tr><td colspan="6">No customer advance deposits recorded.</td></tr>
+  @endforelse
+  </tbody></table></div>
+</section>
+@endif
+
 @canany(['administration.update','finance.update'])
 @if($unallocatedPayments->isNotEmpty() && $openDocuments->isNotEmpty())
 <section class="panel">
