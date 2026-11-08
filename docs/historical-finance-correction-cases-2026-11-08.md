@@ -23,7 +23,7 @@ Six types are supported:
 
 The case service requires a real source record and stable source attributes. A database-unique `open_key` prevents duplicate unresolved cases for the same record and issue type. The original source fingerprint is checked again at review and at permitted execution. Approved source investigations remain unresolved until a supported correction method can actually be completed. Rejecting a case preserves its event history but allows a new properly evidenced request.
 
-The requester cannot approve their own case. Reviews require an independent signed approval reference and evidence notes; submitting or approving a case **does not create an accounting journal, change physical stock or invent an original asset value**.
+The requester cannot approve their own case. Reviews require an independent signed approval reference and evidence notes; submitting or approving a case **does not create an accounting journal, change physical stock or invent an original asset value**. If the source fingerprint changes, it cannot be approved. The independent reviewer may reject a stale submitted case, or the original requester may withdraw an unreviewed case; the reviewer who approved an unexecuted case may subsequently invalidate that approval. These actions preserve event history, free the source for a newly evidenced case, and create no stock or journal changes.
 
 ## Supported automatic correction: previously capitalized invoice missing COGS
 
@@ -32,7 +32,7 @@ The single automatic execution type is `invoice_missing_cogs`. Its case must be 
 Inside one database transaction, the executor:
 - Locks the shared finance posting gate and requires the source month to be open.
 - Revalidates the original invoice snapshot (customer, original currency, dates, amounts, revenue journal identity, physical dispatch and all original invoice lines).
-- Requires the original sales revenue journal to remain posted and unreversed in the invoice currency.
+- Requires the original sales revenue journal to remain posted and unreversed in the invoice currency, and checks the dated source revenue GL debit/credit totals plus linked customer receivable against the original posted invoice amount and customer.
 - Invokes the pre-existing `FinishedGoodsCostPostingService::reconcilePostedInvoice`, which allows COGS only against an existing, approved original-cost-currency batch capitalization, original delivery date, original physical dispatch and permitted chronological cost-journal sequence.
 - Checks **every** original invoice line for an unreversed posted original-currency COGS journal with the matching batch and number of dispatched packages.
 - Verifies the recognized cost expense debit and the finished-stock asset credit match each invoice-line cost posting exactly. Cross-currency conversion is never assumed.
