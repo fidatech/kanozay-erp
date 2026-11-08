@@ -131,15 +131,21 @@ class LaboratoryQualityController extends Controller
    if($data['source_type']==='finished_batch'){
     if(empty($data['production_batch_id']) || !empty($data['goods_receipt_line_id']))
      throw ValidationException::withMessages(['production_batch_id'=>'Choose a production batch only.']);
-    $batch=ProductionBatch::where('status','pending_qc')->find($data['production_batch_id']);
+    $batch=ProductionBatch::where('status','pending_qc')
+     ->whereKey($data['production_batch_id'])->lockForUpdate()->first();
     if(!$batch)throw ValidationException::withMessages(['production_batch_id'=>'Choose a batch awaiting QC approval.']);
+    if($data['collected_on']<$batch->created_at->toDateString())
+     throw ValidationException::withMessages(['collected_on'=>'A laboratory sample cannot be collected before its source production batch exists.']);
     $batchId=$batch->id;$subjectType='finished_good';$subjectId=$batch->finished_good_id;
    }else{
     if(empty($data['goods_receipt_line_id']) || !empty($data['production_batch_id']))
      throw ValidationException::withMessages(['goods_receipt_line_id'=>'Choose a posted GRN line only.']);
-    $line=GoodsReceiptLine::with('receipt')->find($data['goods_receipt_line_id']);
+    $line=GoodsReceiptLine::whereKey($data['goods_receipt_line_id'])
+     ->lockForUpdate()->first();
     if(!$line||$line->receipt?->status!=='posted')
      throw ValidationException::withMessages(['goods_receipt_line_id'=>'Only posted receipt lines can be inspected.']);
+    if($data['collected_on']<$line->receipt->received_on->toDateString())
+     throw ValidationException::withMessages(['collected_on'=>'Incoming QC collection cannot predate the goods receipt.']);
     $receiptLineId=$line->id;$subjectType='material';$subjectId=$line->inventory_material_id;
    }
    $current=DB::table('quality_specifications')
@@ -222,7 +228,7 @@ class LaboratoryQualityController extends Controller
   $request->merge(['observed_value'=>LocalizedDecimal::normalize($request->input('observed_value'))]);
   $data=$request->validate([
    'quality_specification_id'=>['required','integer','exists:quality_specifications,id'],
-   'observed_value'=>['nullable','numeric','decimal:0,6'],
+   'observed_value'=>['nullable','numeric','decimal:0,6','between:-99999999999999.999999,99999999999999.999999'],
    'outcome'=>['nullable',Rule::in(['pass','fail'])],
    'observation'=>['nullable','string','max:3000'],
   ]);
