@@ -309,7 +309,114 @@ The original invoice, return, claim or write-off authorization and absence of ea
 <p style="white-space:pre-wrap">{{ $dispatchDisposition->source_evidence }}</p>
 <p><strong>Remaining financial action:</strong></p>
 <p style="white-space:pre-wrap">{{ $dispatchDisposition->remaining_financial_action }}</p>
-<p class="hfcs-alert">Disposition is recorded but the case remains open. Financial posting still needs an independently source-valued, purpose-specific correction. No customer receivable, revenue, COGS or expense entry was created.</p>
+<p class="hfcs-alert">Business purpose has been documented. Only previously capitalized, source-priced non-sale dispatches can proceed to independently authorized expense recognition. Customer sales and unresolved purposes remain nonposting; no fabricated invoice or revenue is permitted.</p>
+@if($dispatchCostSettlement)
+<h3>Historical non-sale expense settlement</h3>
+<div class="hfcs-grid">
+<div><small>Approval state</small><div><strong>{{ ucfirst($dispatchCostSettlement->status) }}</strong></div></div>
+<div><small>Recognized purpose</small><div>{{ str_replace('_',' ',$dispatchCostSettlement->business_purpose) }}</div></div>
+<div><small>Posting date</small><div>{{ $dispatchCostSettlement->posting_date }}</div></div>
+<div><small>Source authorization</small><div>{{ $dispatchCostSettlement->source_authorization_reference }}</div></div>
+<div><small>Finance approver</small><div>{{ $dispatchCostSettlement->approved_by ? '#'.$dispatchCostSettlement->approved_by : 'Pending' }}</div></div>
+</div>
+<p><strong>Recognized purpose and original costing evidence:</strong></p>
+<p style="white-space:pre-wrap">{{ $dispatchCostSettlement->expense_recognition_evidence }}</p>
+<div style="overflow-x:auto">
+<table style="width:100%;min-width:620px">
+<thead><tr><th>Original dispatch line</th><th>Package quantity</th><th>Verified cost</th><th>Expense ledger</th><th>Posting journal</th></tr></thead>
+<tbody>
+@foreach($dispatchCostSettlementLines as $record)
+<tr>
+<td>#{{ $record->finished_good_dispatch_line_id }}</td>
+<td>{{ number_format($record->quantity_packages) }}</td>
+<td>{{ $record->source_cost_amount }} {{ $record->currency_code }}</td>
+<td>#{{ $record->expense_ledger_id }}</td>
+<td>{{ $record->journal_number??'Not posted' }} {{ $record->journal_status ? '('.$record->journal_status.')' : '' }}</td>
+</tr>
+@endforeach
+</tbody></table></div>
+@if($dispatchCostSettlement->status==='submitted' &&
+(auth()->user()->can('finance.update') || auth()->user()->can('administration.update')) &&
+(int)$dispatchCostSettlement->submitted_by!==auth()->id() &&
+(int)$dispatchDisposition->reviewed_by!==auth()->id() &&
+(int)$case->requested_by!==auth()->id())
+<h3>Independent original-currency expense approval</h3>
+<form method="POST" action="{{ route('finance.historical-corrections.dispatch-cost-approve',$case->id) }}" class="hfcs-form">
+@csrf
+<label>Decision<select name="decision" required>
+<option value="approve">Approve original-capitalized non-sale expense treatment</option>
+<option value="reject">Reject unsupported or unmatched cost accounting</option>
+</select></label>
+<label>Signed approval document
+<input name="approval_reference" required minlength="4" maxlength="180"></label>
+<label>Original inventory and expense-account recognition review
+<textarea name="approval_notes" rows="5" minlength="40" maxlength="5000" required
+placeholder="Review each source batch cost journal, accepted quantity, original currency, purpose-specific expense account and signed recipient/loss evidence."></textarea></label>
+<label style="display:flex;align-items:center;gap:8px">
+<input type="checkbox" name="confirm_independent_cost" value="1" required style="width:auto">
+I independently verified the historical purpose and original manufacturing GL source before authorizing these expenses.
+</label>
+<button class="btn" type="submit">Record independent financial decision</button>
+</form>
+@endif
+@if($dispatchCostSettlement->status==='approved' &&
+(auth()->user()->can('finance.update') || auth()->user()->can('administration.update')) &&
+(int)$dispatchCostSettlement->submitted_by!==auth()->id() &&
+(int)$dispatchCostSettlement->approved_by!==auth()->id() &&
+(int)$dispatchDisposition->reviewed_by!==auth()->id() &&
+(int)$case->requested_by!==auth()->id())
+<h3>Execute approved non-sale accounting</h3>
+<form method="POST" action="{{ route('finance.historical-corrections.dispatch-cost-post',$case->id) }}" class="hfcs-form">
+@csrf
+<p class="hfcs-alert">Final execution creates an original-currency debit to the independently approved sampling/damage/internal-use expense and credit to the posted finished-goods asset for EACH verified physical dispatch line. Any one invalid line blocks all journals in this transaction. It cannot create sales, receivables or additional physical dispatches.</p>
+<label style="display:flex;align-items:center;gap:8px">
+<input type="checkbox" name="confirm_original_cost_posting" value="1" required style="width:auto">
+I checked each source GL cost, independent approval, posting date and financial period.
+</label>
+<button class="btn" type="submit"
+onclick="return confirm('Post all approved original-currency non-sale expense journals for this physical dispatch?')">
+Post approved historical dispatch expense</button>
+</form>
+@endif
+@elseif($case->status==='approved' &&
+in_array($dispatchDisposition->business_purpose,['promotional_sample','production_loss','internal_consumption'],true) &&
+(auth()->user()->can('finance.update') || auth()->user()->can('administration.update')) &&
+(int)$case->requested_by!==auth()->id() &&
+(int)$dispatchDisposition->reviewed_by!==auth()->id())
+<h3>Propose verified original-cost non-sale financial recognition</h3>
+<p class="hfcs-alert">Every physical line must already have original manufacturing WIP and finished-inventory journal capitalization dated on or before the physical dispatch. Reports showing only estimates do not qualify. Each original-currency expense must be explicitly approved before posting; source and warehouse quantities remain unchanged.</p>
+<form method="POST" action="{{ route('finance.historical-corrections.dispatch-cost-submit',$case->id) }}" class="hfcs-form">
+@csrf
+@foreach($dispatchEvidence as $detail)
+<label>Dispatch line #{{ $detail->id }} — batch {{ $detail->batch_number }} ({{ number_format($detail->quantity_packages) }} packages)
+@if(!$detail->total_amount)
+<span class="muted">Source capitalization unavailable; finish historical source reconciliation first.</span>
+@else
+<span class="muted">Original capitalized batch {{ $detail->total_amount }} {{ $detail->original_cost_currency }}, {{ $detail->accepted_packages }} accepted packages. The server determines the exact expense portion.</span>
+@endif
+<select name="expense_ledgers[{{ $detail->id }}]" required>
+<option value="">Select authorized {{ str_replace('_',' ',$dispatchDisposition->business_purpose) }} expense GL</option>
+@foreach($dispatchExpenseLedgers as $ledger)
+<option value="{{ $ledger->id }}" @selected(old('expense_ledgers.'.$detail->id)==$ledger->id)>{{ $ledger->code }} — {{ $ledger->name }}</option>
+@endforeach
+</select></label>
+@endforeach
+<label>Journal date in an open accounting period
+<input type="date" name="posting_date" min="{{ $case->source_date }}"
+max="{{ now()->toDateString() }}" value="{{ old('posting_date',now()->toDateString()) }}" required></label>
+<label>Signed source expense and recipient/loss authorization reference
+<input name="source_authorization_reference" value="{{ old('source_authorization_reference') }}"
+minlength="4" maxlength="180" required></label>
+<label>Original-currency expense recognition explanation and source documents
+<textarea name="expense_recognition_evidence" rows="5" minlength="50" maxlength="5000" required
+placeholder="Document original physical dispatch, purpose, authorized recipient or loss, original manufacturing cost GL, value, currency, selected expense account and any previous GL review.">{{ old('expense_recognition_evidence') }}</textarea></label>
+<label style="display:flex;align-items:center;gap:8px">
+<input type="checkbox" name="confirm_original_non_sale_cost" value="1" required style="width:auto">
+All original batch costs, GL capitalization and non-sale evidence are independently documented; no earlier expense or invoice already recognized this dispatch.
+</label>
+<button class="btn" type="submit">Submit original-cost expense for separate approval</button>
+</form>
+@endif
 @elseif($case->status==='approved' &&
  (auth()->user()->can('finance.update') || auth()->user()->can('administration.update')) &&
  (int)$case->requested_by!==auth()->id())
