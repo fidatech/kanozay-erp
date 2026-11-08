@@ -53,6 +53,9 @@ Route::middleware('auth')->post('/manufacturing/downtime', [\App\Http\Controller
 Route::middleware('auth')->get('/inventory/quality-holds', [\App\Http\Controllers\RawMaterialQualityHoldController::class,'index'])->name('inventory.quality-holds.index');
 Route::middleware('auth')->post('/inventory/quality-holds/lots/{layer}', [\App\Http\Controllers\RawMaterialQualityHoldController::class,'hold'])->name('inventory.quality-holds.hold');
 Route::middleware('auth')->post('/inventory/quality-holds/{hold}/release', [\App\Http\Controllers\RawMaterialQualityHoldController::class,'release'])->whereNumber('hold')->name('inventory.quality-holds.release');
+Route::middleware('auth')->post('/laboratory/nonconformances', [\App\Http\Controllers\QualityNonconformanceController::class,'store'])->name('laboratory.nonconformances.store');
+Route::middleware('auth')->post('/laboratory/nonconformances/{nonconformance}/investigate', [\App\Http\Controllers\QualityNonconformanceController::class,'investigate'])->whereNumber('nonconformance')->name('laboratory.nonconformances.investigate');
+Route::middleware('auth')->post('/laboratory/nonconformances/{nonconformance}/close', [\App\Http\Controllers\QualityNonconformanceController::class,'close'])->whereNumber('nonconformance')->name('laboratory.nonconformances.close');
 Route::middleware('auth')->post('/laboratory/specifications', [\App\Http\Controllers\LaboratoryQualityController::class,'specification'])->name('laboratory.specifications.store');
 Route::middleware('auth')->post('/laboratory/samples', [\App\Http\Controllers\LaboratoryQualityController::class,'sample'])->name('laboratory.samples.store');
 Route::middleware('auth')->get('/laboratory/samples/{sample}', [\App\Http\Controllers\LaboratoryQualityController::class,'show'])->name('laboratory.samples.show');
