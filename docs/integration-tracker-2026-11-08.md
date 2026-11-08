@@ -71,6 +71,12 @@ See [Purchasing and Inventory Development Update](purchasing-inventory-developme
 
 **Phase remains INTEGRATION INCOMPLETE.** Warehouse-specific FIFO lot attribution, complex supplier return credits across several invoices, independently invoiced landed costs and full manufacturing/GL reconciliation remain to be developed or reviewed. Testing was deferred at the user's direction; it is not represented as passing.
 
+## Warehouse-specific FIFO lot development
+
+The Purchasing/Inventory development branch now contains per-warehouse FIFO lot positions, atomic lot-preserving transfers, audited manual attribution of historical positions, a warehouse FIFO valuation report, origin-lot supplier return consumption and production reservation checks against attributable QC-released lots. See [Warehouse FIFO Lot Integration](warehouse-fifo-lot-location-development-2026-11-08.md).
+
+**Production caution:** Existing FIFO records were not assigned guessed locations. Historical stock with unknown lot provenance now requires explicit reconciliation before certain transfers, stock issues or production reservations can proceed. Historical inventory with no valuation layer is still a migration gap. This is a development change, not a tested rollout.
+
 ## Acceptance and release gates
 
 1. Passing SQLite feature suite and isolated regression suite on the latest commit.
