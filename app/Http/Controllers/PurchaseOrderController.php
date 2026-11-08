@@ -94,6 +94,22 @@ class PurchaseOrderController extends Controller {
  }
  public function show(Request $request,PurchaseOrder $order) {
   abort_unless($request->user()->canAny(['administration.view', 'purchases.view']),403);
+  $order->load(['supplier','currency','items.inventoryMaterial','items.receiptLines',
+    'expenses','advances','receipts.lines']);
+  $allReceiptLineIds=$order->receipts->flatMap(fn($receipt)=>$receipt->lines->pluck('id'))->all();
+  $costLayers=\App\Models\InventoryCostLayer::where('source_type','goods_receipt_line')
+    ->whereIn('source_id',$allReceiptLineIds)->get()->keyBy('source_id');
+  $qcService=app(\App\Services\QualityMaterialHoldService::class);
+  $receiptQcSummary=[];
+  foreach($order->receipts as $grn){
+   $heldLines=0;$missingLayers=0;
+   foreach($grn->lines as $grnLine){
+    $costLayer=$costLayers->get($grnLine->id);
+    if(!$costLayer){$missingLayers++;continue;}
+    if($qcService->isLayerHeld($costLayer))$heldLines++;
+   }
+   $receiptQcSummary[$grn->id]=['held_lines'=>$heldLines,'missing_layers'=>$missingLayers];
+  }
   $matchedInvoices=\App\Models\MatchedSupplierInvoice::with(['payable.allocations','payable.credits'])
     ->where('purchase_order_id',$order->id)->where('status','posted')->orderByDesc('id')->get();
   $invoiced=BigDecimal::zero();$outstanding=BigDecimal::zero();
@@ -115,10 +131,11 @@ class PurchaseOrderController extends Controller {
    if($left->isPositive())$unappliedAdvances=$unappliedAdvances->plus($left);
   }
   return view('purchases.show', [
-   'order'=>$order->load(['supplier','currency','items.inventoryMaterial','items.receiptLines','expenses','advances','receipts.lines']),
+   'order'=>$order,
    'materials'=>\App\Models\InventoryMaterial::where('is_active',true)->orderBy('name')->get(),
    'warehouses'=>\App\Models\CompanyWarehouse::where('is_active',true)->orderBy('code')->get(),
    'matchedInvoices'=>$matchedInvoices,
+   'receiptQcSummary'=>$receiptQcSummary,
    'purchaseFinanceSnapshot'=>[
     'invoiced'=>(string)$invoiced->toScale(4),
     'outstanding'=>(string)$outstanding->toScale(4),
