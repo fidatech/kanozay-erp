@@ -78,6 +78,8 @@ class JournalPostingService {
    if(DB::table('supplier_advance_applications')->where('journal_entry_id',$original->id)->exists()
    || DB::table('customer_advance_applications')->where('journal_entry_id',$original->id)->exists())
     throw ValidationException::withMessages(['status'=>'Applied customer or supplier advances require a dedicated document-level correction workflow.']);
+   if(DB::table('shareholder_transactions')->where('journal_entry_id',$original->id)->exists())
+    throw ValidationException::withMessages(['status'=>'Posted shareholder capital or drawing entries require a controlled shareholder document correction, not a standalone GL reversal.']);
    if(DB::table('shareholder_profit_distributions')->where('journal_entry_id',$original->id)->exists())
     throw ValidationException::withMessages(['status'=>'Posted shareholder profit distributions require a controlled resolution-linked correction.']);
    if(DB::table('fixed_asset_depreciation_entries')->where('journal_entry_id',$original->id)->exists()
