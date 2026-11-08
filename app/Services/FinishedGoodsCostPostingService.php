@@ -267,16 +267,50 @@ class FinishedGoodsCostPostingService
         });
     }
 
-    public function postReturnRecovery(SalesReturnQuarantine $quarantine,string $date,int $actorId):object
+    public function postReturnRecovery(SalesReturnQuarantine $quarantine,string $date,int $actorId,
+        ?int $historicalCaseId=null):object
     {
-        return DB::transaction(function()use($quarantine,$date,$actorId){
+        return DB::transaction(function()use($quarantine,$date,$actorId,$historicalCaseId){
             $record=SalesReturnQuarantine::whereKey($quarantine->id)
                 ->lockForUpdate()->firstOrFail();
             $previous=DB::table('production_return_cost_postings')
                 ->where('sales_return_quarantine_id',$record->id)->first();
-            if($previous)return $previous;
-            if($record->status!=='quarantined'){
-                $this->reject('Only a quarantined return awaiting independent QC release can restore inventory cost.');
+            if($previous){
+                if($historicalCaseId!==null)
+                    $this->reject('A historical QC return already has an original-currency COGS recovery journal.');
+                return $previous;
+            }
+            if($historicalCaseId===null){
+                if($record->status!=='quarantined'){
+                    $this->reject('Only a quarantined return awaiting independent QC release can restore inventory cost.');
+                }
+            }else{
+                // The historic released-product exception is never available
+                // to ordinary sales or QC forms. It requires the dedicated
+                // finance executor to have entered its one-transaction
+                // posting state after an independent source/amount review.
+                $history=DB::table('finance_historical_customer_return_cost_recoveries')
+                    ->where('finance_historical_correction_case_id',$historicalCaseId)
+                    ->where('sales_return_quarantine_id',$record->id)
+                    ->lockForUpdate()->first();
+                $case=DB::table('finance_historical_correction_cases')
+                    ->where('id',$historicalCaseId)->first();
+                if(!$history || !$case || $history->status!=='posting' ||
+                    $history->journal_entry_id!==null ||
+                    $case->case_type!=='released_return_missing_cost' ||
+                    $case->status!=='approved' ||
+                    $record->status!=='released' ||
+                    !$record->decided_by || !$record->decided_on ||
+                    (string)$record->decided_on->format('Y-m-d')!==(string)$date ||
+                    (string)$history->posting_date!==(string)$date ||
+                    (int)$history->quantity_packages!==(int)$record->quantity_packages ||
+                    in_array($actorId,[
+                        (int)$record->registered_by,(int)$record->decided_by,
+                        (int)$case->requested_by,(int)$case->reviewed_by,
+                        (int)$history->submitted_by,(int)$history->approved_by,
+                    ],true)){
+                    $this->reject('Historical released-QC inventory recovery requires an unchanged, independently approved and actively executing source-finance case.');
+                }
             }
             $credit=DB::table('sales_credit_note_lines')
                 ->where('id',$record->sales_credit_note_line_id)->first();
