@@ -81,8 +81,11 @@ class SupplierDebitNoteService {
    }
    $max=$sourceTotal->toScale(4,RoundingMode::HalfUp);
    $amount=BigDecimal::of((string)$data['amount'])->toScale(4,RoundingMode::Unnecessary);
-   if(!$amount->isPositive() || $amount->isGreaterThan($max))
-    throw ValidationException::withMessages(['amount'=>'Approved supplier credit cannot exceed the original received unit-price value '.$max.'.']);
+   if(!$amount->isPositive() || !$amount->isEqualTo($max)){
+    throw ValidationException::withMessages([
+      'amount'=>'The ordinary supplier credit must equal the exact source-priced quantity removed from raw inventory ('.$max.'). Partial supplier reimbursements or disputed credits require a separately approved short-credit expense/receivable adjustment; they cannot leave the removed stock base cost in inventory.',
+    ]);
+   }
    $remaining=BigDecimal::of((string)$document->amount);
    foreach($document->allocations as $allocation)$remaining=$remaining->minus((string)$allocation->amount);
    foreach($document->credits as $credit)$remaining=$remaining->minus((string)$credit->amount);
