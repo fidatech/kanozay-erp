@@ -58,6 +58,11 @@ class HistoricalFinanceCorrectionController extends Controller
                 'posted.goods_receipt_landed_cost_id','=','cost.id')
             ->whereNull('posted.id')->orderByDesc('cost.id')
             ->limit(20)->pluck('cost.id');
+        $historicalReleasedReturns=DB::table('sales_return_quarantines as qc')
+            ->leftJoin('production_return_cost_postings as posted',
+                'posted.sales_return_quarantine_id','=','qc.id')
+            ->where('qc.status','released')->whereNull('posted.id')
+            ->orderByDesc('qc.id')->limit(20)->pluck('qc.id');
         $pendingSupplierCredits=DB::table('purchase_return_records')
             ->whereIn('financial_status',
                 ['supplier_credit_pending','landed_cost_review_pending'])
@@ -73,6 +78,7 @@ class HistoricalFinanceCorrectionController extends Controller
                 'opening_fifo_unvalued'=>$unvaluedFifo,
                 'landed_cost_unreconciled'=>$unreconciledLanded,
                 'supplier_return_unreconciled'=>$pendingSupplierCredits,
+                'released_return_missing_cost'=>$historicalReleasedReturns,
             ],
         ]);
     }
@@ -97,6 +103,46 @@ class HistoricalFinanceCorrectionController extends Controller
         $this->gate($request);
         $row=DB::table('finance_historical_correction_cases')->where('id',$case)->first();
         abort_unless($row,404);
+        $historicalReturnPlan=null;
+        $historicalReturnQc=null;
+        $historicalReturnCredit=null;
+        $historicalReturnInvoice=null;
+        $historicalReturnSourceCost=null;
+        $historicalReturnSourceCurrency=null;
+        if($row->case_type==='released_return_missing_cost'){
+            $historicalReturnPlan=DB::table('finance_historical_customer_return_cost_recoveries as recovery')
+                ->leftJoin('journal_entries as journal',
+                    'journal.id','=','recovery.journal_entry_id')
+                ->where('recovery.finance_historical_correction_case_id',$row->id)
+                ->select('recovery.*','journal.number as journal_number',
+                    'journal.status as journal_status')->first();
+            $historicalReturnQc=DB::table('sales_return_quarantines')
+                ->where('id',$row->source_id)->first();
+            if($historicalReturnQc){
+                $historicalReturnCredit=DB::table('sales_credit_note_lines as line')
+                    ->join('sales_credit_notes as note',
+                        'note.id','=','line.sales_credit_note_id')
+                    ->where('line.id',$historicalReturnQc->sales_credit_note_line_id)
+                    ->select('line.*','note.number as credit_number',
+                        'note.credit_date','note.journal_entry_id as credit_journal_id',
+                        'note.sales_invoice_id')->first();
+                if($historicalReturnCredit){
+                    $historicalReturnInvoice=DB::table('sales_invoice_lines as line')
+                        ->join('sales_invoices as invoice',
+                            'invoice.id','=','line.sales_invoice_id')
+                        ->where('line.id',$historicalReturnCredit->sales_invoice_line_id)
+                        ->select('line.*','invoice.number as invoice_number',
+                            'invoice.status as invoice_status','invoice.invoice_date')->first();
+                    $historicalReturnSourceCost=DB::table('production_invoice_cogs_postings as cogs')
+                        ->join('production_batch_cost_postings as batch',
+                            'batch.id','=','cogs.production_batch_cost_posting_id')
+                        ->leftJoin('currencies as currency','currency.id','=','batch.currency_id')
+                        ->where('cogs.sales_invoice_line_id',$historicalReturnCredit->sales_invoice_line_id)
+                        ->select('cogs.*','batch.currency_id','currency.code as currency_code')->first();
+                    $historicalReturnSourceCurrency=$historicalReturnSourceCost?->currency_code;
+                }
+            }
+        }
         $historicalBatchPosting=null;
         $historicalBatchDispatches=collect();
         $historicalBatchAllocations=collect();
@@ -268,6 +314,12 @@ class HistoricalFinanceCorrectionController extends Controller
         return view('finance.historical-correction-show',[
             'case'=>$row,'types'=>HistoricalFinanceCorrectionService::TYPES,
             'events'=>$service->activity($row->id),
+            'historicalReturnPlan'=>$historicalReturnPlan,
+            'historicalReturnQc'=>$historicalReturnQc,
+            'historicalReturnCredit'=>$historicalReturnCredit,
+            'historicalReturnInvoice'=>$historicalReturnInvoice,
+            'historicalReturnSourceCost'=>$historicalReturnSourceCost,
+            'historicalReturnSourceCurrency'=>$historicalReturnSourceCurrency,
             'historicalBatchPosting'=>$historicalBatchPosting,
             'historicalBatchDispatches'=>$historicalBatchDispatches,
             'historicalBatchReadiness'=>$historicalBatchReadiness,
@@ -329,6 +381,49 @@ class HistoricalFinanceCorrectionController extends Controller
         );
         return back()->with('success',
             'Supplier-offered short credit documented against immutable original return price. No financial liability, receivable or loss was posted; approved accounting treatment is still outstanding.');
+    }
+
+    public function submitHistoricalCustomerReturn(Request $request,int $case,
+        \App\Services\HistoricalCustomerReturnCostRecoveryService $service)
+    {
+        $this->gate($request,true);
+        $data=$request->validate([
+            'source_evidence_reference'=>['required','string','min:4','max:180'],
+            'source_reconciliation_notes'=>['required','string','min:60','max:5000'],
+            'confirm_original_restock'=>['accepted'],
+            'confirm_no_prior_inventory_gl'=>['accepted'],
+        ]);
+        $service->submit($case,$data,(int)$request->user()->id);
+        return back()->with('success',
+            'Previously released QC return source value submitted for independent finance review. No credit note, customer refund, physical stock or GL movement created.');
+    }
+
+    public function reviewHistoricalCustomerReturn(Request $request,int $case,
+        \App\Services\HistoricalCustomerReturnCostRecoveryService $service)
+    {
+        $this->gate($request,true);
+        $data=$request->validate([
+            'decision'=>['required',Rule::in(['approve','reject'])],
+            'approval_reference'=>['required','string','min:4','max:180'],
+            'approval_notes'=>['required','string','min:60','max:5000'],
+            'confirm_independent_return_review'=>['accepted'],
+        ]);
+        $service->approve($case,$data,(int)$request->user()->id);
+        return back()->with('success',
+            'Independent source-priced customer return accounting decision recorded. No GL or warehouse movements.');
+    }
+
+    public function postHistoricalCustomerReturn(Request $request,int $case,
+        \App\Services\HistoricalCustomerReturnCostRecoveryService $service)
+    {
+        $this->gate($request,true);
+        $request->validate([
+            'confirm_original_qc_cogs'=>['accepted'],
+        ]);
+        $recovery=$service->post($case,(int)$request->user()->id);
+        return back()->with('success',
+            'Original QC-released customer return inventory asset recovered and its original-currency COGS reversed in journal #'.
+            $recovery->journal_entry_id.'. No additional physical movement, credit note or refund created.');
     }
 
     public function submitHistoricalBatch(Request $request,int $case,
