@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\CompanyWarehouse;
+use App\Models\LedgerAccount;
+use App\Services\PurchaseReturnLandedCostAdjustmentService;
 use App\Support\LocalizedDecimal;
 use App\Models\GoodsReceipt;
 use App\Models\PurchaseReturnRecord;
@@ -59,13 +61,62 @@ class PurchaseReturnController extends Controller
         $receipt=GoodsReceipt::findOrFail($data['goods_receipt_id']);
         $return=$service->post($receipt,$data,$request->user()->id);
         return redirect()->route('purchases.returns.show',$return)
-            ->with('success','Return posted to inventory. Supplier credit requires reconciliation.');
+            ->with('success',$return->status==='pending_landed_cost_review'
+                ?'Landed-cost return request saved; physical stock remains untouched until a separate finance reviewer approves the original-currency landed write-off.'
+                :'Return posted to inventory. Supplier credit requires reconciliation.');
     }
 
     public function show(Request $request,PurchaseReturnRecord $return)
     {
         $this->check($request);
         $return->load(['receipt','order.supplier','currency','lines.material','lines.receiptLine']);
-        return view('purchases.return-show',compact('return'));
+        $landedAdjustment=\Illuminate\Support\Facades\DB::table('purchase_return_landed_cost_adjustments as adjustment')
+            ->join('journal_entries as journal','journal.id','=','adjustment.journal_entry_id')
+            ->where('adjustment.purchase_return_record_id',$return->id)
+            ->select('adjustment.*','journal.number as journal_number')
+            ->first();
+        $lossExpenseLedgers=collect();
+        if($return->status==='pending_landed_cost_review' &&
+            ($request->user()->can('administration.update') ||
+             ($request->user()->can('finance.update') &&
+              $request->user()->can('purchases.view')))){
+            $lossExpenseLedgers=LedgerAccount::where('type','expense')
+                ->where('is_active',true)->where('is_group',false)
+                ->orderBy('code')->get(['id','code','name']);
+        }
+        return view('purchases.return-show',compact(
+            'return','landedAdjustment','lossExpenseLedgers'
+        ));
     }
+    public function approveLanded(Request $request,PurchaseReturnRecord $return,
+        PurchaseReturnLandedCostAdjustmentService $service)
+    {
+        abort_unless($request->user()->can('administration.update') ||
+          ($request->user()->can('finance.update') &&
+           $request->user()->can('purchases.view')),403);
+        $data=$request->validate([
+            'expense_ledger_id'=>['required','integer','exists:ledger_accounts,id'],
+            'approval_reference'=>['required','string','min:4','max:180'],
+            'source_evidence'=>['required','string','min:20','max:3000'],
+            'confirm_landed_expense'=>['accepted'],
+        ]);
+        $service->finalize($return->id,$data,$request->user()->id);
+        return redirect()->route('purchases.returns.show',$return)
+            ->with('success','Independent landed-cost inventory write-off posted and the physical source-lot return released. Supplier base-price credit remains pending.');
+    }
+
+    public function cancelPending(Request $request,PurchaseReturnRecord $return,
+        PurchaseReturnService $service)
+    {
+        abort_unless($request->user()->can('administration.update') ||
+            ($request->user()->can('purchases.update') &&
+             $request->user()->can('inventory.update')),403);
+        $data=$request->validate([
+            'reason'=>['required','string','min:10','max:1500'],
+        ]);
+        $service->cancelPending($return,$data['reason'],$request->user()->id);
+        return redirect()->route('purchases.returns.show',$return)
+            ->with('success','Unposted supplier return request cancelled. No physical inventory or GL journal was posted.');
+    }
+
 }
