@@ -15,7 +15,7 @@
 @if(session('success'))<p class="notice">{{ session('success') }}</p>@endif
 @if($errors->any())<p class="notice notice-warning">{{ implode(' ',$errors->all()) }}</p>@endif
 <div class="sa-warning">An advance payment is a posted journal: debit supplier-advance asset and credit the source cash/bank/sarafi ledger in the same currency. Applying it to a supplier invoice posts a separate payable-clearing journal. Earlier purchase-order advance notes are operational estimates, not proof that money was paid; never add those twice to financial balances.</div>
-@canany(['finance.update','administration.update'])
+@if(auth()->user()->can('administration.update') || (auth()->user()->can('purchases.update') && auth()->user()->can('finance.update')))
 <section class="sa-panel"><h2>Post a new supplier advance payment</h2>
 <form method="POST" action="{{ route('supplier-advances.pay') }}" class="sa-grid">@csrf
 <input type="hidden" name="submission_token" value="{{ (string)\Illuminate\Support\Str::uuid() }}">
@@ -31,13 +31,13 @@
 <label>Approved payment reference<input name="reference" minlength="3" maxlength="120" required></label>
 <button class="btn" type="submit" onclick="return confirm('Post the supplier advance as a real cash payment to the General Ledger?')">Post supplier advance</button>
 </form></section>
-@endcanany
+@endif
 <section class="sa-panel"><h2>Posted supplier prepayments and unallocated balances</h2>
 <div class="sa-table"><table><thead><tr><th>Advance</th><th>Supplier</th><th>PO</th><th>Paid date</th><th>Currency</th><th>Original amount</th><th>Remaining</th><th>Cash reference</th></tr></thead><tbody>
 @forelse($advances as $a)<tr><td>{{ $a->number }}</td><td>{{ $a->supplier_name }}</td><td><a href="{{ route('purchases.orders.show',$a->purchase_order_id) }}">{{ $a->po_number }}</a></td><td>{{ $a->paid_on }}</td><td>{{ $a->currency_code }}</td><td>{{ $a->amount }}</td><td><strong>{{ $a->remaining }}</strong></td><td>{{ $a->reference }}</td></tr>
 @empty<tr><td colspan="8">No actual supplier advance payments posted yet.</td></tr>@endforelse
 </tbody></table></div>{{ $advances->links() }}</section>
-@canany(['finance.update','administration.update'])
+@if(auth()->user()->can('administration.update') || (auth()->user()->can('purchases.update') && auth()->user()->can('finance.update')))
 <section class="sa-panel"><h2>Apply prepayment to a verified supplier payable</h2>
 <p>Only applications against the same supplier and currency will post. Both the advance balance and the invoice's unpaid balance are checked under transactional locks.</p>
 @foreach($advances as $a)
@@ -60,7 +60,7 @@
 @endif
 @endforeach
 </section>
-@endcanany
+@endif
 <section class="sa-panel"><h2>Posted supplier advance applications</h2>
 <div class="sa-table"><table><thead><tr><th>Application</th><th>Advance</th><th>Payable</th><th>Date</th><th>Amount</th><th>Authorization</th></tr></thead><tbody>
 @forelse($applications as $x)<tr><td>{{ $x->number }}</td><td>{{ $x->advance_number }}</td><td>{{ $x->payable_number }}</td><td>{{ $x->applied_on }}</td><td>{{ $x->amount }}</td><td>{{ $x->approval_reference }}</td></tr>
