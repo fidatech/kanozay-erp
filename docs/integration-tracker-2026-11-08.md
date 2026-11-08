@@ -93,6 +93,16 @@ Added sample-time snapshots of approved QC specification versions, independent i
 
 **Still integration incomplete.** New database migrations, QA scenarios and MySQL/browser acceptance were not executed at user direction. The new strict hold gates depend on reviewed historical FIFO source data; they must be staged and reconciled before live activation.
 
+## Sales and Delivery development update
+
+Developed sales-order fulfillment summaries across posted invoice lines, delivery notes, proof-confirmed customer receipt and customer-credit returns. Added audited cancellation only for wholly unbilled linked sales orders. Delivery notes now reject credited returned quantities, require original invoice date or later, and protect in-transit documents from unsupported cancellation. Proof of delivery is required for all customer-received confirmations, while returned depot shipments retain source tracking without generating inventory entries.
+
+Every **new** customer return credit enters QC quarantine and saleable stock can only be restored by a later independent QC disposition. The former immediate-restock form path was removed. Historical direct restocks remain labeled as legacy cases that require evidence review. Sales numeric forms normalize grouped and Pashto/Dari digits before normal validation.
+
+[Sales and Delivery development detail](sales-delivery-development-2026-11-08.md) documents source changes and remaining finance/COGS, legacy-return, proof-of-receipt, tax/discount and customer-recall gaps.
+
+**Status: advanced development, not full integration.** Migrations, automated testing, web UAT and deployment were deferred on user instruction; a committed feature is not represented as a production-verified function.
+
 ## Acceptance and release gates
 
 1. Passing SQLite feature suite and isolated regression suite on the latest commit.
