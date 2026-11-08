@@ -94,7 +94,13 @@ class CashMovementReportController extends Controller
                 fputcsv($out, ['From', $from, 'To', $to]);
                 fputcsv($out, ['Account', 'Type', 'Currency', 'Opening balance', 'Inflows', 'Outflows', 'Closing balance', 'Ledger mapping']);
                 foreach ($rows as $row) {
-                    fputcsv($out, [$row['account']->name, $row['account']->type, $row['currency']?->code, $row['opening'], $row['inflows'], $row['outflows'], $row['closing'], $row['mapped'] ? 'Mapped' : 'Missing']);
+                    fputcsv($out, [
+                        ReportCenterController::csvSafe($row['account']->name),
+                        $row['account']->type,
+                        ReportCenterController::csvSafe($row['currency']?->code),
+                        $row['opening'],$row['inflows'],$row['outflows'],
+                        $row['closing'],$row['mapped']?'Mapped':'Missing',
+                    ]);
                 }
                 fclose($out);
             }, 'cash-movements-' . $from . '-to-' . $to . '.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
