@@ -83,7 +83,15 @@
 <section class="wh-panel"><h2>Warehouse movement audit</h2>
 <div class="wh-table"><table><thead><tr><th>Recorded</th><th>Material</th><th>Operation</th><th>Source</th><th>Destination</th><th>Quantity</th><th>FIFO lots</th><th>Reason</th></tr></thead><tbody>
 @forelse($recent as $row)<tr><td>{{ $row->occurred_on }}</td><td>{{ $row->sku }}</td><td>{{ ucwords(str_replace('_',' ',$row->type)) }}</td><td>{{ $row->source?:'Unassigned' }}</td><td>{{ $row->destination }}</td><td>{{ $row->quantity }}</td>
-<td>@if(isset($recentLotRows[$row->id])){{ $recentLotRows[$row->id]->lot_count }} source lot(s)
+<td>@if(isset($recentLotRows[$row->id]))
+<details>
+ <summary>{{ $recentLotRows[$row->id]->lot_count }} source lot(s)</summary>
+ <ul style="padding-left:17px;margin:7px 0">
+ @foreach($lotMovementDetails->get($row->id,collect()) as $lot)
+ <li>Lot #{{ $lot->inventory_cost_layer_id }} · {{ $lot->source_type }} #{{ $lot->source_id }} · {{ $lot->quantity }} {{ $lot->currency_code?:'(unvalued)' }}</li>
+ @endforeach
+ </ul>
+</details>
 @else <span style="color:#94651e">Historical / unverified</span>@endif</td>
 <td>{{ $row->reason }}</td></tr>
 @empty<tr><td colspan="8">No warehouse allocations or transfers recorded yet.</td></tr>@endforelse
