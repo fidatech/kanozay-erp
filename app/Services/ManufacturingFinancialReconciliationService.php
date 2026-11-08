@@ -255,6 +255,8 @@ class ManufacturingFinancialReconciliationService
                 'qc_returns'=>$returnQty,'costed_sales'=>$sold,
                 'costed_recoveries'=>$recovered,'net_physical'=>$netPhysical,
                 'remaining_costed'=>$bookPackages,
+                'gross_material_source_cost'=>$capital?(string)$this->decimal($capital->material_amount)->toScale(4):null,
+                'abnormal_waste_expensed'=>$capital?(string)$this->decimal($capital->abnormal_waste_amount)->toScale(4):null,
                 'total_capitalized'=>$amount?(string)$amount->toScale(4):null,
                 'posted_cogs'=>$capital?(string)$costedCost->toScale(4):null,
                 'returned_cost'=>$capital?(string)$restoredCost->toScale(4):null,
