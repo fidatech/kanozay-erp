@@ -3,6 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\InventoryMaterial;
+use App\Models\CompanyWarehouse;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use App\Models\InventoryStockCount;
 use App\Services\InventoryStockCountService;
 use Illuminate\Http\Request;
@@ -14,9 +17,16 @@ class InventoryStockCountController extends Controller
     {
         abort_unless($request->user()->canAny(['inventory.view', 'administration.view']), 403);
 
+        $balances=DB::table('inventory_warehouse_balances')->get(['inventory_material_id','company_warehouse_id','quantity']);
+        $perMaterial=[];
+        foreach($balances as $row){
+            $perMaterial[$row->inventory_material_id][$row->company_warehouse_id]=$row->quantity;
+        }
         return view('inventory.counts.index', [
-            'counts' => InventoryStockCount::with('creator')->latest('id')->paginate(20),
+            'counts' => InventoryStockCount::with(['creator','warehouse'])->latest('id')->paginate(20),
             'materials' => InventoryMaterial::query()->where('is_active', true)->orderBy('name')->get(),
+            'warehouses'=>CompanyWarehouse::where('is_active',true)->orderBy('code')->get(),
+            'warehouseBalances'=>$perMaterial,
         ]);
     }
 
@@ -46,6 +56,7 @@ class InventoryStockCountController extends Controller
             'submission_token' => ['required', 'uuid'],
             'counted_on' => ['required', 'date', 'before_or_equal:today'],
             'notes' => ['nullable', 'string', 'max:1000'],
+            'company_warehouse_id'=>['nullable','integer',Rule::exists('company_warehouses','id')->where('is_active',true)],
             'quantities' => ['required', 'array', 'min:1', 'max:100'],
             'quantities.*' => ['required', 'regex:/^(?:0|[1-9][0-9]{0,13})(?:\.[0-9]{1,6})?$/', 'numeric', 'gte:0'],
         ]);
@@ -61,7 +72,7 @@ class InventoryStockCountController extends Controller
         abort_unless($request->user()->canAny(['inventory.view', 'administration.view']), 403);
 
         return view('inventory.counts.show', [
-            'count' => $count->load(['creator', 'approver', 'lines.material', 'lines.adjustment']),
+            'count' => $count->load(['creator','approver','warehouse','lines.material','lines.adjustment']),
         ]);
     }
 
