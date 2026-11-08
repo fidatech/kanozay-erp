@@ -149,6 +149,18 @@ Expanded Pashto/Dari report navigation and labels for the dispatch cost review w
 
 **Status: cost evidence and review advanced; full finished-goods GL capitalization/COGS development outstanding.** No automated tests, migrations, browser UAT, source syntax lint, MySQL verification or deployment performed at user's direction.
 
+## Manufacturing GL, invoice COGS and physical-stock reconciliation hardening
+
+The development branch already contains approved original-currency manufacturing ledger policies and atomic WIP → finished-goods capitalization, sales invoice COGS journals, and independently QC-released customer return asset recoveries. This batch strengthened that source code without introducing a second accounting engine.
+
+Prevented legacy physical dispatch from being retroactively capitalized without its missing historic COGS; disabled standalone finished-goods stock dispatch outside the invoiced COGS workflow; froze approved overhead after batch capitalization/dispatch; checked actual supplier invoice GL asset debit and exact original FIFO purchase cost values; verified each COGS posting against source batch/quantity/date/warehouse dispatch; and required source-matching credit notes for returned cost recovery. Replayed sales invoice tokens now require identical original financial and dispatch payloads.
+
+Added the **Manufacturing Inventory and COGS Reconciliation** report and CSV, comparing actual warehouse receipts, physical dispatches, costed sales, QC-stock recovery, original-currency WIP/finished-stock/COGS journal states and remaining financially capitalized stock value. It flags source record mismatches and never infers missing historical value. Finance month close now blocks unlinked warehouse dispatches and reversed/unposted manufacturing cost journals in addition to missing inventory source postings. Navigation includes the new report with Dari/Pashto titles.
+
+[Manufacturing Financial Integration Hardening](manufacturing-financial-integration-hardening-2026-11-08.md) documents implemented controls and remaining historical remediation, landed costs, rejected/reworked batch variance accounting, full translation and deployment dependencies.
+
+**Status: substantial GL source development, not production-verifiable completion.** No migrations, automated tests, lint, real-browser UAT or MySQL deployment were performed on user instruction.
+
 ## Acceptance and release gates
 
 1. Passing SQLite feature suite and isolated regression suite on the latest commit.
