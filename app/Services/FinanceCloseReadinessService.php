@@ -16,6 +16,94 @@ use Illuminate\Support\Facades\DB;
 class FinanceCloseReadinessService
 {
     /**
+     * Scrapped customer returns do not restore finished stock. Audited
+     * reclassification must credit the authentic original COGS once and
+     * debit only the separately approved original-cost loss account.
+     */
+    private function historicalScrapReclassificationIsValid(object $plan): bool
+    {
+        $qc=DB::table('sales_return_quarantines')
+            ->where('id',$plan->sales_return_quarantine_id)->first();
+        $credit=DB::table('sales_credit_note_lines')
+            ->where('id',$plan->sales_credit_note_line_id)->first();
+        $note=$credit?DB::table('sales_credit_notes')
+            ->where('id',$credit->sales_credit_note_id)->first():null;
+        $sale=DB::table('sales_invoice_lines')
+            ->where('id',$plan->sales_invoice_line_id)->first();
+        $source=DB::table('production_invoice_cogs_postings')
+            ->where('id',$plan->production_invoice_cogs_posting_id)->first();
+        $cost=$source?DB::table('production_batch_cost_postings')
+            ->where('id',$source->production_batch_cost_posting_id)->first():null;
+        $policy=$cost?DB::table('manufacturing_cost_ledger_policies')
+            ->where('id',$cost->manufacturing_cost_ledger_policy_id)->first():null;
+        $journal=DB::table('journal_entries')
+            ->where('id',$plan->journal_entry_id)->first();
+        $original=$source?DB::table('journal_entries')
+            ->where('id',$source->journal_entry_id)->first():null;
+        $expense=DB::table('ledger_accounts')
+            ->where('id',$plan->loss_ledger_id)->first();
+        $review=DB::table('finance_historical_correction_cases')
+            ->where('id',$plan->finance_historical_correction_case_id)->first();
+        if(!$qc || !$credit || !$note || !$sale || !$source || !$cost ||
+            !$policy || !$journal || !$original || !$expense || !$review ||
+            $plan->status!=='posted' ||
+            $plan->treatment!=='scrap_cogs_reclass' ||
+            $review->status!=='resolved' ||
+            $qc->status!=='scrapped' || !$qc->decided_by ||
+            (int)$qc->registered_by===(int)$qc->decided_by ||
+            !$qc->quality_reference || !$qc->decision_notes ||
+            $qc->released_warehouse_id!==null ||
+            (int)$qc->quantity_packages!==(int)$plan->quantity_packages ||
+            (string)$qc->decided_on!==(string)$plan->source_date ||
+            (string)$qc->decided_on!==(string)$plan->posting_date ||
+            (int)$qc->sales_credit_note_line_id!==(int)$credit->id ||
+            (int)$credit->sales_invoice_line_id!==(int)$sale->id ||
+            (int)$credit->quantity_packages!==(int)$plan->quantity_packages ||
+            (int)$credit->production_batch_id!==(int)$sale->production_batch_id ||
+            (int)$qc->production_batch_id!==(int)$sale->production_batch_id ||
+            (int)$source->sales_invoice_line_id!==(int)$sale->id ||
+            (int)$source->quantity_packages!==(int)$sale->quantity_packages ||
+            (int)$plan->currency_id!==(int)$cost->currency_id ||
+            (int)$plan->cogs_ledger_id!==(int)$policy->cogs_ledger_id ||
+            (int)$plan->loss_ledger_id===(int)$policy->cogs_ledger_id ||
+            $expense->type!=='expense' || !$expense->is_active || $expense->is_group ||
+            $journal->status!=='posted' || $journal->reversal_of_id ||
+            (int)$journal->currency_id!==(int)$cost->currency_id ||
+            (string)$journal->entry_date!==(string)$plan->posting_date ||
+            (int)$journal->id!==(int)$plan->journal_entry_id ||
+            $original->status!=='posted' || $original->reversal_of_id ||
+            (int)$original->currency_id!==(int)$cost->currency_id ||
+            DB::table('journal_entries')
+                ->whereIn('reversal_of_id',[$journal->id,$original->id])->exists() ||
+            DB::table('finished_good_warehouse_movements')
+                ->where('production_batch_id',$qc->production_batch_id)
+                ->where('type','customer_return')
+                ->where('reference','Quarantined customer return QC '.$qc->id)
+                ->exists() ||
+            DB::table('production_return_cost_postings')
+                ->where('sales_return_quarantine_id',$qc->id)->exists() ||
+            !BigDecimal::of((string)$plan->original_invoice_cogs)
+                ->isEqualTo((string)$source->amount) ||
+            !BigDecimal::of((string)$plan->source_loss_amount)->isPositive())
+            return false;
+        $lines=DB::table('journal_lines')
+            ->where('journal_entry_id',$journal->id)->get();
+        if($lines->count()!==2)return false;
+        $loss=BigDecimal::zero();$cogs=BigDecimal::zero();
+        foreach($lines as $line){
+            if((int)$line->ledger_account_id===(int)$plan->loss_ledger_id)
+                $loss=$loss->plus((string)$line->debit)->minus((string)$line->credit);
+            elseif((int)$line->ledger_account_id===(int)$plan->cogs_ledger_id)
+                $cogs=$cogs->plus((string)$line->debit)->minus((string)$line->credit);
+            else return false; // No finished-stock asset or unrelated GL account.
+        }
+        return $loss->isEqualTo((string)$plan->source_loss_amount) &&
+            $cogs->isEqualTo(
+                BigDecimal::of((string)$plan->source_loss_amount)->negated()
+            );
+    }
+
+    /**
      * Original production-batch QC return allocations form one immutable
      * cost-recovery subledger. This read-only audit is also used for the QC
      * journal's own month, even if manufacturing was capitalized earlier.
@@ -296,6 +384,60 @@ class FinanceCloseReadinessService
         if($invalidHistoricalBatchReturns)
             $blockers[]=$invalidHistoricalBatchReturns.
                 ' approved historical uncapitalized-batch QC-return asset / COGS restorations fail original-currency source, quantity or journal reconciliation.';
+        // The authorized accounting for quarantined goods is a SOURCE
+        // HOLD, not an inventory asset or automatic new expense. A later
+        // independent QC scrap decision may have a source COGS loss
+        // reclassification, which is verified in its original QC month.
+        $dispositions=DB::table('finance_historical_customer_return_disposition_reviews')
+            ->where(function($query)use($begin,$end){
+                $query->where(function($held)use($begin,$end){
+                    $held->where('treatment','quarantine_hold')
+                        ->where('status','held')
+                        ->whereBetween('source_date',[$begin,$end]);
+                })->orWhere(function($scrapped)use($begin,$end){
+                    $scrapped->where('treatment','scrap_cogs_reclass')
+                        ->where('status','posted')
+                        ->whereBetween('posting_date',[$begin,$end]);
+                });
+            })->get();
+        $invalidScrapCases=0;$invalidQuarantineHolds=0;
+        foreach($dispositions as $plan){
+            if($plan->status==='posted'){
+                if(!$this->historicalScrapReclassificationIsValid($plan))
+                    $invalidScrapCases++;
+            }else{
+                $case=DB::table('finance_historical_correction_cases')
+                    ->where('id',$plan->finance_historical_correction_case_id)->first();
+                if($plan->treatment!=='quarantine_hold' ||
+                    $plan->journal_entry_id!==null ||
+                    $plan->posting_date!==null ||
+                    $plan->source_loss_amount!==null ||
+                    $plan->loss_ledger_id!==null ||
+                    !$case || $case->status!=='resolved' ||
+                    !$plan->approved_by || !$plan->submitted_by ||
+                    (int)$plan->submitted_by===(int)$plan->approved_by)
+                    $invalidQuarantineHolds++;
+            }
+        }
+        if($invalidScrapCases)
+            $blockers[]=$invalidScrapCases.
+                ' independently signed scrapped customer return COGS reclassification(s) have missing, reversed or incorrect original-cost loss / COGS GL journals.';
+        if($invalidQuarantineHolds)
+            $blockers[]=$invalidQuarantineHolds.
+                ' original customer-credit quarantine hold review(s) contain invalid asset/GL postings or incomplete independent authorization.';
+        $unclassifiedScrap=DB::table('sales_return_quarantines as qc')
+            ->leftJoin('finance_historical_customer_return_disposition_reviews as financial',
+                function($join){
+                    $join->on('financial.sales_return_quarantine_id','=','qc.id')
+                        ->where('financial.treatment','=','scrap_cogs_reclass')
+                        ->where('financial.status','=','posted');
+                })
+            ->where('qc.status','scrapped')
+            ->whereBetween('qc.decided_on',[$begin,$end])
+            ->whereNull('financial.id')->count();
+        if($unclassifiedScrap)
+            $warnings[]=$unclassifiedScrap.
+                ' QC-scrapped customer return(s) retain their original sales COGS expense without an independently posted returns-loss reclassification. Check the original customer credits and accounting treatment; no automatic expense is required.';
         $orphanDispatches=DB::table('finished_good_dispatch_lines as item')
             ->join('finished_good_dispatches as dispatch',
                 'dispatch.id','=','item.finished_good_dispatch_id')
