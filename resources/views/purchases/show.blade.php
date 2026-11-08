@@ -137,6 +137,7 @@ $hasSubtotal=$subtotal->compareTo(\Brick\Math\BigDecimal::zero())>0;
 @canany(['purchases.view','inventory.view','administration.view'])
 <p><a class="btn btn-light" href="{{ route('workspace.page',['purchases','purchase-returns']) }}">Return goods to supplier</a></p>
 @endcanany
+<p class="muted">Incoming QC holds reflect the current approved material specifications and lot review results. A posted goods receipt is not proof of laboratory release.</p>
 <p class="muted">Only confirmed orders can receive goods. Quantities use the linked material's unit. Posting a GRN increases warehouse/unassigned stock and creates inventory cost layers. Purchase unit-price snapshots are frozen in the order currency, while landed-cost adjustments are recorded separately. The GRN alone does not create a supplier payable journal. A base-currency purchase equivalent is shown only when an explicit direct historical exchange rate was available on the receipt date; it is not an inventory valuation.</p>
 @if(in_array($order->status,['confirmed','partially_received'],true))
 @can('inventory.update')
@@ -163,7 +164,7 @@ $hasSubtotal=$subtotal->compareTo(\Brick\Math\BigDecimal::zero())>0;
 </form>
 @endcan
 @endif
-<div class="table-wrap"><table><thead><tr><th>GRN number</th><th>Date</th><th>Supplier reference</th><th>Lines</th><th>Purchase value snapshot</th><th>Base purchase equivalent</th><th>Status</th><th>Next step</th></tr></thead><tbody>
+<div class="table-wrap"><table><thead><tr><th>GRN number</th><th>Date</th><th>Supplier reference</th><th>Lines</th><th>Purchase value snapshot</th><th>Base purchase equivalent</th><th>Status</th><th>Incoming QC</th><th>Next step</th></tr></thead><tbody>
 @forelse($order->receipts as $receipt)
 
 <tr><td><strong>{{ $receipt->number }}</strong></td><td>{{ $receipt->received_on->format('Y-m-d') }}</td><td>{{ $receipt->supplier_reference ?? '—' }}</td><td>{{ $receipt->lines->count() }}</td><td>{{ $receipt->purchase_value_snapshot ?? 'Not captured' }}</td><td>
@@ -172,12 +173,18 @@ $hasSubtotal=$subtotal->compareTo(\Brick\Math\BigDecimal::zero())>0;
 <small style="display:block;color:#648099">Rate: {{ $receipt->fx_rate_snapshot }}@if($receipt->fx_rate_effective_date) · {{ $receipt->fx_rate_effective_date->format('Y-m-d') }}@else · base currency @endif</small>
 @endif
 </td><td>{{ ucfirst($receipt->status) }}</td>
+<td>
+@php($qc=$receiptQcSummary[$receipt->id]??['held_lines'=>0,'missing_layers'=>0])
+@if($qc['missing_layers']>0)<span style="color:#b54708">{{ $qc['missing_layers'] }} line(s) missing cost layers</span>
+@elseif($qc['held_lines']>0)<span style="color:#a85415">{{ $qc['held_lines'] }} line(s) on QC hold</span>
+@else<span style="color:#257347">No active holds</span>@endif
+</td>
 <td style="white-space:nowrap">
 <a href="{{ route('workspace.page',['purchases','goods-receipts','receipt_id'=>$receipt->id]) }}">Match invoice</a>
 <span class="muted"> · </span>
 <a href="{{ route('workspace.page',['purchases','purchase-returns','receipt_id'=>$receipt->id]) }}">Return</a>
 </td></tr>
-@empty<tr><td colspan="8" class="muted">No goods received yet.</td></tr>@endforelse
+@empty<tr><td colspan="9" class="muted">No goods received yet.</td></tr>@endforelse
 </tbody></table></div>
 @foreach($order->receipts as $receipt)
 @if($receipt->status === 'posted' && $receipt->cost_currency_code && $receipt->lines->isNotEmpty() && $receipt->lines->every(fn ($line) => $line->line_subtotal_snapshot !== null))
