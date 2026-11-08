@@ -183,6 +183,102 @@ This records a disputed supplier proposal only; it does not recognize a claim, e
 <button class="btn" type="submit" onclick="return confirm('Document this source-priced supplier dispute without posting any financial transaction?')">Record supplier short-credit review</button>
 </form>
 @endif
+@if($shortCreditSettlement)
+<h3>Supplier short-credit settlement and independent GL recognition</h3>
+<div class="hfcs-grid">
+<div><small>Settlement status</small><div><strong>{{ ucfirst($shortCreditSettlement->status) }}</strong></div></div>
+<div><small>Original matched payable</small><div>#{{ $shortCreditSettlement->trade_document_id }}</div></div>
+<div><small>Original inventory reversal</small><div>{{ $shortCreditSettlement->source_base_return_value }} {{ $supplierCreditCurrency }}</div></div>
+<div><small>Accepted supplier payable reduction</small><div>{{ $shortCreditSettlement->supplier_offered_credit }} {{ $supplierCreditCurrency }}</div></div>
+<div><small>Authorized claim / loss</small><div>{{ $shortCreditSettlement->unresolved_difference }} {{ $supplierCreditCurrency }} ({{ str_replace('_',' ',$shortCreditSettlement->treatment) }})</div></div>
+<div><small>Posted journal</small><div>{{ $shortCreditSettlement->journal_entry_id ? '#'.$shortCreditSettlement->journal_entry_id : 'Not posted' }}</div></div>
+</div>
+<p><strong>Signed recognition source:</strong></p><p style="white-space:pre-wrap">{{ $shortCreditSettlement->recognition_evidence }}</p>
+@if($shortCreditSettlement->status==='submitted' &&
+(auth()->user()->can('finance.update') || auth()->user()->can('administration.update')) &&
+(int)$shortCreditSettlement->submitted_by!==auth()->id() &&
+(int)$case->requested_by!==auth()->id() &&
+(int)$supplierDispute->reviewed_by!==auth()->id())
+<form method="POST" action="{{ route('finance.historical-corrections.short-credit-approve',$case->id) }}" class="hfcs-form">
+@csrf
+<h3>Independent financial recognition decision</h3>
+<label>Decision
+<select name="decision" required>
+<option value="approve">Approve source-priced accounting treatment</option>
+<option value="reject">Reject unsupported accounting evidence</option>
+</select></label>
+<label>Signed independent authorization reference
+<input name="approval_reference" minlength="4" maxlength="180" required></label>
+<label>Review of original supplier claim or nonrecoverable loss
+<textarea name="approval_notes" rows="5" minlength="40" maxlength="5000" required
+placeholder="Identify original supplier invoice, value, legal claim basis or approved loss write-off, matching payable and GL account."></textarea></label>
+<label style="display:flex;align-items:center;gap:8px">
+<input type="checkbox" name="confirm_independent_settlement" value="1" required style="width:auto">
+I independently verified original-currency source prices, receivable/loss authority and absence of a prior return-cost journal.
+</label>
+<button type="submit" class="btn">Record independent settlement decision</button>
+</form>
+@endif
+@if($shortCreditSettlement->status==='approved' &&
+(auth()->user()->can('finance.update') || auth()->user()->can('administration.update')) &&
+(int)$shortCreditSettlement->submitted_by!==auth()->id() &&
+(int)$shortCreditSettlement->approved_by!==auth()->id() &&
+(int)$case->requested_by!==auth()->id())
+<form method="POST" action="{{ route('finance.historical-corrections.short-credit-post',$case->id) }}" class="hfcs-form">
+@csrf
+<p class="hfcs-alert">An approved original-currency journal will debit the actual accepted supplier payable credit, debit the approved claim asset or loss expense for the remaining difference, and credit the original matched inventory account for the full physical return base price. Original warehouse quantities do not change.</p>
+<label style="display:flex;align-items:center;gap:8px">
+<input type="checkbox" name="confirm_post_short_credit" value="1" required style="width:auto">
+I have independently checked the approved journal accounts, posting period and original source documents.
+</label>
+<button type="submit" class="btn" onclick="return confirm('Post the independently approved original-currency short-credit journal?')">Post approved supplier correction</button>
+</form>
+@endif
+@elseif($supplierDispute && $case->status==='approved' &&
+(auth()->user()->can('finance.update') || auth()->user()->can('administration.update')) &&
+(int)$case->requested_by!==auth()->id() &&
+(int)$supplierDispute->reviewed_by!==auth()->id() &&
+$supplierDispute->requested_treatment!=='unresolved')
+<h3>Propose independent original-currency supplier short-credit settlement</h3>
+<p class="hfcs-alert">A documented, nonrecoverable expense or legally supported supplier claim may be recognized only after a second independent financial approval. A proposal never posts a journal, changes inventory quantities or invents a supplier credit.</p>
+<form method="POST" action="{{ route('finance.historical-corrections.short-credit-submit',$case->id) }}" class="hfcs-form">
+@csrf
+<label>Source-matched posted supplier payable
+<select name="trade_document_id" required>
+<option value="">Select original supplier invoice</option>
+@foreach($shortCreditPayables as $payable)
+<option value="{{ $payable->id }}" @selected(old('trade_document_id')==$payable->id)>{{ $payable->number }} — {{ $payable->supplier_invoice_number }} ({{ $payable->amount }} {{ $supplierCreditCurrency }})</option>
+@endforeach
+</select></label>
+<label>Authorized treatment of original-currency difference
+<select name="treatment" required>
+@if($supplierDispute->requested_treatment==='supplier_claim_pending')
+<option value="recognized_supplier_claim">Documented recognized supplier claim (asset)</option>
+@else
+<option value="approved_nonrecoverable_loss">Authorized nonrecoverable supplier loss (expense)</option>
+@endif
+</select></label>
+<label>Approved difference ledger
+<select name="difference_ledger_id" required>
+<option value="">Select approved GL account</option>
+@foreach($shortCreditDifferenceLedgers as $ledger)
+<option value="{{ $ledger->id }}" @selected(old('difference_ledger_id')==$ledger->id)>{{ $ledger->code }} — {{ $ledger->name }}</option>
+@endforeach
+</select></label>
+<label>Posting date in an OPEN accounting period
+<input type="date" name="posting_date" min="{{ $case->source_date }}" max="{{ now()->toDateString() }}" value="{{ old('posting_date',now()->toDateString()) }}" required></label>
+<label>Signed supplier-credit settlement / loss approval document
+<input name="settlement_reference" minlength="4" maxlength="180" value="{{ old('settlement_reference') }}" required></label>
+<label>Source-price and legally supported recognition explanation
+<textarea name="recognition_evidence" rows="5" minlength="50" maxlength="5000" required
+placeholder="Document original supplier invoice, GRN quantities, accepted credit, independent claim recovery evidence or authorized loss write-off.">{{ old('recognition_evidence') }}</textarea></label>
+<label style="display:flex;align-items:center;gap:8px">
+<input type="checkbox" name="confirm_signed_recognition" value="1" required style="width:auto">
+The original invoice, return, claim or write-off authorization and absence of earlier GL recognition have been reviewed.
+</label>
+<button type="submit" class="btn">Submit source-matched financial correction</button>
+</form>
+@endif
 </section>
 @endif
 @if($case->case_type==='standalone_dispatch')
