@@ -9,6 +9,7 @@ use App\Models\FixedAsset;
 use App\Models\FixedAssetAssignment;
 use App\Models\FixedAssetCategory;
 use App\Services\FixedAssetAssignmentService;
+use App\Services\FixedAssetCapitalizationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -28,7 +29,37 @@ class FixedAssetController extends Controller
     public function show(Request $request, FixedAsset $asset)
     {
         $this->viewAccess($request);
+        $capitalization=DB::table('fixed_asset_capitalizations as link')
+            ->join('journal_entries as journal','journal.id','=','link.acquisition_journal_id')
+            ->join('ledger_accounts as ledger','ledger.id','=','link.asset_ledger_id')
+            ->where('link.fixed_asset_id',$asset->id)
+            ->select('link.*','journal.number as journal_number',
+                'ledger.code as asset_ledger_code')->first();
+        $candidates=collect();
+        if(!$capitalization && $request->user()->canAny(['finance.update','administration.update'])){
+            $candidates=DB::table('journal_lines as line')
+                ->join('journal_entries as journal','journal.id','=','line.journal_entry_id')
+                ->join('ledger_accounts as ledger','ledger.id','=','line.ledger_account_id')
+                ->leftJoin('journal_entries as reversal',
+                    'reversal.reversal_of_id','=','journal.id')
+                ->leftJoin('fixed_asset_capitalizations as existing',
+                    'existing.journal_line_id','=','line.id')
+                ->where('journal.status','posted')
+                ->whereNull('journal.reversal_of_id')
+                ->whereNull('reversal.id')->whereNull('existing.id')
+                ->where('journal.reference',$asset->source_reference)
+                ->where('journal.currency_id',$asset->currency_id)
+                ->where('ledger.type','asset')->where('ledger.is_group',false)
+                ->where('ledger.is_active',true)
+                ->where('line.credit',0)
+                ->where('line.debit',$asset->acquisition_cost)
+                ->select('line.id as journal_line_id','journal.number as journal_number',
+                    'journal.entry_date','ledger.code as ledger_code','line.debit')
+                ->orderByDesc('journal.entry_date')->limit(50)->get();
+        }
         return view('assets.show', [
+            'capitalization'=>$capitalization,
+            'capitalizationCandidates'=>$candidates,
             'asset' => $asset->load(['category', 'currency', 'custodian']),
             'assignments' => $asset->assignments()->with('employee')->orderByDesc('assigned_on')->get(),
             'employees' => EmployeeProfile::where('is_active', true)->orderBy('employee_number')->get(),
@@ -73,6 +104,18 @@ class FixedAssetController extends Controller
             return $record;
         });
         return redirect()->route('assets.show', $asset)->with('success', 'Asset registered with source reference. No depreciation or accounting entry was posted.');
+    }
+
+    public function reconcileCapitalization(Request $request,FixedAsset $asset,FixedAssetCapitalizationService $service)
+    {
+        abort_unless($request->user()->canAny(['finance.update','administration.update']),403);
+        $data=$request->validate([
+            'journal_line_id'=>['required','integer','exists:journal_lines,id'],
+            'reconciliation_reference'=>['required','string','min:4','max:180'],
+            'evidence_notes'=>['required','string','min:15','max:3000'],
+        ]);
+        $service->link($asset,$data,$request->user()->id);
+        return back()->with('success','Original PPE acquisition debit reconciled. No duplicate asset acquisition journal was created.');
     }
 
     public function assign(Request $request, FixedAsset $asset, FixedAssetAssignmentService $service)
