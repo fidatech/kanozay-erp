@@ -21,13 +21,17 @@ class SupplierDebitNoteController extends Controller {
     ->whereIn('goods_receipt_id',$returns->pluck('goods_receipt_id'))
     ->select('goods_receipt_id','trade_document_id','inventory_ledger_id')
     ->get()->groupBy('goods_receipt_id');
-  $matchedDocumentIds=$matchedByReceipt->flatten()->pluck('trade_document_id')->all();
+  $matchedDocumentIds=$matchedByReceipt->flatten()->pluck('trade_document_id')->unique()->all();
+  $supplierIds=$returns->pluck('order.supplier_id')->filter()->unique()->values();
   $payables=TradeDocument::with('party')->where('type','payable')
-    ->where(function($query)use($returns,$matchedDocumentIds){
-     $query->whereIn('trade_party_id',$returns->pluck('purchase_order_id')->isEmpty()
-       ? [] : \App\Models\PurchaseOrder::whereIn('id',$returns->pluck('purchase_order_id'))->pluck('supplier_id'))
-       ->orWhereIn('id',$matchedDocumentIds);
-    })->latest('id')->limit(1200)->get();
+    ->whereIn('trade_party_id',$supplierIds)->latest('id')->limit(1000)->get();
+  // Always include source-matched invoices even if an older payable falls
+  // outside the general list's pagination window.
+  if($matchedDocumentIds){
+   $sourcePayables=TradeDocument::with('party')->where('type','payable')
+     ->whereIn('id',$matchedDocumentIds)->get();
+   $payables=$payables->concat($sourcePayables)->unique('id')->sortByDesc('id')->values();
+  }
   $offsetLedgers=LedgerAccount::whereIn('type',['asset','expense'])
     ->where('is_group',false)->where('is_active',true)->whereNotIn('id',
       \Illuminate\Support\Facades\DB::table('entity_ledger_accounts')->select('ledger_account_id'))
