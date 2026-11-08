@@ -69,6 +69,15 @@ class FixedAssetDepreciationService
             $period=CarbonImmutable::createFromFormat('!Y-m-d',$month.'-01');
             if(!$period || $period->format('Y-m')!==$month)
                 throw ValidationException::withMessages(['month'=>'Invalid accounting month.']);
+            $acquisitionDate=DB::table('fixed_asset_capitalizations as verified')
+                ->join('journal_entries as posted','posted.id','=','verified.acquisition_journal_id')
+                ->where('verified.fixed_asset_id',$asset->id)
+                ->value('posted.entry_date');
+            if(!$acquisitionDate || $period->endOfMonth()->toDateString()<$acquisitionDate){
+                throw ValidationException::withMessages([
+                    'month'=>'Depreciation period cannot precede the reconciled posted asset acquisition journal.',
+                ]);
+            }
             $start=CarbonImmutable::parse($policy->start_month)->startOfMonth();
             $index=($period->year-$start->year)*12+($period->month-$start->month);
             if($index<0 || $index>=(int)$policy->useful_life_months)
