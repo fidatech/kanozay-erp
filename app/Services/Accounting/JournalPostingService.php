@@ -78,6 +78,9 @@ class JournalPostingService {
    if(DB::table('supplier_advance_applications')->where('journal_entry_id',$original->id)->exists()
    || DB::table('customer_advance_applications')->where('journal_entry_id',$original->id)->exists())
     throw ValidationException::withMessages(['status'=>'Applied customer or supplier advances require a dedicated document-level correction workflow.']);
+   if(DB::table('finance_supplier_short_credit_settlements')
+        ->where('journal_entry_id',$original->id)->exists())
+     throw ValidationException::withMessages(['status'=>'A posted supplier short-credit claim/loss journal requires a dedicated audited source reversal.']);
    if(DB::table('finance_opening_fifo_valuations')
         ->where('journal_entry_id',$original->id)->exists()){
       throw ValidationException::withMessages([
