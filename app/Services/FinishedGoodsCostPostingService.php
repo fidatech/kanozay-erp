@@ -132,6 +132,22 @@ class FinishedGoodsCostPostingService
                 $this->reject('The same physical dispatch is linked to more than one sales invoice line.');
             }
 
+            $lastCOGSDate=DB::table('production_invoice_cogs_postings as cogs')
+                ->join('journal_entries as journal',
+                    'journal.id','=','cogs.journal_entry_id')
+                ->where('cogs.production_batch_cost_posting_id',$posted->id)
+                ->max('journal.entry_date');
+            $lastReturnDate=DB::table('production_return_cost_postings as recovered')
+                ->join('production_invoice_cogs_postings as sold',
+                    'sold.id','=','recovered.production_invoice_cogs_posting_id')
+                ->join('journal_entries as journal',
+                    'journal.id','=','recovered.journal_entry_id')
+                ->where('sold.production_batch_cost_posting_id',$posted->id)
+                ->max('journal.entry_date');
+            if(($lastCOGSDate && $invoice->invoice_date<$lastCOGSDate) ||
+               ($lastReturnDate && $invoice->invoice_date<$lastReturnDate)){
+                $this->reject('This invoice predates an already posted sale or QC-return cost movement for the same batch. A separately reviewed historical adjustment is required to preserve chronological GL valuation.');
+            }
             $priorSales=DB::table('production_invoice_cogs_postings')
                 ->where('production_batch_cost_posting_id',$posted->id)->get();
             $priorQty=0;$netCost=BigDecimal::zero();
@@ -268,6 +284,22 @@ class FinishedGoodsCostPostingService
             $policy=$this->policies->approved((int)$cost->currency_id);
             if((int)$policy->id!==(int)$cost->manufacturing_cost_ledger_policy_id){
                 $this->reject('Batch cost policy has changed since the source sale.');
+            }
+            $latestCostDate=DB::table('production_invoice_cogs_postings as sold')
+                ->join('journal_entries as journal',
+                    'journal.id','=','sold.journal_entry_id')
+                ->where('sold.production_batch_cost_posting_id',$cost->id)
+                ->max('journal.entry_date');
+            $latestReturnDate=DB::table('production_return_cost_postings as recovery')
+                ->join('production_invoice_cogs_postings as sold',
+                    'sold.id','=','recovery.production_invoice_cogs_posting_id')
+                ->join('journal_entries as journal',
+                    'journal.id','=','recovery.journal_entry_id')
+                ->where('sold.production_batch_cost_posting_id',$cost->id)
+                ->max('journal.entry_date');
+            if(($latestCostDate && $date<$latestCostDate) ||
+                ($latestReturnDate && $date<$latestReturnDate)){
+                $this->reject('The requested QC return recovery is backdated before another posted batch COGS movement. A finance-controlled historical adjustment is required.');
             }
             $sourceJournal=DB::table('journal_entries')->where('id',$source->journal_entry_id)->first();
             if(!$sourceJournal || $sourceJournal->status!=='posted' ||
