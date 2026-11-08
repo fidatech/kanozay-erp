@@ -7,6 +7,27 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 class PurchaseOrderController extends Controller {
+ private function normalizeAmount($value):mixed {
+  if(!is_string($value))return $value;
+  $value=strtr($value,[
+   '٠'=>'0','١'=>'1','٢'=>'2','٣'=>'3','٤'=>'4','٥'=>'5','٦'=>'6','٧'=>'7','٨'=>'8','٩'=>'9',
+   '۰'=>'0','۱'=>'1','۲'=>'2','۳'=>'3','۴'=>'4','۵'=>'5','۶'=>'6','۷'=>'7','۸'=>'8','۹'=>'9',
+   '٫'=>'.','٬'=>',','،'=>',',
+  ]);
+  return str_replace(',','',$value);
+ }
+ private function normalizeItemAmounts(Request $request):void {
+  $items=$request->input('items');
+  if(!is_array($items))return;
+  foreach($items as &$item){
+   if(!is_array($item))continue;
+   foreach(['quantity','unit_price'] as $field){
+    if(array_key_exists($field,$item))$item[$field]=$this->normalizeAmount($item[$field]);
+   }
+  }
+  unset($item);
+  $request->merge(['items'=>$items]);
+ }
  public function index(Request $request) {
   abort_unless($request->user()->canAny(['administration.view', 'purchases.view']),403);
   $orders=PurchaseOrder::with(['supplier','currency','items'])->latest('id')->paginate(20);
@@ -22,7 +43,9 @@ class PurchaseOrderController extends Controller {
  }
  public function store(Request $request) {
   abort_unless($request->user()->canAny(['administration.update', 'purchases.create']),403);
+  $this->normalizeItemAmounts($request);
   $data=$request->validate([
+   'submission_token'=>['nullable','uuid'],
 
    'supplier_id'=>['required',Rule::exists('trade_parties','id')->where('type','supplier')->where('is_active',true)],
    'currency_id'=>['required',Rule::exists('currencies','id')->where('is_active',true)],
@@ -37,12 +60,19 @@ class PurchaseOrderController extends Controller {
   ]);
   DB::transaction(function()use($data,$request){
    $supplier=TradeParty::whereKey($data['supplier_id'])->lockForUpdate()->firstOrFail();
+   if(!empty($data['submission_token']) &&
+      PurchaseOrder::where('submission_token',$data['submission_token'])->exists()){
+    throw \Illuminate\Validation\ValidationException::withMessages([
+     'submission_token'=>'This purchase order has already been submitted. Refresh the form before creating another.',
+    ]);
+   }
    if(!$supplier->currencies()->whereKey($data['currency_id'])->exists()){
     throw \Illuminate\Validation\ValidationException::withMessages([
      'currency_id'=>'Enable this currency on the selected supplier account before creating the purchase order.',
     ]);
    }
    $order=PurchaseOrder::create([
+    'submission_token'=>$data['submission_token']??null,
     'number'=>'TMP-'.(string) \Illuminate\Support\Str::uuid(),'supplier_id'=>$data['supplier_id'],'currency_id'=>$data['currency_id'],
     'source'=>$data['source'],'order_date'=>$data['order_date'],'expected_date'=>$data['expected_date']??null,
     'notes'=>$data['notes']??null,'created_by'=>$request->user()->id,'status'=>'draft',
@@ -165,6 +195,10 @@ class PurchaseOrderController extends Controller {
  public function updateDraftItem(Request $request,PurchaseOrder $order,\App\Models\PurchaseOrderItem $item) {
   abort_unless($request->user()->canAny(['administration.update','purchases.update']),403);
   abort_unless((int)$item->purchase_order_id===(int)$order->id,404);
+  $request->merge([
+   'quantity'=>$this->normalizeAmount($request->input('quantity')),
+   'unit_price'=>$this->normalizeAmount($request->input('unit_price')),
+  ]);
   $data=$request->validate([
    'description'=>['required','string','max:255'],
    'inventory_material_id'=>['required','integer',Rule::exists('inventory_materials','id')->where('is_active',true)],
@@ -184,6 +218,10 @@ class PurchaseOrderController extends Controller {
  }
  public function addDraftItem(Request $request,PurchaseOrder $order) {
   abort_unless($request->user()->canAny(['administration.update','purchases.update']),403);
+  $request->merge([
+   'quantity'=>$this->normalizeAmount($request->input('quantity')),
+   'unit_price'=>$this->normalizeAmount($request->input('unit_price')),
+  ]);
   $data=$request->validate([
    'description'=>['required','string','max:255'],
    'inventory_material_id'=>['required','integer',Rule::exists('inventory_materials','id')->where('is_active',true)],
