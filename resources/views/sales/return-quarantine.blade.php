@@ -47,6 +47,9 @@
 <div class="muted">GL {{ $recovery->journal_number }} · Asset debit / COGS credit</div>
 @elseif($q->status==='released')
 <strong style="color:#a6462d">Historical cost not reconciled</strong>
+<div><a href="{{ route('finance.historical-corrections.index',[
+  'type'=>'released_return_missing_cost','source_id'=>$q->id
+]) }}">Investigate original credit/QC/COGS evidence</a></div>
 @elseif($q->status==='scrapped')
 <span class="muted">No saleable asset recovery; source COGS remains expensed</span>
 @else
