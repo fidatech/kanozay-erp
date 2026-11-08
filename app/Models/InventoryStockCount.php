@@ -8,7 +8,7 @@ class InventoryStockCount extends Model
 {
     protected $fillable = [
         'number', 'submission_token', 'counted_on', 'status', 'notes', 'created_by',
-        'approved_by', 'approved_at',
+        'approved_by', 'approved_at', 'company_warehouse_id', 'count_scope',
     ];
 
     protected function casts(): array
@@ -19,6 +19,11 @@ class InventoryStockCount extends Model
     public function lines()
     {
         return $this->hasMany(InventoryStockCountLine::class)->orderBy('inventory_material_id');
+    }
+
+    public function warehouse()
+    {
+        return $this->belongsTo(CompanyWarehouse::class, 'company_warehouse_id');
     }
 
     public function creator()
