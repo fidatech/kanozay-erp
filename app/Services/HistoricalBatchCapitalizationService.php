@@ -49,15 +49,35 @@ final class HistoricalBatchCapitalizationService
                 ->isEqualTo((string)$invoice->invoice_total))
             $this->fail('The original customer receivable and sales revenue GL must be valid, posted, unreversed and match the original buyer, invoice and currency.');
 
+        $receivableLedger=DB::table('entity_ledger_accounts')->where([
+            'entity_type'=>'customer','entity_id'=>$invoice->customer_id,
+            'currency_id'=>$invoice->invoice_currency_id,'purpose'=>'receivable',
+        ])->value('ledger_account_id');
+        if(!$receivableLedger)
+            $this->fail('Original customer receivable account mapping is missing or currency-mismatched.');
         $debit=BigDecimal::zero();$credit=BigDecimal::zero();
-        foreach(DB::table('journal_lines')->where('journal_entry_id',$revenue->id)
-            ->get(['debit','credit']) as $line){
+        $receivableDebit=BigDecimal::zero();$incomeCredit=BigDecimal::zero();
+        $journalLines=DB::table('journal_lines as row')
+            ->join('ledger_accounts as ledger','ledger.id','=','row.ledger_account_id')
+            ->where('row.journal_entry_id',$revenue->id)
+            ->get(['row.ledger_account_id','row.debit','row.credit','ledger.type']);
+        if($journalLines->count()!==2)
+            $this->fail('The original posted sales journal must contain exactly one customer receivable debit and one revenue credit.');
+        foreach($journalLines as $line){
             $debit=$debit->plus((string)$line->debit);
             $credit=$credit->plus((string)$line->credit);
+            if((int)$line->ledger_account_id===(int)$receivableLedger)
+                $receivableDebit=$receivableDebit->plus((string)$line->debit)
+                    ->minus((string)$line->credit);
+            if($line->type==='income')
+                $incomeCredit=$incomeCredit->plus((string)$line->credit)
+                    ->minus((string)$line->debit);
         }
         if(!$debit->isEqualTo((string)$invoice->invoice_total) ||
-            !$credit->isEqualTo((string)$invoice->invoice_total))
-            $this->fail('Original customer revenue journal debit and credit totals must both equal the exact posted invoice total.');
+            !$credit->isEqualTo((string)$invoice->invoice_total) ||
+            !$receivableDebit->isEqualTo((string)$invoice->invoice_total) ||
+            !$incomeCredit->isEqualTo((string)$invoice->invoice_total))
+            $this->fail('Original customer revenue journal must debit the matched customer receivable and credit the income ledger by the exact invoice total.');
     }
 
     /** Re-read both physical and immutable financial sources for each decision. */
