@@ -131,6 +131,7 @@
  @elseif($order->batch)
   @php($batch = $order->batch)
   <p><strong>Batch:</strong> {{ $batch->batch_number }} · <strong>Product:</strong> {{ $batch->finishedGood?->sku }} · <strong>Status:</strong> {{ str_replace('_', ' ', ucfirst($batch->status)) }}</p>
+  <p><a class="btn btn-light" href="{{ route('manufacturing.traceability.batch',$batch) }}">Batch source lots, packaging and delivery trace</a></p>
   <div class="table-wrap"><table><thead><tr><th>Produced</th><th>Accepted</th><th>Rejected</th><th>Lab decision</th><th>Stock release</th></tr></thead><tbody>
    <tr><td>{{ $batch->reported_packages }}</td><td>{{ $batch->accepted_packages }}</td><td>{{ $batch->rejected_packages }}</td>
     <td>{{ $batch->decided_at?->format('Y-m-d H:i') ?? 'Pending' }}</td><td>{{ $batch->released_at?->format('Y-m-d H:i') ?? 'Not released' }}</td></tr>
