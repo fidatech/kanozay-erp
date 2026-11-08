@@ -34,6 +34,23 @@
 <div class="report-actions"><button type="submit" class="btn"><i class="fa-solid fa-filter"></i> {{ $t('filter') }}</button><a class="outline" href="{{ route('workspace.page',['reports',$report]) }}">{{ $t('reset') }}</a></div>
 </form>
 <div class="report-note"><strong>{{ $t('reporting_note') }}:</strong> {{ $note }}</div>
+<div class="report-actions" style="margin-bottom:12px">
+<a class="outline" href="{{ route('workspace.page',['reports','overview']) }}">{{ \App\Support\ErpInterfaceLabels::page('reports','overview') }}</a>
+@if($report==='inventory')
+<a class="outline" href="{{ route('inventory.warehouse-stock.index') }}">{{ \App\Support\ErpInterfaceLabels::page('inventory','warehouses') }}</a>
+<a class="outline" href="{{ route('inventory.warehouse-valuation.index') }}">{{ \App\Support\ErpInterfaceLabels::page('inventory','inventory-valuation') }}</a>
+@elseif($report==='sales')
+<a class="outline" href="{{ route('workspace.page',['reports','delivery-notes']) }}">{{ \App\Support\ErpInterfaceLabels::page('reports','delivery-notes') }}</a>
+<a class="outline" href="{{ route('workspace.page',['reports','sales-credits']) }}">{{ \App\Support\ErpInterfaceLabels::page('reports','sales-credits') }}</a>
+@elseif($report==='quality')
+<a class="outline" href="{{ route('workspace.page',['reports','qc-samples']) }}">{{ \App\Support\ErpInterfaceLabels::page('reports','qc-samples') }}</a>
+<a class="outline" href="{{ route('workspace.page',['reports','nonconformances']) }}">{{ \App\Support\ErpInterfaceLabels::page('reports','nonconformances') }}</a>
+@elseif($report==='costing')
+<a class="outline" href="{{ route('manufacturing.cost-readiness.index') }}">{{ \App\Support\ErpInterfaceLabels::page('manufacturing','costing') }}</a>
+@elseif($report==='finance')
+<a class="outline" href="{{ route('finance.periods.index') }}">{{ \App\Support\ReportingLabels::text('period_close') }}</a>
+@endif
+</div>
 <div class="report-head" style="margin:12px 0"><h2 style="margin:0;font-size:15px">{{ $t('report_register') }}</h2><span class="report-count">{{ number_format($records->total()) }} {{ $t('matching_records') }}</span></div>
 <div class="report-table">
 <table><thead><tr>@foreach($columns as $column)<th scope="col">{{ $column }}</th>@endforeach</tr></thead>
