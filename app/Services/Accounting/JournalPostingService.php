@@ -78,6 +78,11 @@ class JournalPostingService {
    if(DB::table('supplier_advance_applications')->where('journal_entry_id',$original->id)->exists()
    || DB::table('customer_advance_applications')->where('journal_entry_id',$original->id)->exists())
     throw ValidationException::withMessages(['status'=>'Applied customer or supplier advances require a dedicated document-level correction workflow.']);
+   if(DB::table('finance_historical_customer_return_disposition_reviews')
+        ->where('journal_entry_id',$original->id)->exists())
+     throw ValidationException::withMessages([
+       'status'=>'Original source-priced scrapped-customer COGS expense reclassification requires a separate independently authorized QC/customer credit correction; do not reverse its journal alone.',
+     ]);
    if(DB::table('finance_historical_dispatch_cost_lines')
         ->where('journal_entry_id',$original->id)->exists())
      throw ValidationException::withMessages([
