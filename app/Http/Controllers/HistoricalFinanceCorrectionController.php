@@ -99,6 +99,8 @@ class HistoricalFinanceCorrectionController extends Controller
         abort_unless($row,404);
         $historicalBatchPosting=null;
         $historicalBatchDispatches=collect();
+        $historicalBatchAllocations=collect();
+        $historicalBatchExpenseLedgers=collect();
         $historicalBatchReadiness=null;
         if($row->case_type==='batch_uncapitalized'){
             $historicalBatchPosting=DB::table('finance_historical_batch_capitalizations as plan')
@@ -108,17 +110,44 @@ class HistoricalFinanceCorrectionController extends Controller
                 ->where('plan.finance_historical_correction_case_id',$row->id)
                 ->select('plan.*','cost.issue_journal_id','cost.capitalization_journal_id',
                     'currency.code as currency_code')->first();
+            if($historicalBatchPosting){
+                $historicalBatchAllocations=DB::table('finance_historical_batch_dispatch_allocations as posting')
+                    ->leftJoin('ledger_accounts as ledger','ledger.id','=','posting.expense_ledger_id')
+                    ->leftJoin('journal_entries as journal','journal.id','=','posting.journal_entry_id')
+                    ->where('posting.finance_historical_batch_capitalization_id',$historicalBatchPosting->id)
+                    ->select('posting.*','ledger.code as expense_code',
+                        'ledger.name as expense_name','journal.number as journal_number',
+                        'journal.status as journal_status')
+                    ->orderBy('posting.dispatch_date')
+                    ->orderBy('posting.finished_good_dispatch_line_id')->get();
+            }
+            if($row->status==='approved' &&
+                $request->user()->canAny(['finance.update','administration.update'])){
+                $reserved=DB::table('manufacturing_cost_ledger_policies')
+                    ->pluck('cogs_ledger_id')->all();
+                $historicalBatchExpenseLedgers=\App\Models\LedgerAccount::query()
+                    ->where('type','expense')->where('is_active',true)
+                    ->where('is_group',false)->whereNotIn('id',$reserved)
+                    ->orderBy('code')->get(['id','code','name']);
+            }
             $historicalBatchDispatches=DB::table('finished_good_dispatch_lines as source')
                 ->join('finished_good_dispatches as dispatch',
                     'dispatch.id','=','source.finished_good_dispatch_id')
                 ->leftJoin('sales_invoice_lines as invoice_line',
                     'invoice_line.dispatch_id','=','dispatch.id')
                 ->leftJoin('sales_invoices as invoice','invoice.id','=','invoice_line.sales_invoice_id')
+                ->leftJoin('finance_historical_dispatch_dispositions as signed',
+                    'signed.finished_good_dispatch_id','=','dispatch.id')
+                ->leftJoin('finance_historical_correction_cases as dispatch_case',
+                    'dispatch_case.id','=','signed.finance_historical_correction_case_id')
                 ->where('source.production_batch_id',$row->source_id)
                 ->select('source.id as physical_line_id','source.quantity_packages',
                     'dispatch.number as dispatch_number',
                     'dispatch.dispatch_date','invoice.number as invoice_number',
-                    'invoice.status as invoice_status','invoice.id as invoice_id')
+                    'invoice.status as invoice_status','invoice.id as invoice_id',
+                    'signed.business_purpose','signed.supporting_document_reference',
+                    'signed.reviewed_by as purpose_reviewed_by',
+                    'dispatch_case.status as purpose_case_status')
                 ->orderBy('dispatch.dispatch_date')->orderBy('source.id')->get();
             $batch=\App\Models\ProductionBatch::with(['costs','finishedGood'])
                 ->find($row->source_id);
@@ -242,6 +271,8 @@ class HistoricalFinanceCorrectionController extends Controller
             'historicalBatchPosting'=>$historicalBatchPosting,
             'historicalBatchDispatches'=>$historicalBatchDispatches,
             'historicalBatchReadiness'=>$historicalBatchReadiness,
+            'historicalBatchAllocations'=>$historicalBatchAllocations,
+            'historicalBatchExpenseLedgers'=>$historicalBatchExpenseLedgers,
             'openingEquityLedgers'=>$openingEquityLedgers,
             'currencies'=>$currencies,'openingPosting'=>$openingPosting,
             'dispatchDisposition'=>$dispatchDisposition,
@@ -308,10 +339,12 @@ class HistoricalFinanceCorrectionController extends Controller
             'accounting_date'=>['required','date','before_or_equal:today'],
             'source_authorization_reference'=>['required','string','min:4','max:180'],
             'source_reconciliation_notes'=>['required','string','min:60','max:5000'],
-            'confirm_all_original_invoices'=>['accepted'],
+            'expense_ledgers'=>['nullable','array','max:100'],
+            'expense_ledgers.*'=>['required','integer','exists:ledger_accounts,id'],
+            'confirm_all_original_sources'=>['accepted'],
         ]);
         $service->submit($case,$data,(int)$request->user()->id);
-        return back()->with('success','Historical batch manufacturing and original invoice COGS recovery submitted. No journals or physical movements created.');
+        return back()->with('success','Source-fingerprinted historical manufacturing, genuine invoice COGS and signed non-sale expenses submitted for separate approval. No journals or physical movements created.');
     }
 
     public function reviewHistoricalBatch(Request $request,int $case,
@@ -325,7 +358,7 @@ class HistoricalFinanceCorrectionController extends Controller
             'confirm_historical_cost_review'=>['accepted'],
         ]);
         $service->approve($case,$data,(int)$request->user()->id);
-        return back()->with('success','Independent historical original-currency manufacturing and COGS review recorded. No journals posted.');
+        return back()->with('success','Independent historical original-currency manufacturing, sales and signed non-sale expense review recorded. No journals posted.');
     }
 
     public function postHistoricalBatch(Request $request,int $case,
@@ -335,8 +368,9 @@ class HistoricalFinanceCorrectionController extends Controller
         $request->validate(['confirm_atomic_historical_posting'=>['accepted']]);
         $posting=$service->post($case,(int)$request->user()->id);
         return back()->with('success',
-            'Source-backed manufacturing WIP, finished inventory and '.
-            $posting->posted_invoice_cogs_lines.' invoiced COGS line(s) posted atomically. No physical stock or sales revenue was changed.');
+            'Source-backed manufacturing WIP, finished inventory, '.
+            $posting->posted_invoice_cogs_lines.' genuine invoice COGS line(s) and '.
+            $posting->posted_non_sale_lines.' signed non-sale expense line(s) posted atomically. No physical stock or sales revenue was changed.');
     }
 
     public function submitDispatchCost(Request $request,int $case,
