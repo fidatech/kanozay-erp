@@ -309,6 +309,74 @@ final class HistoricalBatchCapitalizationService
         ];
     }
 
+    private function independentFromNonSale(array $source,int $actorId): void
+    {
+        foreach($source['non_sale'] as $review){
+            if(in_array($actorId,[
+                $review['source_requester'],
+                $review['source_reviewer'],
+                $review['purpose_reviewer'],
+            ],true))
+                $this->fail('Separate staff must perform the source-dispatch request, purpose classification, financial proposal, approval and final GL execution.');
+        }
+    }
+
+    private function expenseLedger(int $ledgerId,array $source): void
+    {
+        $policy=app(ManufacturingLedgerPolicyService::class)
+            ->approved((int)$source['currency_id']);
+        $ledger=\App\Models\LedgerAccount::whereKey($ledgerId)->first();
+        if(!$ledger || !$ledger->is_active || $ledger->is_group ||
+            $ledger->type!=='expense' ||
+            in_array($ledgerId,[
+                (int)$policy->cogs_ledger_id,
+                (int)$policy->material_inventory_ledger_id,
+                (int)$policy->work_in_progress_ledger_id,
+                (int)$policy->finished_inventory_ledger_id,
+            ],true) ||
+            DB::table('entity_ledger_accounts')->where('ledger_account_id',$ledgerId)->exists())
+            $this->fail('Use an independently reviewed, active and unmapped sampling, damage or internal-use expense account, separate from sales COGS and manufacturing asset accounts.');
+    }
+
+    /** Check every original allocation and its approved purpose account. */
+    private function allocationRecords(object $record,array $s): array
+    {
+        $rows=DB::table('finance_historical_batch_dispatch_allocations')
+            ->where('finance_historical_batch_capitalization_id',$record->id)
+            ->orderBy('finished_good_dispatch_line_id')->get()
+            ->keyBy('finished_good_dispatch_line_id');
+        if($record->dispatch_line_count===null && !$s['non_sale'] && $rows->isEmpty())
+            return []; // Previously approved all-invoiced legacy proposal.
+        if((int)$record->dispatch_line_count!==$s['lines']->count() ||
+            (int)$record->non_sale_line_count!==count($s['non_sale']) ||
+            $rows->count()!==$s['lines']->count())
+            $this->fail('Finance approval allocation does not cover each exact source dispatch and its independently evidenced purpose.');
+        $result=[];
+        foreach($s['lines'] as $physical){
+            $saved=$rows->get($physical->physical_line_id);
+            $signed=$s['non_sale'][(int)$physical->physical_line_id]??null;
+            $purpose=$signed['purpose']??'customer_sale';
+            $expense=$signed?(int)($saved?->expense_ledger_id??0):0;
+            if(!$saved ||
+                (int)$saved->finished_good_dispatch_line_id!==(int)$physical->physical_line_id ||
+                (string)$saved->dispatch_date!==(string)$physical->dispatch_date ||
+                (int)$saved->quantity_packages!==(int)$physical->quantity_packages ||
+                (int)$saved->currency_id!==(int)$s['currency_id'] ||
+                $saved->business_purpose!==$purpose ||
+                (int)($saved->sales_invoice_line_id??0)!==(int)($physical->invoice_line_id??0) ||
+                (int)($saved->finance_historical_dispatch_disposition_id??0)!==(int)($signed['disposition_id']??0) ||
+                ($signed && !$expense) ||
+                (!$signed && $saved->expense_ledger_id!==null) ||
+                $saved->journal_entry_id!==null ||
+                !BigDecimal::of((string)$saved->source_cost_amount)
+                    ->isEqualTo($s['allocations'][(int)$physical->physical_line_id]))
+                $this->fail('An approved physical dispatch cost, sale link, expense GL, currency or signed purpose changed since financial proposal.');
+            if($signed)$this->expenseLedger($expense,$s);
+            $result[(int)$physical->physical_line_id]=$saved;
+        }
+        return $result;
+    }
+
     private function matches(object $record, array $s): void
     {
         if((int)$record->production_batch_id!==(int)$s['batch']->id ||
@@ -316,10 +384,11 @@ final class HistoricalBatchCapitalizationService
             (string)$record->accounting_date!==$s['date'] ||
             (int)$record->accepted_packages!==(int)$s['batch']->accepted_packages ||
             (int)$record->dispatched_packages!==$s['packages'] ||
-            (int)$record->invoice_line_count!==$s['lines']->count() ||
+            (int)$record->invoice_line_count!==$s['sale_count'] ||
             !BigDecimal::of((string)$record->expected_original_cost)->isEqualTo($s['amount']) ||
             !hash_equals((string)$record->source_fingerprint,(string)$s['signature']))
             $this->fail('The reviewed historical batch value, source invoices, dispatches or GL evidence have changed since the original proposal.');
+        $this->allocationRecords($record,$s);
     }
 
     public function submit(int $caseId,array $data,int $actorId): object
@@ -329,6 +398,16 @@ final class HistoricalBatchCapitalizationService
             if(in_array($actorId,[(int)$s['case']->requested_by,
                 (int)$s['case']->reviewed_by],true))
                 $this->fail('A different finance proposer is required after the independent historical case review.');
+            $this->independentFromNonSale($s,$actorId);
+            $accounts=$data['expense_ledgers']??[];
+            $expected=collect(array_keys($s['non_sale']))
+                ->map(fn($id)=>(string)$id)->sort()->values()->all();
+            $submitted=collect(array_keys($accounts))
+                ->map(fn($id)=>(string)(int)$id)->sort()->values()->all();
+            if($expected!==$submitted)
+                $this->fail('Assign a purpose-appropriate expense account to EVERY signed non-sale source line and never assign one to an invoiced sale.');
+            foreach($accounts as $id=>$ledgerId)
+                $this->expenseLedger((int)$ledgerId,$s);
             if(DB::table('finance_historical_batch_capitalizations')
                 ->where('production_batch_id',$s['batch']->id)->exists())
                 $this->fail('An original financial capitalization proposal already exists for this batch.');
@@ -340,12 +419,31 @@ final class HistoricalBatchCapitalizationService
                 'expected_original_cost'=>$s['amount'],
                 'accepted_packages'=>$s['batch']->accepted_packages,
                 'dispatched_packages'=>$s['packages'],
-                'invoice_line_count'=>$s['lines']->count(),
+                'invoice_line_count'=>$s['sale_count'],
+                'dispatch_line_count'=>$s['lines']->count(),
+                'non_sale_line_count'=>count($s['non_sale']),
                 'source_fingerprint'=>$s['signature'],
                 'source_authorization_reference'=>trim($data['source_authorization_reference']),
                 'source_reconciliation_notes'=>trim($data['source_reconciliation_notes']),
                 'submitted_by'=>$actorId,'created_at'=>now(),'updated_at'=>now(),
             ]);
+            foreach($s['lines'] as $physical){
+                $physicalId=(int)$physical->physical_line_id;
+                $signed=$s['non_sale'][$physicalId]??null;
+                DB::table('finance_historical_batch_dispatch_allocations')->insert([
+                    'finance_historical_batch_capitalization_id'=>$id,
+                    'finished_good_dispatch_line_id'=>$physicalId,
+                    'sales_invoice_line_id'=>$physical->invoice_line_id,
+                    'finance_historical_dispatch_disposition_id'=>$signed['disposition_id']??null,
+                    'currency_id'=>$s['currency_id'],
+                    'expense_ledger_id'=>$signed?(int)$accounts[$physicalId]:null,
+                    'business_purpose'=>$signed['purpose']??'customer_sale',
+                    'dispatch_date'=>$physical->dispatch_date,
+                    'quantity_packages'=>$physical->quantity_packages,
+                    'source_cost_amount'=>$s['allocations'][$physicalId],
+                    'created_at'=>now(),'updated_at'=>now(),
+                ]);
+            }
             ActivityLog::record('finance.historical_batch_capitalization.submitted',
                 'finance_historical_batch_capitalization',$id,
                 'Source-fingerprinted original manufacturing and invoice COGS recovery awaiting independent approval; no GL postings.');
@@ -366,6 +464,7 @@ final class HistoricalBatchCapitalizationService
             if(in_array($actorId,[(int)$record->submitted_by,
                 (int)$s['case']->requested_by,(int)$s['case']->reviewed_by],true))
                 $this->fail('A separate finance reviewer must approve original manufacturing and invoice cost recovery.');
+            $this->independentFromNonSale($s,$actorId);
             $this->matches($record,$s);
             $approved=$data['decision']==='approve';
             DB::table('finance_historical_batch_capitalizations')->where('id',$record->id)->update([
@@ -397,6 +496,7 @@ final class HistoricalBatchCapitalizationService
                 (int)$s['case']->requested_by,
                 (int)$s['case']->reviewed_by],true))
                 $this->fail('A different finance executor must post the original source manufacturing and invoice journals.');
+            $this->independentFromNonSale($s,$actorId);
             $this->matches($record,$s);
 
             // Serialize every cost and COGS journal with the financial-period
