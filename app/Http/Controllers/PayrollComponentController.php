@@ -20,6 +20,7 @@ class PayrollComponentController extends Controller {
  public function store(Request $request,PayrollPeriod $period,PayrollLine $line,PayrollComponentService $service) {
   abort_unless($request->user()->can('administration.update')||
     ($request->user()->can('hr.update') && $request->user()->can('finance.update')),403);
+  $request->merge(['amount'=>\App\Support\LocalizedDecimal::normalize($request->input('amount'))]);
   $data=$request->validate([
    'submission_token'=>['required','uuid'],
    'kind'=>['required',Rule::in(['allowance','deduction'])],
