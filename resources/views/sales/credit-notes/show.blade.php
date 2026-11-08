@@ -4,7 +4,16 @@
 <p class="no-print" style="margin:12px 0"><a class="btn btn-light" href="{{ route('sales.returns.quarantine.index') }}">Inspect quarantined customer returns</a></p>
 <div class="card" style="max-width:900px;margin:auto;padding:36px;background:#fff;color:#1b2738"><header style="display:flex;align-items:center;gap:20px;border-bottom:3px solid #5921a8;padding-bottom:16px"><img src="{{ asset('images/kanozay-logo.jpg') }}" alt="Kanozay logo" style="max-width:200px;max-height:86px;object-fit:contain"><div><h2>Kanozay Foods Manufacturing Company</h2><strong>CREDIT NOTE</strong><div>{{ $creditNote->number }}</div></div></header>
 <div style="display:flex;justify-content:space-between;margin:24px 0"><div><strong>Customer</strong><div>{{ $creditNote->invoice->customer->name }}</div><strong>Original invoice</strong><div>{{ $creditNote->invoice->number }}</div></div><div><strong>Date</strong><div>{{ $creditNote->credit_date->format('Y-m-d') }}</div><strong>Reason</strong><div>{{ $creditNote->reason }}</div></div></div>
-<div class="table-wrap"><table style="width:100%"><thead><tr><th>Product</th><th>Quantity</th><th>Unit price</th><th>Credit amount</th><th>Disposition</th></tr></thead><tbody>@foreach($creditNote->lines as $line)<tr><td>{{ $line->invoiceLine->finishedGood->name }} · Batch {{ $line->invoiceLine->batch->batch_number }}</td><td>{{ number_format($line->quantity_packages) }}</td><td>{{ $creditNote->currency_code }} {{ $line->unit_price }}</td><td>{{ $creditNote->currency_code }} {{ $line->line_total }}</td><td>{{ $line->restocked?'QC accepted to stock':'Quarantined / not restocked' }}</td></tr>@endforeach</tbody><tfoot><tr><th colspan="3" style="text-align:right">Total credit</th><th>{{ $creditNote->currency_code }} {{ $creditNote->total }}</th><th></th></tr></tfoot></table></div>
+<div class="table-wrap"><table style="width:100%"><thead><tr><th>Product</th><th>Quantity</th><th>Unit price</th><th>Credit amount</th><th>Disposition</th></tr></thead><tbody>@foreach($creditNote->lines as $line)<tr><td>{{ $line->invoiceLine->finishedGood->name }} · Batch {{ $line->invoiceLine->batch->batch_number }}</td><td>{{ number_format($line->quantity_packages) }}</td><td>{{ $creditNote->currency_code }} {{ $line->unit_price }}</td><td>{{ $creditNote->currency_code }} {{ $line->line_total }}</td><td>
+@if($line->quarantine)
+<strong>{{ ucwords($line->quarantine->status) }}</strong>
+<div class="muted">QC return #{{ $line->quarantine->id }}</div>
+@elseif($line->restocked)
+<span style="color:#9b5d17">Legacy direct restock — verify earlier QC approval</span>
+@else
+<span class="muted">Historical return — disposition not recorded</span>
+@endif
+</td></tr>@endforeach</tbody><tfoot><tr><th colspan="3" style="text-align:right">Total credit</th><th>{{ $creditNote->currency_code }} {{ $creditNote->total }}</th><th></th></tr></tfoot></table></div>
 @if($creditNote->refund)
 <div style="margin-top:20px;padding:12px;border:1px solid #d8e5f2;background:#f3f9ff;border-radius:9px">
 <h3>Posted customer refund</h3>
