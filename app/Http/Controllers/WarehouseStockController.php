@@ -33,6 +33,15 @@ class WarehouseStockController extends Controller
             $layer->setAttribute('unpositioned_quantity',(string)$missing->toScale(6));
             return $layer;
         })->filter(fn($layer)=>BigDecimal::of($layer->unpositioned_quantity)->isPositive())->values();
+        $recentMovementIds=DB::table('inventory_warehouse_movements')
+            ->orderByDesc('id')->limit(50)->pluck('id');
+        $lotMovementDetails=DB::table('inventory_warehouse_lot_movements as moved')
+            ->join('inventory_cost_layers as lot','lot.id','=','moved.inventory_cost_layer_id')
+            ->whereIn('moved.inventory_warehouse_movement_id',$recentMovementIds)
+            ->select('moved.inventory_warehouse_movement_id','moved.inventory_cost_layer_id',
+                'moved.quantity','lot.currency_code','lot.source_type','lot.source_id')
+            ->orderBy('lot.received_on')->orderBy('lot.id')
+            ->get()->groupBy('inventory_warehouse_movement_id');
         $recentLotRows=DB::table('inventory_warehouse_lot_movements')
             ->select('inventory_warehouse_movement_id')
             ->selectRaw('COUNT(*) as lot_count')
@@ -40,6 +49,7 @@ class WarehouseStockController extends Controller
         return view('inventory.warehouse-stock',$state+[
             'legacyLots'=>$legacyLots,
             'recentLotRows'=>$recentLotRows,
+            'lotMovementDetails'=>$lotMovementDetails,
             'recent'=>\Illuminate\Support\Facades\DB::table('inventory_warehouse_movements as m')
                 ->join('inventory_materials as i','i.id','=','m.inventory_material_id')
                 ->join('company_warehouses as d','d.id','=','m.destination_warehouse_id')
