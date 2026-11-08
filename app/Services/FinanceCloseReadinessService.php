@@ -77,6 +77,53 @@ class FinanceCloseReadinessService
             $blockers[]=($capitalCashMissing+$profitCashMissing).
                 ' posted shareholder cash movements have no matching cashbook/bank transaction. Reconcile historical postings.';
         }
+        // Source-linked manufacturing movements are necessary for a
+        // meaningful inventory valuation and COGS close. Block the period if
+        // physical releases, invoice dispatches, or saleable customer returns
+        // cannot be reconciled to original-currency GL journals.
+        $missingCapital=DB::table('finished_good_movements as movement')
+            ->leftJoin('production_batch_cost_postings as cost',
+                'cost.production_batch_id','=','movement.production_batch_id')
+            ->where('movement.type','production_receipt')
+            ->whereBetween('movement.occurred_on',[$begin,$end])
+            ->whereNull('cost.id')->count();
+        if($missingCapital){
+            $blockers[]=$missingCapital.
+                ' physical finished-goods production receipt(s) have no reviewed WIP and inventory capitalization journals.';
+        }
+        $missingCOGS=DB::table('sales_invoice_lines as line')
+            ->join('sales_invoices as invoice','invoice.id','=','line.sales_invoice_id')
+            ->leftJoin('production_invoice_cogs_postings as cogs',
+                'cogs.sales_invoice_line_id','=','line.id')
+            ->where('invoice.status','posted')
+            ->whereBetween('invoice.invoice_date',[$begin,$end])
+            ->whereNull('cogs.id')->count();
+        if($missingCOGS){
+            $blockers[]=$missingCOGS.
+                ' posted customer invoice dispatch line(s) have no original-currency COGS journal.';
+        }
+        $missingReturnCost=DB::table('sales_return_quarantines as ret')
+            ->leftJoin('production_return_cost_postings as recovered',
+                'recovered.sales_return_quarantine_id','=','ret.id')
+            ->where('ret.status','released')
+            ->whereBetween('ret.decided_on',[$begin,$end])
+            ->whereNull('recovered.id')->count();
+        if($missingReturnCost){
+            $blockers[]=$missingReturnCost.
+                ' saleable returned-lot recovery transaction(s) have no associated inventory asset/COGS reversal journal.';
+        }
+        $unreviewedOverhead=DB::table('production_overhead_allocations as allocation')
+            ->join('production_batches as batch','batch.id','=','allocation.production_batch_id')
+            ->join('finished_good_movements as movement',
+                'movement.production_batch_id','=','batch.id')
+            ->where('movement.type','production_receipt')
+            ->whereBetween('movement.occurred_on',[$begin,$end])
+            ->where('allocation.status','submitted')->count();
+        if($unreviewedOverhead){
+            $blockers[]=$unreviewedOverhead.
+                ' production cost overhead allocation(s) remain under review for finished batches released this month.';
+        }
+
         $bankAccounts=DB::table('financial_accounts')
             ->where('type','bank')->where('is_active',true)->get(['id','name']);
         foreach($bankAccounts as $account){
