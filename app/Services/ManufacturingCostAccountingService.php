@@ -331,7 +331,7 @@ class ManufacturingCostAccountingService
                 $case=DB::table('finance_historical_correction_cases')
                     ->where('id',$historicalCaseId)->first();
                 if(!$history || !$case || $case->case_type!=='batch_uncapitalized' ||
-                    $case->status!=='approved' || $history->status!=='approved' ||
+                    $case->status!=='approved' || $history->status!=='posting' ||
                     (string)$history->accounting_date!==(string)$data['accounting_date'] ||
                     $history->approval_reference!==trim($data['approval_reference']) ||
                     $history->production_batch_cost_posting_id ||
@@ -340,6 +340,15 @@ class ManufacturingCostAccountingService
                         (int)$case->requested_by,(int)$case->reviewed_by,
                     ],true)){
                     $this->reject('Already-dispatched batch capitalization requires an independently authorized, unchanged historical correction and separate finance executor.');
+                }
+                $earliestDispatch=DB::table('finished_good_dispatch_lines as physical')
+                    ->join('finished_good_dispatches as dispatch',
+                        'dispatch.id','=','physical.finished_good_dispatch_id')
+                    ->where('physical.production_batch_id',$batchId)
+                    ->min('dispatch.dispatch_date');
+                if(!$earliestDispatch ||
+                    $data['accounting_date']>$earliestDispatch){
+                    $this->reject('Historical manufacturing GL posting must be on or before the first original physical batch dispatch.');
                 }
                 $dispatches=DB::table('finished_good_dispatch_lines')
                     ->where('production_batch_id',$batchId);
