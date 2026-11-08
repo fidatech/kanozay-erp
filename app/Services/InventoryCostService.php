@@ -293,6 +293,27 @@ class InventoryCostService
                 ]);
             }
 
+            $openingValuation=DB::table('finance_opening_fifo_valuations as approved')
+                ->join('journal_entries as journal',
+                    'journal.id','=','approved.journal_entry_id')
+                ->where('approved.inventory_cost_layer_id',$layer->id)
+                ->select('approved.currency_id','approved.original_cost',
+                    'approved.posting_date','journal.status',
+                    'journal.reversal_of_id','journal.id as journal_id')->first();
+            if($openingValuation){
+                if($openingValuation->status!=='posted' ||
+                    $openingValuation->reversal_of_id ||
+                    $openingValuation->posting_date>$movement->occurred_on->toDateString() ||
+                    DB::table('journal_entries')
+                      ->where('reversal_of_id',$openingValuation->journal_id)->exists() ||
+                    (int)$openingValuation->currency_id!==(int)$layer->currency_id ||
+                    !BigDecimal::of((string)$openingValuation->original_cost)
+                       ->isEqualTo((string)$layer->original_cost)){
+                    throw ValidationException::withMessages([
+                        'quantity'=>'Historical opening stock valuation has an invalid, reversed or later-dated source GL journal. Reconcile original asset and FIFO costing before stock is issued.',
+                    ]);
+                }
+            }
             if($layer->source_type==='goods_receipt_line'){
                 app(GoodsReceiptLandedCostPostingService::class)->assertLotCostPosted(
                     (int)$layer->source_id,$movement->occurred_on->toDateString()
