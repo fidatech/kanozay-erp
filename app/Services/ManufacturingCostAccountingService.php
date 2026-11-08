@@ -121,7 +121,18 @@ class ManufacturingCostAccountingService
                     if(!$receiptLine){
                         $this->reject('A consumed source receipt line is missing.');
                     }
+                    if($layer->original_cost===null ||
+                        BigDecimal::of((string)$layer->original_cost)->isNegative()){
+                        $this->reject('Original FIFO receipt has no verified nonnegative source purchase valuation.');
+                    }
+                    if(BigDecimal::of((string)$layer->original_quantity)
+                        ->compareTo((string)$receiptLine->quantity)!==0 ||
+                        BigDecimal::of((string)$layer->original_cost)
+                        ->compareTo((string)$receiptLine->line_subtotal_snapshot)!==0){
+                        $this->reject('FIFO lot original quantity or cost differs from its immutable posted GRN source snapshot.');
+                    }
                     $invoiced=BigDecimal::zero();
+                    $invoicedValue=BigDecimal::zero();
                     $invoices=DB::table('matched_supplier_invoice_lines as item')
                         ->join('matched_supplier_invoices as invoice',
                             'invoice.id','=','item.matched_supplier_invoice_id')
@@ -130,8 +141,10 @@ class ManufacturingCostAccountingService
                         ->leftJoin('journal_entries as reversal',
                             'reversal.reversal_of_id','=','journal.id')
                         ->where('item.goods_receipt_line_id',$layer->source_id)
-                        ->select('item.quantity','invoice.inventory_ledger_id',
-                            'invoice.currency_id','journal.status','journal.entry_date',
+                        ->select('item.quantity','item.line_value',
+                            'invoice.inventory_ledger_id','invoice.total as invoice_total',
+                            'invoice.currency_id','invoice.journal_entry_id',
+                            'journal.status','journal.entry_date',
                             'journal.reversal_of_id','reversal.id as reversal_id')->get();
                     foreach($invoices as $invoice){
                         if((int)$invoice->inventory_ledger_id!==(int)$policy->material_inventory_ledger_id ||
@@ -141,10 +154,27 @@ class ManufacturingCostAccountingService
                             (string)$invoice->entry_date>$date){
                             $this->reject('Consumed supplier receipt has unposted, reversed, different-ledger or later-dated asset invoicing. Reconcile source books first.');
                         }
+                        $invoiceDebits=DB::table('journal_lines')
+                            ->where('journal_entry_id',$invoice->journal_entry_id)
+                            ->where('ledger_account_id',$policy->material_inventory_ledger_id)
+                            ->get(['debit','credit']);
+                        if($invoiceDebits->isEmpty()){
+                            $this->reject('Supplier invoice has no matching posted inventory asset journal debit.');
+                        }
+                        $debit=BigDecimal::zero();
+                        foreach($invoiceDebits as $glLine){
+                            $debit=$debit->plus((string)$glLine->debit)
+                                ->minus((string)$glLine->credit);
+                        }
+                        if(!$debit->isEqualTo((string)$invoice->invoice_total)){
+                            $this->reject('Supplier invoice posted inventory asset debit differs from the original matched payable value.');
+                        }
                         $invoiced=$invoiced->plus((string)$invoice->quantity);
+                        $invoicedValue=$invoicedValue->plus((string)$invoice->line_value);
                     }
-                    if($invoiced->isLessThan((string)$receiptLine->quantity)){
-                        $this->reject('The original FIFO receipt line has not been fully matched to its posted supplier inventory debit.');
+                    if(!$invoiced->isEqualTo((string)$receiptLine->quantity) ||
+                        !$invoicedValue->isEqualTo((string)$layer->original_cost)){
+                        $this->reject('Source supplier invoices do not exactly reconcile the original receipt quantity and FIFO cost. Review source journal postings, partial invoices and supplier returns.');
                     }
                 }
                 $total=$total->plus((string)$consumed->amount);
