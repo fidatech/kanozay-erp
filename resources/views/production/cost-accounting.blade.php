@@ -22,6 +22,7 @@
 <p>Original-currency FIFO inventory → WIP → finished goods → COGS</p></div>
 <div class="actions">
 <a class="btn btn-light" href="{{ route('manufacturing.cost-readiness.index') }}">Cost readiness</a>
+<a class="btn btn-light" href="{{ route('reports.manufacturing-financial.index') }}">Inventory &amp; COGS reconciliation</a>
 <a class="btn btn-light" href="{{ route('workspace.page',['manufacturing','costing']) }}">Overhead approvals</a>
 </div></div>
 @if(session('success'))<section class="mc-panel" role="status">{{ session('success') }}</section>@endif
