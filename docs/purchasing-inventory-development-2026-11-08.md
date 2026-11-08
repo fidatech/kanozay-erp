@@ -35,9 +35,15 @@ Release decision: **development only; no production approval**
 - GRNs, returns, supplier invoice matching, debit notes and landed-cost forms normalize grouped numeric input and Pashto/Dari digits before server-side precision/range validation.
 - Supplier invoice credit and inventory valuation remain source-linked. No arbitrary exchange rates or tax policies were introduced.
 
+## Follow-up development — FIFO lot location
+
+The subsequent commit series added location-specific FIFO cost-layer positions, atomic location-preserving warehouse transfers, a QC-released source-lot requirement, audited manual historical lot attribution and a paginated multi-currency warehouse valuation view. See [Warehouse FIFO Lot Location Integration](warehouse-fifo-lot-location-development-2026-11-08.md).
+
+The new code **does not** mean warehouse FIFO integration is production-ready. Historic balances and lots without location evidence will require documented reconciliation; incomplete lot data deliberately prevents financial/production postings that could misstate FIFO costs.
+
 ## Still open in development
 
-- Per-lot warehouse attribution and QC-safe warehouse transfers; the stock ledger currently tracks warehouse quantities separately from some global FIFO cost layers.
+- Historical cost layers without position evidence and legacy physical stock that predates cost-layer tracking still need a reviewed migration. Newly developed FIFO transfers and issue controls deliberately refuse unsupported legacy attribution.
 - Full warehouse-level lot quarantine, routing and transfer costing, stock recall and source-lot traceability throughout the manufacturing chain.
 - Some supplier-return edge cases spanning multiple matched invoices or mixed invoiced/uninvoiced quantities require a reviewed multi-document credit workflow. Such cases are blocked by current single-document validation instead of silently crediting an unrelated payable.
 - Finance posting of independently invoiced landed-cost providers, formal tax/discount policy and source-cost GL reconciliation remain outstanding.
