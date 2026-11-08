@@ -154,9 +154,21 @@ class CustomerAdvanceService
                 || (int) $document->currency_id !== (int) $receipt->currency_id) {
                 throw ValidationException::withMessages(['trade_document_id' => 'Select a receivable for the same customer and currency.']);
             }
+            if (! $document->journal || $document->journal->status !== 'posted'
+                || (int) $document->journal->currency_id !== (int) $receipt->currency_id) {
+                throw ValidationException::withMessages(['trade_document_id' => 'Original invoice journal must be posted in the deposit currency.']);
+            }
             if ($data['applied_on'] < $receipt->received_on
                 || $data['applied_on'] < (string) $document->document_date) {
                 throw ValidationException::withMessages(['applied_on' => 'Application cannot precede the deposit or invoice.']);
+            }
+            $lastApplication=DB::table('customer_advance_applications')
+                ->where('customer_advance_receipt_id', $receiptId)->max('applied_on');
+            $lastRefund=DB::table('customer_advance_refunds')
+                ->where('customer_advance_receipt_id', $receiptId)->max('refunded_on');
+            if (($lastApplication && $data['applied_on'] < $lastApplication)
+                || ($lastRefund && $data['applied_on'] < $lastRefund)) {
+                throw ValidationException::withMessages(['applied_on' => 'Application date must follow prior deposit applications and refunds.']);
             }
             if (! $value->isPositive() || $value->isGreaterThan($this->remaining($receiptId))) {
                 throw ValidationException::withMessages(['amount' => 'Customer advance has insufficient unapplied balance.']);
@@ -248,6 +260,14 @@ class CustomerAdvanceService
             }
             if ($data['refunded_on'] < $receipt->received_on) {
                 throw ValidationException::withMessages(['refunded_on' => 'Refund date cannot precede receipt date.']);
+            }
+            $lastApplication=DB::table('customer_advance_applications')
+                ->where('customer_advance_receipt_id', $receiptId)->max('applied_on');
+            $lastRefund=DB::table('customer_advance_refunds')
+                ->where('customer_advance_receipt_id', $receiptId)->max('refunded_on');
+            if (($lastApplication && $data['refunded_on'] < $lastApplication)
+                || ($lastRefund && $data['refunded_on'] < $lastRefund)) {
+                throw ValidationException::withMessages(['refunded_on' => 'Refund date must follow prior deposit applications and refunds.']);
             }
             if (! $value->isPositive() || $value->isGreaterThan($this->remaining($receiptId))) {
                 throw ValidationException::withMessages(['amount' => 'Refund exceeds the unapplied and unrefunded customer deposit balance.']);
