@@ -35,7 +35,8 @@ class ProductionAbnormalWasteCostService
             ->orderBy('cost.id')
             ->get(['cost.id','cost.inventory_cost_layer_id',
                 'cost.quantity','cost.amount','cost.currency_id','cost.currency_code',
-                'cost.is_valued','layer.source_type','layer.source_id']);
+                'cost.is_valued','layer.source_type','layer.source_id',
+                'movement.occurred_on as source_issue_date']);
     }
 
     public function approve(int $wasteId,array $data,int $actorId):object
@@ -93,8 +94,29 @@ class ProductionAbnormalWasteCostService
                 $row=$available->get($id);
                 if(!$row || !$row->inventory_cost_layer_id || !$row->is_valued ||
                     $row->amount===null || $row->currency_id===null ||
-                    $row->source_type!=='goods_receipt_line'){
-                    $this->reject('A selected waste allocation has no verified original-cost GRN FIFO consumption.');
+                    !in_array($row->source_type,['goods_receipt_line','inventory_stock_movement'],true)){
+                    $this->reject('A selected waste allocation has no source-backed valued GRN or independently capitalized original opening FIFO consumption.');
+                }
+                if($row->source_type==='inventory_stock_movement'){
+                    $approved=DB::table('finance_opening_fifo_valuations as valued')
+                        ->join('journal_entries as journal',
+                            'journal.id','=','valued.journal_entry_id')
+                        ->where('valued.inventory_cost_layer_id',$row->inventory_cost_layer_id)
+                        ->select('valued.original_cost','valued.posting_date',
+                            'valued.currency_id','valued.journal_entry_id',
+                            'journal.status','journal.reversal_of_id')->first();
+                    $layerSource=DB::table('inventory_cost_layers')
+                        ->where('id',$row->inventory_cost_layer_id)->first();
+                    if(!$approved || !$layerSource || $approved->status!=='posted' ||
+                        $approved->reversal_of_id ||
+                        DB::table('journal_entries')
+                            ->where('reversal_of_id',$approved->journal_entry_id)->exists() ||
+                        $approved->posting_date>$row->source_issue_date ||
+                        (int)$approved->currency_id!==(int)$row->currency_id ||
+                        !BigDecimal::of((string)$approved->original_cost)
+                            ->isEqualTo((string)$layerSource->original_cost)){
+                        $this->reject('An abnormal loss attributed to historical opening FIFO stock requires a posted, unreversed, earlier original-currency opening valuation.');
+                    }
                 }
                 $consumed=BigDecimal::of((string)$row->quantity);
                 $sourceCost=BigDecimal::of((string)$row->amount);
