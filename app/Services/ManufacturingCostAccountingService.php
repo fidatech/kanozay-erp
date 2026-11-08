@@ -106,8 +106,8 @@ class ManufacturingCostAccountingService
                 $layer=DB::table('inventory_cost_layers')
                     ->where('id',$consumed->inventory_cost_layer_id)->first();
                 if(!$layer || (int)$layer->inventory_material_id!==(int)$movement->inventory_material_id ||
-                    $layer->source_type!=='goods_receipt_line'){
-                    $this->reject('Opening, unverified or mismatched FIFO source layers require their own posted GL opening-value reconciliation before capitalization.');
+                    !in_array($layer->source_type,['goods_receipt_line','inventory_stock_movement'],true)){
+                    $this->reject('Unknown FIFO source layer or material cannot enter source-backed WIP capitalization.');
                 }
                 if((string)$layer->received_on>$date ||
                     (string)$layer->received_on>(string)$movement->occurred_on){
@@ -115,6 +115,11 @@ class ManufacturingCostAccountingService
                 }
                 if(!isset($checkedLots[$layer->id])){
                     $checkedLots[$layer->id]=true;
+                    if($layer->source_type==='inventory_stock_movement'){
+                        $this->assertApprovedOpeningSource(
+                            $layer,$policy,$date,(string)$movement->occurred_on
+                        );
+                    }else{
                     // The FIFO consumption already includes any recorded
                     // freight/customs allocations. Their original expense
                     // must first be reclassified into the exact source
@@ -183,6 +188,7 @@ class ManufacturingCostAccountingService
                         !$invoicedValue->isEqualTo((string)$layer->original_cost)){
                         $this->reject('Source supplier invoices do not exactly reconcile the original receipt quantity and FIFO cost. Review source journal postings, partial invoices and supplier returns.');
                     }
+                    }
                 }
                 $total=$total->plus((string)$consumed->amount);
             }
@@ -192,6 +198,70 @@ class ManufacturingCostAccountingService
         }
         if(!$total->isEqualTo($expectedAmount)){
             $this->reject('Frozen batch material cost does not match the sum of original immutable FIFO issues.');
+        }
+    }
+
+    /**
+     * An old opening source is costable only after a separately approved
+     * physical-stock valuation created the original raw inventory asset
+     * debit and opening-equity credit. Old manual or unvalued lots have no
+     * automatic cost evidence and cannot pass this gate.
+     */
+    private function assertApprovedOpeningSource(object $layer,object $policy,
+        string $capitalizationDate,string $materialIssueDate):void
+    {
+        $proof=DB::table('finance_opening_fifo_valuations as source')
+            ->join('finance_historical_correction_cases as review',
+                'review.id','=','source.finance_historical_correction_case_id')
+            ->join('journal_entries as journal',
+                'journal.id','=','source.journal_entry_id')
+            ->where('source.inventory_cost_layer_id',$layer->id)
+            ->select('source.*','review.status as case_status',
+                'review.case_type','review.requested_by','review.reviewed_by',
+                'journal.status as journal_status',
+                'journal.entry_date as journal_date',
+                'journal.currency_id as journal_currency_id',
+                'journal.reversal_of_id as journal_reversal_id')->first();
+        $opening=DB::table('inventory_stock_movements')
+            ->where('id',$layer->source_id)->first();
+        if(!$proof || !$opening || $opening->type!=='opening' ||
+            $opening->direction!=='in' ||
+            (int)$opening->inventory_material_id!==(int)$layer->inventory_material_id ||
+            !BigDecimal::of((string)$opening->quantity)
+                ->isEqualTo((string)$layer->original_quantity) ||
+            $proof->case_type!=='opening_fifo_unvalued' ||
+            $proof->case_status!=='resolved' ||
+            (int)$proof->requested_by===(int)$proof->reviewed_by ||
+            $proof->journal_status!=='posted' || $proof->journal_reversal_id ||
+            DB::table('journal_entries')
+                ->where('reversal_of_id',$proof->journal_entry_id)->exists() ||
+            (int)$proof->currency_id!==(int)$policy->currency_id ||
+            (int)$proof->journal_currency_id!==(int)$policy->currency_id ||
+            (int)$proof->inventory_ledger_id!==(int)$policy->material_inventory_ledger_id ||
+            (string)$proof->posting_date!==(string)$proof->journal_date ||
+            $proof->posting_date>$materialIssueDate ||
+            $proof->posting_date>$capitalizationDate ||
+            $layer->original_cost===null ||
+            !BigDecimal::of((string)$layer->original_cost)
+                ->isEqualTo((string)$proof->original_cost)){
+            $this->reject('Historical opening FIFO source lacks valid independent original-currency asset/equity capitalization before the material issue and batch WIP posting.');
+        }
+        $asset=BigDecimal::zero();$equity=BigDecimal::zero();
+        foreach(DB::table('journal_lines')
+            ->where('journal_entry_id',$proof->journal_entry_id)
+            ->get(['ledger_account_id','debit','credit']) as $line){
+            if((int)$line->ledger_account_id===(int)$proof->inventory_ledger_id){
+                $asset=$asset->plus((string)$line->debit)
+                    ->minus((string)$line->credit);
+            }
+            if((int)$line->ledger_account_id===(int)$proof->opening_equity_ledger_id){
+                $equity=$equity->plus((string)$line->credit)
+                    ->minus((string)$line->debit);
+            }
+        }
+        if(!$asset->isEqualTo((string)$proof->original_cost) ||
+           !$equity->isEqualTo((string)$proof->original_cost)){
+            $this->reject('The recorded original opening FIFO asset/equity GL journal does not balance to the cost attributed to this production material lot.');
         }
     }
 
