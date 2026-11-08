@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\PurchaseOrder;
+use App\Support\LocalizedDecimal;
 use Illuminate\Validation\Rule;
 use App\Services\GoodsReceiptService;
 use Illuminate\Http\Request;
@@ -13,6 +14,7 @@ class GoodsReceiptController extends Controller
     {
         abort_unless($request->user()->can('inventory.update'), 403);
 
+        $request->merge(['quantities'=>LocalizedDecimal::quantities($request->input('quantities'))]);
         $data = $request->validate([
             'receipt_token' => ['required', 'uuid'],
             'received_on' => ['required', 'date', 'before_or_equal:today'],
