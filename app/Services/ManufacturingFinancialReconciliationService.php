@@ -1,0 +1,197 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\ProductionBatch;
+use Brick\Math\BigDecimal;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+
+/**
+ * Read-only subledger-to-GL integrity audit for original-currency production
+ * cost postings. Never calculates a cross-currency total or adjusts source
+ * documents to force them to balance.
+ */
+class ManufacturingFinancialReconciliationService
+{
+    private function decimal(mixed $amount):BigDecimal
+    {
+        return BigDecimal::of((string)($amount??'0'));
+    }
+
+    private function journalIsValid(int $id):bool
+    {
+        $entry=DB::table('journal_entries')->where('id',$id)->first();
+        return $entry && $entry->status==='posted' && $entry->reversal_of_id===null &&
+            !DB::table('journal_entries')->where('reversal_of_id',$id)->exists();
+    }
+
+    /** Debit-positive, credit-negative for an exact GL ledger account. */
+    private function ledgerNet(int $journalId,int $ledgerId):BigDecimal
+    {
+        $net=BigDecimal::zero();
+        foreach(DB::table('journal_lines')
+            ->where('journal_entry_id',$journalId)
+            ->where('ledger_account_id',$ledgerId)
+            ->get(['debit','credit']) as $line){
+            $net=$net->plus((string)$line->debit)->minus((string)$line->credit);
+        }
+        return $net;
+    }
+
+    public function rows(Collection $batches):Collection
+    {
+        if($batches->isEmpty())return collect();
+        $ids=$batches->pluck('id')->all();
+        $posted=DB::table('production_batch_cost_postings')
+            ->whereIn('production_batch_id',$ids)->get()->keyBy('production_batch_id');
+        $policies=DB::table('manufacturing_cost_ledger_policies')
+            ->whereIn('id',$posted->pluck('manufacturing_cost_ledger_policy_id'))
+            ->get()->keyBy('id');
+        $cogs=DB::table('production_invoice_cogs_postings')
+            ->whereIn('production_batch_cost_posting_id',$posted->pluck('id'))
+            ->get()->groupBy('production_batch_cost_posting_id');
+        $sourceIds=$cogs->flatten()->pluck('id');
+        $returns=DB::table('production_return_cost_postings')
+            ->whereIn('production_invoice_cogs_posting_id',$sourceIds)
+            ->get()->groupBy('production_invoice_cogs_posting_id');
+        $invoices=DB::table('sales_invoice_lines')
+            ->whereIn('production_batch_id',$ids)->get()->groupBy('production_batch_id');
+        $dispatches=DB::table('finished_good_dispatch_lines')
+            ->whereIn('production_batch_id',$ids)->get()->groupBy('production_batch_id');
+        $releasedReturns=DB::table('sales_return_quarantines')
+            ->whereIn('production_batch_id',$ids)
+            ->where('status','released')->get()->groupBy('production_batch_id');
+        $legacyRestocks=DB::table('sales_credit_note_lines as credit')
+            ->leftJoin('sales_return_quarantines as quarantine',
+                'quarantine.sales_credit_note_line_id','=','credit.id')
+            ->whereIn('credit.production_batch_id',$ids)
+            ->where('credit.restocked',true)->whereNull('quarantine.id')
+            ->select('credit.production_batch_id','credit.quantity_packages')
+            ->get()->groupBy('production_batch_id');
+        $result=collect();
+        foreach($batches as $batch){
+            $issues=[];$capital=$posted->get($batch->id);
+            $originalPackages=(int)$batch->accepted_packages;
+            $physical=0;$sold=0;$recovered=0;$restoredCost=BigDecimal::zero();
+            $costedCost=BigDecimal::zero();
+            foreach($dispatches->get($batch->id,collect()) as $movement){
+                $physical+=(int)$movement->quantity_packages;
+            }
+            $returnQty=0;
+            foreach($releasedReturns->get($batch->id,collect()) as $return){
+                $returnQty+=(int)$return->quantity_packages;
+            }
+            $legacyQty=0;
+            foreach($legacyRestocks->get($batch->id,collect()) as $return){
+                $legacyQty+=(int)$return->quantity_packages;
+            }
+            if($physical || $invoices->has($batch->id)){
+                if(!$capital)$issues[]='Dispatched or invoiced batch has no source-backed financial capitalization.';
+            }
+            $policy=null;$amount=null;$currency=null;
+            if($capital){
+                $policy=$policies->get($capital->manufacturing_cost_ledger_policy_id);
+                $currency=DB::table('currencies')->where('id',$capital->currency_id)->value('code');
+                $amount=$this->decimal($capital->total_amount);
+                if(!$policy || $policy->status!=='approved' ||
+                    (int)$capital->currency_id!==(int)($policy->currency_id??0)){
+                    $issues[]='The original manufacturing ledger policy is missing, unapproved or has a different source currency.';
+                }
+                if((int)$capital->accepted_packages!==$originalPackages){
+                    $issues[]='Accepted physical packages no longer match the original posted capitalization quantity.';
+                }
+                if(!$this->decimal($capital->material_amount)
+                    ->plus((string)$capital->overhead_amount)->isEqualTo($amount)){
+                    $issues[]='Capitalized materials and approved overhead do not add up to the posted finished-goods value.';
+                }
+                if(!$this->journalIsValid((int)$capital->issue_journal_id) ||
+                    !$this->journalIsValid((int)$capital->capitalization_journal_id)){
+                    $issues[]='A manufacturing WIP or finished-inventory journal is missing, reversed or unposted.';
+                }elseif($policy){
+                    $wip=(int)$policy->work_in_progress_ledger_id;
+                    $raw=(int)$policy->material_inventory_ledger_id;
+                    $fg=(int)$policy->finished_inventory_ledger_id;
+                    if(!$this->ledgerNet((int)$capital->issue_journal_id,$wip)->isEqualTo($amount) ||
+                       !$this->ledgerNet((int)$capital->issue_journal_id,$raw)
+                            ->isEqualTo($amount->minus((string)$capital->overhead_amount)->negated()) ||
+                       !$this->ledgerNet((int)$capital->capitalization_journal_id,$fg)->isEqualTo($amount) ||
+                       !$this->ledgerNet((int)$capital->capitalization_journal_id,$wip)->isEqualTo($amount->negated())){
+                        $issues[]='Posted manufacturing journal inventory or WIP account balance does not reconcile to its frozen cost snapshot.';
+                    }
+                }
+                $postings=$cogs->get($capital->id,collect());
+                foreach($postings as $posting){
+                    $sold+=(int)$posting->quantity_packages;
+                    $costedCost=$costedCost->plus((string)$posting->amount);
+                    if(!$this->journalIsValid((int)$posting->journal_entry_id)){
+                        $issues[]='An original COGS journal is missing, reversed or not posted.';
+                    }elseif($policy &&
+                        (!$this->ledgerNet((int)$posting->journal_entry_id,(int)$policy->cogs_ledger_id)
+                            ->isEqualTo((string)$posting->amount) ||
+                         !$this->ledgerNet((int)$posting->journal_entry_id,(int)$policy->finished_inventory_ledger_id)
+                            ->isEqualTo($this->decimal($posting->amount)->negated()))){
+                        $issues[]='A posted COGS debit and finished-inventory credit do not match their invoice-cost record.';
+                    }
+                    foreach($returns->get($posting->id,collect()) as $recovery){
+                        $recovered+=(int)$recovery->quantity_packages;
+                        $restoredCost=$restoredCost->plus((string)$recovery->amount);
+                        $quarantine=DB::table('sales_return_quarantines')
+                            ->where('id',$recovery->sales_return_quarantine_id)->first();
+                        if(!$quarantine || $quarantine->status!=='released'){
+                            $issues[]='A returned COGS asset recovery has no independently released QC return.';
+                        }
+                        if(!$this->journalIsValid((int)$recovery->journal_entry_id)){
+                            $issues[]='A QC-return inventory recovery journal is missing, unposted or reversed.';
+                        }elseif($policy &&
+                            (!$this->ledgerNet((int)$recovery->journal_entry_id,(int)$policy->finished_inventory_ledger_id)
+                                ->isEqualTo((string)$recovery->amount) ||
+                             !$this->ledgerNet((int)$recovery->journal_entry_id,(int)$policy->cogs_ledger_id)
+                                ->isEqualTo($this->decimal($recovery->amount)->negated()))){
+                            $issues[]='A posted QC-return inventory debit and COGS credit differ from its source recovery.';
+                        }
+                    }
+                }
+                if($invoices->get($batch->id,collect())->count()!==$postings->count()){
+                    $issues[]='Some sales invoice lines do not have exactly one original-currency COGS posting.';
+                }
+            }
+            $netPhysical=$originalPackages+$returnQty+$legacyQty-$physical;
+            $netCosted=$sold-$recovered;
+            $bookPackages=$originalPackages-$netCosted;
+            $remaining=$amount?->minus($costedCost)->plus($restoredCost);
+            if($netPhysical<0 || ($capital && $bookPackages<0)){
+                $issues[]='Physical or costed finished-goods stock is negative.';
+            }
+            if($capital && $physical!==$sold){
+                $issues[]='Gross physical dispatches do not equal the number of packages charged to COGS.';
+            }
+            if($capital && $returnQty!==$recovered){
+                $issues[]='QC-restocked packages do not match costed return asset recoveries.';
+            }
+            if($capital && $netPhysical!==$bookPackages){
+                $issues[]='The physical and financially costed remaining package balances differ.';
+            }
+            if($legacyQty>0)$issues[]='Legacy direct restock lacks independently reconciled source-cost recovery.';
+            if($remaining && $remaining->isNegative()){
+                $issues[]='Calculated finished-inventory asset value is negative.';
+            }
+            $result->push([
+                'batch_id'=>$batch->id,'batch'=>$batch->batch_number,
+                'product'=>$batch->finishedGood?->name??'Unknown',
+                'status'=>$batch->status,'currency'=>$currency,
+                'accepted'=>$originalPackages,'dispatched'=>$physical,
+                'qc_returns'=>$returnQty,'costed_sales'=>$sold,
+                'costed_recoveries'=>$recovered,'net_physical'=>$netPhysical,
+                'remaining_costed'=>$bookPackages,
+                'total_capitalized'=>$amount?(string)$amount->toScale(4):null,
+                'posted_cogs'=>$capital?(string)$costedCost->toScale(4):null,
+                'returned_cost'=>$capital?(string)$restoredCost->toScale(4):null,
+                'remaining_asset_value'=>$remaining?(string)$remaining->toScale(4):null,
+                'issues'=>array_values(array_unique($issues)),
+                'has_capitalization'=>(bool)$capital,
+            ]);
+        }
+        return $result;
+    }
+}
