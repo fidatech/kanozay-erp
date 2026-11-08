@@ -291,6 +291,18 @@ class FinanceCloseReadinessService
                 ' recorded material waste line(s) this month lack independent classification, remain in rework, or have abnormal FIFO costs not yet expensed in an approved batch posting.';
         }
 
+        // A submitted/approved historical source case remains a live
+        // reconciliation exception. Only the validated COGS executor
+        // can resolve invoice cases automatically; arbitrary historic GL
+        // journals do not silently close other exception categories.
+        $openHistorical=DB::table('finance_historical_correction_cases')
+            ->whereBetween('source_date',[$begin,$end])
+            ->whereIn('status',['submitted','approved'])->count();
+        if($openHistorical){
+            $blockers[]=$openHistorical.
+                ' source-linked historical correction case(s) remain open for original documents dated in this month. Complete independently approved source reconciliation before closing.';
+        }
+
         $bankAccounts=DB::table('financial_accounts')
             ->where('type','bank')->where('is_active',true)->get(['id','name']);
         foreach($bankAccounts as $account){
