@@ -352,6 +352,8 @@ class ManufacturingCostAccountingService
                     'journal.status as journal_status','journal.entry_date',
                     'journal.currency_id as journal_currency_id','journal.reversal_of_id',
                     'reversal.id as reversed_by_id')->get();
+            $abnormal=app(ProductionAbnormalWasteCostService::class)
+                ->forOrder($batch->production_order_id,(int)$policy->currency_id,$data['accounting_date']);
             $credits=[];$overhead=BigDecimal::zero();
             foreach($overheads as $row){
                 if((int)$row->currency_id!==(int)$policy->currency_id ||
@@ -382,8 +384,6 @@ class ManufacturingCostAccountingService
             if(!BigDecimal::of($materialPosted)->isPositive()){
                 $this->reject('Frozen material cost rounds to zero in journal precision and cannot support a positive GL posting.');
             }
-            $abnormal=app(ProductionAbnormalWasteCostService::class)
-                ->forOrder($batch->production_order_id,(int)$policy->currency_id,$data['accounting_date']);
             $abnormalPosted=$abnormal['total']->toScale(4,RoundingMode::HalfUp);
             if($abnormalPosted->isGreaterThanOrEqualTo($materialPosted)){
                 $this->reject('After excluding abnormal waste, the batch has no remaining eligible normal material cost for accepted finished packages.');
