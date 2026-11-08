@@ -53,7 +53,8 @@
 <section class="pr-panel"><h2>Posted purchase returns</h2><div class="pr-wrap"><table><thead><tr><th>Return number</th><th>Receipt</th><th>Supplier</th><th>Return date</th><th>Financial status</th><th>Details</th></tr></thead><tbody>
 @forelse($returns as $return)
 <tr><td>{{ $return->number }}</td><td>{{ $return->receipt?->number }}</td><td>{{ $return->order?->supplier?->name }}</td><td>{{ $return->returned_on?->toDateString() }}</td>
-<td>Supplier credit pending</td><td><a href="{{ route('purchases.returns.show',$return) }}">View return</a></td></tr>
+<td><span class="status">{{ $return->financial_status==='supplier_credit_posted'?'Supplier credit posted':'Supplier credit pending' }}</span></td>
+<td><a href="{{ route('purchases.returns.show',$return) }}">View return</a></td></tr>
 @empty<tr><td colspan="6">No purchase returns have been posted.</td></tr>@endforelse
 </tbody></table></div>{{ $returns->links() }}</section>
 @endsection
