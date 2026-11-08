@@ -5,6 +5,7 @@
 @if($errors->any())<div class="panel" style="border-color:#f4c5c5;color:#b12d2d">@foreach($errors->all() as $error)<p>{{ $error }}</p>@endforeach</div>@endif
 <section class="panel" style="padding:20px;border-radius:12px">
 <h2>Review counted quantities and discrepancies</h2>
+<p><strong>Count location:</strong> {{ $count->count_scope==='warehouse' ? ($count->warehouse?->code.' — '.$count->warehouse?->name) : ($count->count_scope==='unassigned'?'Unassigned stock pool':'Legacy company-wide snapshot') }}</p>
 <p class="muted">Count reference: {{ $count->notes ?: 'Not specified' }}. If the source stock balance changed since this count was created, approval is blocked and a new count must be recorded.</p>
 <div class="table-wrap"><table><thead><tr><th>SKU</th><th>Material</th><th>Expected</th><th>Counted</th><th>Variance</th><th>Posted adjustment</th></tr></thead><tbody>
 @foreach($count->lines as $line)
@@ -16,7 +17,7 @@
 </tbody></table></div>
 @if($count->status === 'draft')
 @can('inventory.update')
-<div style="border-top:1px solid #e4eaf4;margin-top:16px;padding-top:16px"><p class="muted">Approval applies all differences atomically. Reductions cannot reduce stock below reserved quantities. Stock postings cannot be edited afterward.</p>
+<div style="border-top:1px solid #e4eaf4;margin-top:16px;padding-top:16px"><p class="muted">Approval posts location-specific differences atomically and refuses stale snapshots. Reductions cannot exceed available stock or breach production reservations. Stock postings cannot be edited afterward.</p>
 <form action="{{ route('inventory.counts.approve',$count) }}" method="POST">@csrf
 <button type="submit" class="btn" onclick="return confirm('Approve this count and post every discrepancy to the inventory ledger?')">Approve and post stock differences</button></form></div>
 @endcan
