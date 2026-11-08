@@ -25,12 +25,12 @@ class ProductionTraceabilityController extends Controller
     {
         $this->guard($request);
         $batch->load(['order.recipe','order.materials','finishedGood','costs','checks']);
-        $issues=DB::table('inventory_cost_consumptions as use')
+        $issues=DB::table('inventory_cost_consumptions as consumed')
             ->join('inventory_stock_movements as movement',
-                'movement.id','=','use.inventory_stock_movement_id')
+                'movement.id','=','consumed.inventory_stock_movement_id')
             ->join('production_order_materials as item',
                 'item.id','=','movement.reference_id')
-            ->leftJoin('inventory_cost_layers as lot','lot.id','=','use.inventory_cost_layer_id')
+            ->leftJoin('inventory_cost_layers as lot','lot.id','=','consumed.inventory_cost_layer_id')
             ->leftJoin('goods_receipt_lines as grline',function($join){
                 $join->on('grline.id','=','lot.source_id')
                     ->where('lot.source_type','=','goods_receipt_line');
@@ -43,15 +43,15 @@ class ProductionTraceabilityController extends Controller
             ->where('item.production_order_id',$batch->production_order_id)
             ->where('movement.reference_type','production_order_material')
             ->select([
-                'use.id as consumption_id','use.inventory_cost_layer_id','use.quantity',
-                'use.amount','use.currency_code','use.is_valued',
+                'consumed.id as consumption_id','consumed.inventory_cost_layer_id','consumed.quantity',
+                'consumed.amount','consumed.currency_code','consumed.is_valued',
                 'movement.occurred_on','item.id as order_material_id',
                 'item.material_name','item.unit','item.is_packaging',
                 'lot.source_type','lot.source_id','lot.received_on',
                 'grn.number as receipt_number','purchase.number as purchase_number',
                 'supplier.name as supplier_name','warehouse.code as warehouse_code',
             ])
-            ->orderBy('item.line_number')->orderBy('use.id')
+            ->orderBy('item.line_number')->orderBy('consumed.id')
             ->paginate(50)->withQueryString();
 
         $workSteps=DB::table('production_work_steps')
@@ -84,9 +84,9 @@ class ProductionTraceabilityController extends Controller
     {
         $this->guard($request);
         $layer->load('material');
-        $batches=DB::table('inventory_cost_consumptions as use')
+        $batches=DB::table('inventory_cost_consumptions as consumed')
             ->join('inventory_stock_movements as movement',
-                'movement.id','=','use.inventory_stock_movement_id')
+                'movement.id','=','consumed.inventory_stock_movement_id')
             ->join('production_order_materials as item',
                 'item.id','=','movement.reference_id')
             ->join('production_orders as plan',
@@ -96,14 +96,14 @@ class ProductionTraceabilityController extends Controller
             ->leftJoin('finished_goods as good','good.id','=','batch.finished_good_id')
             ->leftJoin('finished_good_lot_controls as control',
                 'control.production_batch_id','=','batch.id')
-            ->where('use.inventory_cost_layer_id',$layer->id)
+            ->where('consumed.inventory_cost_layer_id',$layer->id)
             ->where('movement.reference_type','production_order_material')
             ->select([
                 'plan.id as order_id','plan.number as order_number',
                 'batch.id as batch_id','batch.batch_number','batch.status as batch_status',
                 'batch.accepted_packages','good.name as product_name',
                 'control.status as lot_control_status','item.material_name','item.is_packaging',
-                'use.quantity','use.currency_code','use.amount',
+                'consumed.quantity','consumed.currency_code','consumed.amount',
                 'movement.occurred_on',
             ])
             ->orderByDesc('movement.id')->paginate(50)->withQueryString();
