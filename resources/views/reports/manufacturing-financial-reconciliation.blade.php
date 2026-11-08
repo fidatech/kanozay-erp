@@ -39,7 +39,7 @@ The CSV includes all matching batches and their individual exceptions.</p>
 <div class="mfr-table"><table>
 <thead><tr>
 <th>Production batch</th><th>Currency</th>
-<th>Physical: accepted / dispatched / QC returned</th>
+<th>QC accepted / warehouse received / dispatched / QC returned</th>
 <th>Physical remaining</th>
 <th>Costed sales / QC recoveries</th><th>Costed remaining</th>
 <th>Capitalized inventory</th><th>Recognized COGS</th>
@@ -51,12 +51,13 @@ The CSV includes all matching batches and their individual exceptions.</p>
 <small>{{ ucwords(str_replace('_',' ',$row['status'])) }}</small></td>
 <td>{{ $row['currency']??'Unreconciled' }}</td>
 <td>{{ number_format($row['accepted']) }} /
+{{ number_format($row['received']) }} /
 {{ number_format($row['dispatched']) }} /
 {{ number_format($row['qc_returns']) }}</td>
 <td>{{ number_format($row['net_physical']) }}</td>
 <td>{{ number_format($row['costed_sales']) }} /
 {{ number_format($row['costed_recoveries']) }}</td>
-<td>{{ number_format($row['remaining_costed']) }}</td>
+<td>@if($row['remaining_costed']!==null){{ number_format($row['remaining_costed']) }}@else<span class="muted">Not capitalized</span>@endif</td>
 <td>{{ $row['total_capitalized']??'Not capitalized' }}</td>
 <td>{{ $row['posted_cogs']??'—' }}</td>
 <td>{{ $row['returned_cost']??'—' }}</td>
