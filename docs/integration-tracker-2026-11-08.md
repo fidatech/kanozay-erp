@@ -125,6 +125,18 @@ Finance month-close now has a source readiness report and checks for draft GL/pa
 
 **Status: integration advanced, not production-verified.** New migrations, tests, MySQL schema and browser UAT were deliberately not run. Legacy approved resolutions without a documented allocation and old shareholder postings without cashbook movement need explicit reconciliation before these stricter controls are activated.
 
+## Reports, Analytics and first-language translations
+
+Replaced the generic Reports overview placeholder with a read-only, permission-controlled operations dashboard. Added original-currency posted invoice totals and customer credit-note values without treating them as cash or profit; purchase/production/delivery/journal counts; current nonconformance and manual incoming-lot hold counts; and formal laboratory sample status summaries.
+
+Added four detailed source-backed report registers: customer delivery notes (using actual tracking proof), customer credit notes, formal quality samples, and nonconformance investigations. Corrected existing inventory, raw-material-plus-packaging costing, and batch-traceability scope descriptions to match their implemented source records. Added navigation to the underlying warehouse, manufacturing, QC, logistics and finance registers. Strengthened UTF-8 CSV exports and spreadsheet formula escaping.
+
+Extended the existing `en`/`fa`/`ps` interface locale support for the dashboard, reporting overview, register filters, navigation labels and many report columns, with English fallback where translation remains incomplete. Original amounts retain exact source currencies and string-decimal formatting.
+
+[Reports, Analytics and Language Development](reports-analytics-i18n-development-2026-11-08.md) documents current source status and the remaining complete-system translation, financial reconciliation and report UAT dependencies.
+
+**Status: source development advanced, not production-ready.** No automated tests, migrations, runtime browser inspection, MySQL checks or deployment were performed. Reports describe recorded source documents; they are not independently certified financial statements.
+
 ## Acceptance and release gates
 
 1. Passing SQLite feature suite and isolated regression suite on the latest commit.
