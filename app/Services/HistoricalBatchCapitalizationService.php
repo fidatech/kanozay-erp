@@ -164,10 +164,8 @@ final class HistoricalBatchCapitalizationService
 
         if($lines->isEmpty() || $lines->count()>100)
             $this->fail('This correction requires 1 to 100 fully source-linked historical physical dispatch lines.');
-        if(DB::table('sales_credit_note_lines')->where('production_batch_id',$batch->id)->exists() ||
-            DB::table('sales_return_quarantines')->where('production_batch_id',$batch->id)->exists())
-            $this->fail('Historic customer credits, returned goods or quarantine changes require a separate inventory and COGS correction before this batch can be reconstructed.');
-
+        // Genuine customer returns are inspected after the exact original
+        // source sale allocations have been projected, then source-signed.
         $count=0;$saleCount=0;$dispatchIds=[];$invoiceLines=[];$nonSale=[];
         foreach($lines as $row){
             if($row->dispatch_date<$date ||
@@ -263,8 +261,18 @@ final class HistoricalBatchCapitalizationService
             $allocations[(int)$row->physical_line_id]=(string)$costed->toScale(4);
         }
 
+        $saleCosts=[];
+        foreach($lines as $row){
+            if($row->invoice_line_id)
+                $saleCosts[(int)$row->invoice_line_id]=
+                    $allocations[(int)$row->physical_line_id];
+        }
+        $returns=app(HistoricalBatchReturnSourceService::class)
+            ->snapshot((int)$batch->id,$lines,$saleCosts,$currencyId,$date);
         $period=app(FinancePeriodClosingService::class);
         $period->assertOpenDate($date);
+        foreach($returns as $returned)
+            $period->assertOpenDate($returned['date']);
         foreach($lines->pluck('dispatch_date')->unique() as $dispatchDate)
             $period->assertOpenDate((string)$dispatchDate);
         if($date>now()->toDateString() ||
@@ -304,6 +312,7 @@ final class HistoricalBatchCapitalizationService
         // Preserve fingerprints of old fully-invoiced proposals. New
         // mixed-source plans also bind all independently signed dispositions.
         if($nonSale)$signatureSources['signed_non_sale']=$nonSale;
+        if($returns)$signatureSources['released_credit_returns']=$returns;
         $signature=hash('sha256',json_encode(
             $signatureSources,JSON_UNESCAPED_UNICODE|JSON_PRESERVE_ZERO_FRACTION));
         return [
@@ -311,6 +320,7 @@ final class HistoricalBatchCapitalizationService
             'lines'=>$lines,'date'=>$date,'currency_id'=>$currencyId,
             'amount'=>(string)$amount,'packages'=>$count,
             'sale_count'=>$saleCount,'non_sale'=>$nonSale,
+            'returns'=>$returns,
             'allocations'=>$allocations,'signature'=>$signature,
         ];
     }
@@ -325,6 +335,48 @@ final class HistoricalBatchCapitalizationService
             ],true))
                 $this->fail('Separate staff must perform the source-dispatch request, purpose classification, financial proposal, approval and final GL execution.');
         }
+    }
+
+    private function independentFromReturns(array $source,int $actorId): void
+    {
+        foreach($source['returns'] as $return){
+            if(in_array($actorId,$return['actors'],true))
+                $this->fail('The historical batch finance proposer, approver and final executor must differ from every original customer credit registrar and QC release officer.');
+        }
+    }
+
+    private function returnRecords(object $plan,array $source): array
+    {
+        $rows=DB::table('finance_historical_batch_return_allocations')
+            ->where('finance_historical_batch_capitalization_id',$plan->id)
+            ->orderBy('sales_return_quarantine_id')->get()->keyBy('sales_return_quarantine_id');
+        if($plan->return_line_count===null &&
+            !$source['returns'] && $rows->isEmpty())
+            return []; // Existing reviewed invoiced/mixed plans remain valid.
+        if((int)$plan->return_line_count!==count($source['returns']) ||
+            $rows->count()!==count($source['returns']))
+            $this->fail('The independently approved historical batch has unreviewed or missing QC return allocations.');
+        $matched=[];
+        foreach($source['returns'] as $returned){
+            $entry=$rows->get($returned['qc_id']);
+            if(!$entry ||
+                (int)$entry->sales_credit_note_line_id!==$returned['credit_line_id'] ||
+                (int)$entry->sales_invoice_line_id!==$returned['sales_invoice_line_id'] ||
+                (int)$entry->currency_id!==$source['currency_id'] ||
+                (string)$entry->original_qc_date!==$returned['date'] ||
+                (int)$entry->quantity_packages!==$returned['quantity'] ||
+                !BigDecimal::of((string)$entry->original_invoiced_cogs_amount)
+                    ->isEqualTo($returned['original_sale_cost']) ||
+                !BigDecimal::of((string)$entry->original_return_cost_amount)
+                    ->isEqualTo($returned['expected_cost']) ||
+                !hash_equals((string)$entry->source_fingerprint,
+                    (string)$returned['fingerprint']) ||
+                $entry->journal_entry_id!==null ||
+                $entry->production_return_cost_posting_id!==null)
+                $this->fail('The original QC decision, customer credit source, warehouse restock, original-cost fraction or signed return evidence changed after financial approval.');
+            $matched[$returned['qc_id']]=$entry;
+        }
+        return $matched;
     }
 
     private function expenseLedger(int $ledgerId,array $source): void
@@ -395,6 +447,7 @@ final class HistoricalBatchCapitalizationService
             !hash_equals((string)$record->source_fingerprint,(string)$s['signature']))
             $this->fail('The reviewed historical batch value, source invoices, dispatches or GL evidence have changed since the original proposal.');
         $this->allocationRecords($record,$s);
+        $this->returnRecords($record,$s);
     }
 
     public function submit(int $caseId,array $data,int $actorId): object
@@ -405,6 +458,7 @@ final class HistoricalBatchCapitalizationService
                 (int)$s['case']->reviewed_by],true))
                 $this->fail('A different finance proposer is required after the independent historical case review.');
             $this->independentFromNonSale($s,$actorId);
+            $this->independentFromReturns($s,$actorId);
             $accounts=$data['expense_ledgers']??[];
             $expected=collect(array_keys($s['non_sale']))
                 ->map(fn($id)=>(string)$id)->sort()->values()->all();
@@ -428,6 +482,7 @@ final class HistoricalBatchCapitalizationService
                 'invoice_line_count'=>$s['sale_count'],
                 'dispatch_line_count'=>$s['lines']->count(),
                 'non_sale_line_count'=>count($s['non_sale']),
+                'return_line_count'=>count($s['returns']),
                 'source_fingerprint'=>$s['signature'],
                 'source_authorization_reference'=>trim($data['source_authorization_reference']),
                 'source_reconciliation_notes'=>trim($data['source_reconciliation_notes']),
@@ -447,6 +502,21 @@ final class HistoricalBatchCapitalizationService
                     'dispatch_date'=>$physical->dispatch_date,
                     'quantity_packages'=>$physical->quantity_packages,
                     'source_cost_amount'=>$s['allocations'][$physicalId],
+                    'created_at'=>now(),'updated_at'=>now(),
+                ]);
+            }
+            foreach($s['returns'] as $returned){
+                DB::table('finance_historical_batch_return_allocations')->insert([
+                    'finance_historical_batch_capitalization_id'=>$id,
+                    'sales_return_quarantine_id'=>$returned['qc_id'],
+                    'sales_credit_note_line_id'=>$returned['credit_line_id'],
+                    'sales_invoice_line_id'=>$returned['sales_invoice_line_id'],
+                    'currency_id'=>$returned['currency_id'],
+                    'original_qc_date'=>$returned['date'],
+                    'quantity_packages'=>$returned['quantity'],
+                    'original_invoiced_cogs_amount'=>$returned['original_sale_cost'],
+                    'original_return_cost_amount'=>$returned['expected_cost'],
+                    'source_fingerprint'=>$returned['fingerprint'],
                     'created_at'=>now(),'updated_at'=>now(),
                 ]);
             }
@@ -471,6 +541,7 @@ final class HistoricalBatchCapitalizationService
                 (int)$s['case']->requested_by,(int)$s['case']->reviewed_by],true))
                 $this->fail('A separate finance reviewer must approve original manufacturing and invoice cost recovery.');
             $this->independentFromNonSale($s,$actorId);
+            $this->independentFromReturns($s,$actorId);
             $this->matches($record,$s);
             $approved=$data['decision']==='approve';
             DB::table('finance_historical_batch_capitalizations')->where('id',$record->id)->update([
@@ -675,6 +746,7 @@ final class HistoricalBatchCapitalizationService
                 (int)$s['case']->reviewed_by],true))
                 $this->fail('A different finance executor must post the original source manufacturing and invoice journals.');
             $this->independentFromNonSale($s,$actorId);
+            $this->independentFromReturns($s,$actorId);
             $this->matches($record,$s);
 
             // Serialize every cost and COGS journal with the financial-period
@@ -684,6 +756,8 @@ final class HistoricalBatchCapitalizationService
             $period->assertOpenDate($s['date']);
             foreach($s['lines']->pluck('dispatch_date')->unique() as $date)
                 $period->assertOpenDate((string)$date);
+            foreach($s['returns'] as $returned)
+                $period->assertOpenDate($returned['date']);
 
             // The manufacturing override is permitted ONLY during this
             // same transaction's atomic executor. On ANY failure this
