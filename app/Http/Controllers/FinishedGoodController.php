@@ -41,18 +41,13 @@ class FinishedGoodController extends Controller
 
     public function dispatch(Request $request, FinishedGood $good, FinishedGoodDispatchService $dispatches)
     {
-        abort_unless($request->user()->can('inventory.update'), 403);
-        $data = $request->validate([
-            'submission_token' => ['required', 'uuid'],
-            'production_batch_id' => ['required', 'integer', 'exists:production_batches,id'],
-            'quantity_packages' => ['required', 'integer', 'min:1', 'max:2147483647'],
-            'dispatch_date' => ['required', 'date', 'before_or_equal:today'],
-            'reference' => ['nullable', 'string', 'max:100'],
-            'notes' => ['nullable', 'string', 'max:2000'],
+        abort_unless($request->user()->can('inventory.update'),403);
+        // A standalone warehouse dispatch cannot recognize matching COGS
+        // or a customer receivable. The corresponding stock movement must
+        // be created within SalesInvoiceService's atomic journal workflow.
+        throw \Illuminate\Validation\ValidationException::withMessages([
+            'dispatch'=>'Direct finished-goods dispatch is disabled because it bypasses customer invoicing and original-currency COGS posting. Post a sales invoice to dispatch saleable products; use warehouse transfer for internal moves.',
         ]);
-
-        $dispatches->post($good->id, (int) $data['production_batch_id'], (int) $data['quantity_packages'], $data, (int) $request->user()->id);
-        return redirect()->route('production.finished-goods.show', $good)->with('success', 'Finished goods dispatch posted. Warehouse stock was reduced from the selected released batch.');
     }
 
     public function assignCatalog(Request $request,FinishedGood $good,ApprovedCatalogService $catalog)
