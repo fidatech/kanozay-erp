@@ -143,32 +143,20 @@ class SalesDeliveryNoteController extends Controller
             'received_by'=>['required','string','max:150'],
             'delivered_at'=>['required','date','before_or_equal:now'],
             'delivery_location'=>['nullable','string','max:180'],
-            'proof_reference'=>['nullable','string','max:180'],
+            'proof_reference'=>['required','string','min:3','max:180'],
             'submission_token'=>['nullable','uuid'],
         ]);
-        if(!empty($data['proof_reference'])){
-            if(empty($data['delivery_location']))throw ValidationException::withMessages(['delivery_location'=>'Proof-backed delivery requires a checkpoint or delivery location.']);
-            app(\App\Services\SalesDeliveryTrackingService::class)->record($note,[
-                'submission_token'=>$data['submission_token']??(string)Str::uuid(),
-                'status'=>'delivered','occurred_at'=>$data['delivered_at'],
-                'location'=>$data['delivery_location'],'proof_reference'=>$data['proof_reference'],
-                'receiver_name'=>$data['received_by'],'notes'=>'Confirmed from delivery note.',
-            ],$request->user()->id);
-            return back()->with('success','Delivery receipt and immutable tracking proof confirmed.');
-        }
-        DB::transaction(function()use($request,$note,$data){
-            $locked=SalesDeliveryNote::whereKey($note->id)->lockForUpdate()->firstOrFail();
-            if(\App\Models\SalesDeliveryTrackingEvent::where('sales_delivery_note_id',$locked->id)
-                ->where('status','returned')->exists())
-                throw ValidationException::withMessages(['status'=>'Returned delivery requires a new delivery document; cannot confirm as delivered.']);
-            if($locked->status!=='issued')throw ValidationException::withMessages(['status'=>'Only issued delivery notes can be marked delivered.']);
-            $locked->update([
-                'status'=>'delivered','received_by'=>$data['received_by'],
-                'delivered_at'=>$data['delivered_at'],'delivered_by'=>$request->user()->id,
+        if(empty($data['delivery_location'])){
+            throw ValidationException::withMessages([
+                'delivery_location'=>'Customer delivery confirmation requires a checkpoint/location and a proof reference.',
             ]);
-            ActivityLog::record('sales.delivery_note.delivered','sales_delivery_note',$locked->id,
-                'Customer delivery confirmed; logistics record only.');
-        });
+        }
+        app(\App\Services\SalesDeliveryTrackingService::class)->record($note,[
+            'submission_token'=>$data['submission_token']??(string)Str::uuid(),
+            'status'=>'delivered','occurred_at'=>$data['delivered_at'],
+            'location'=>$data['delivery_location'],'proof_reference'=>$data['proof_reference'],
+            'receiver_name'=>$data['received_by'],'notes'=>'Confirmed from delivery note.',
+        ],$request->user()->id);
         return back()->with('success','Delivery receipt confirmed.');
     }
 
@@ -178,7 +166,20 @@ class SalesDeliveryNoteController extends Controller
         $data=$request->validate(['reason'=>['required','string','min:5','max:1000']]);
         DB::transaction(function()use($request,$note,$data){
             $locked=SalesDeliveryNote::whereKey($note->id)->lockForUpdate()->firstOrFail();
-            if($locked->status!=='issued')throw ValidationException::withMessages(['status'=>'Only unconfirmed delivery notes can be cancelled.']);
+            if(!in_array($locked->status,['issued','returned'],true)){
+                throw ValidationException::withMessages(['status'=>'Confirmed customer deliveries cannot be cancelled.']);
+            }
+            $tracking=\App\Models\SalesDeliveryTrackingEvent::where('sales_delivery_note_id',$locked->id)->get();
+            if($locked->status==='issued' && $tracking->isNotEmpty()){
+                throw ValidationException::withMessages([
+                    'status'=>'A delivery with recorded loading or transit evidence cannot be cancelled until logistics records a documented return.',
+                ]);
+            }
+            if($locked->status==='returned' && !$tracking->contains('status','returned')){
+                throw ValidationException::withMessages([
+                    'status'=>'A returned note requires its source tracking return event before administrative cancellation.',
+                ]);
+            }
             $locked->update([
                 'status'=>'cancelled','cancelled_by'=>$request->user()->id,
                 'cancelled_at'=>now(),'notes'=>trim(($locked->notes??'')."\nCancellation reason: ".$data['reason']),
