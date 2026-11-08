@@ -51,6 +51,39 @@
   <div style="border-top:1px solid #667085;padding-top:8px">Prepared by</div><div style="border-top:1px solid #667085;padding-top:8px">Customer signature</div>
  </div>
 </div>
+@if($mayViewCosts)
+<section class="card no-print" style="max-width:900px;margin:18px auto;padding:22px">
+<h2>Factory source-currency inventory and COGS journals</h2>
+<p class="muted">Restricted finance information. Revenue and customer receivables remain in {{ $invoice->currency_code }}. COGS is valued in each batch's original manufacturing currency. Different currencies are never combined or converted implicitly.</p>
+<div class="table-wrap"><table><thead><tr>
+<th>Production lot</th><th>Packages dispatched</th><th>Cost currency</th>
+<th>COGS amount</th><th>Posted GL journal</th><th>Reconciliation</th>
+</tr></thead><tbody>
+@foreach($invoice->lines as $line)
+@php($posting=$lineCosts->get($line->id))
+<tr>
+<td>{{ $line->batch?->batch_number??'Unknown source' }}</td>
+<td>{{ number_format((int)$line->quantity_packages) }}</td>
+<td>{{ $posting?->cost_currency_code??'Not costed' }}</td>
+<td>@if($posting)<x-finance-amount :amount="$posting->amount" />@else — @endif</td>
+<td>{{ $posting?->journal_number??'No source COGS journal' }}</td>
+<td>@if($posting?->journal_status==='posted')
+<strong style="color:#168058">Source cost posted</strong>
+@else<strong style="color:#a3412b">Finance reconciliation required</strong>@endif</td>
+</tr>
+@endforeach
+</tbody></table></div>
+@if($costTotals)
+<div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:14px">
+@foreach($costTotals as $currency=>$amount)
+<div style="padding:10px 13px;border-radius:9px;border:1px solid #dce7f0">
+<strong>{{ $currency }}</strong> COGS posted: <x-finance-amount :amount="$amount" /></div>
+@endforeach
+</div>
+@endif
+<p class="muted">Historic invoices that predate source manufacturing capitalization may have no posted COGS. Such exceptions require explicit journal and inventory reconciliation; this view cannot invent a retrospective source exchange rate.</p>
+</section>
+@endif
 <section class="card no-print" style="max-width:900px;margin:18px auto;padding:22px">
 <h2>Physical delivery and logistics progress</h2>
 <p class="muted">Invoice posting already dispatches selected finished-good batches from stock. Delivery notes document where those invoiced packages went; they do not post another inventory movement or revenue journal.</p>
