@@ -224,6 +224,80 @@ class FinanceCloseReadinessService
                     }
                 }
             }
+            if($valid && $recovery->dispatch_line_count!==null){
+                $approved=DB::table('finance_historical_batch_dispatch_allocations')
+                    ->where('finance_historical_batch_capitalization_id',$recovery->id)->get();
+                $physicalCount=DB::table('finished_good_dispatch_lines')
+                    ->where('production_batch_id',$recovery->production_batch_id)->count();
+                $valid=$approved->count()===(int)$recovery->dispatch_line_count &&
+                    $physicalCount===(int)$recovery->dispatch_line_count &&
+                    (int)$recovery->posted_invoice_cogs_lines===(int)$recovery->invoice_line_count &&
+                    (int)$recovery->posted_non_sale_lines===(int)$recovery->non_sale_line_count;
+                $saleCount=0;$expenseCount=0;
+                foreach($approved as $allocation){
+                    $physical=DB::table('finished_good_dispatch_lines as line')
+                        ->join('finished_good_dispatches as dispatch',
+                            'dispatch.id','=','line.finished_good_dispatch_id')
+                        ->where('line.id',$allocation->finished_good_dispatch_line_id)
+                        ->select('line.production_batch_id','line.quantity_packages',
+                            'dispatch.dispatch_date')->first();
+                    $journal=DB::table('journal_entries')
+                        ->where('id',$allocation->journal_entry_id)->first();
+                    if(!$physical ||
+                        (int)$physical->production_batch_id!==(int)$recovery->production_batch_id ||
+                        (int)$physical->quantity_packages!==(int)$allocation->quantity_packages ||
+                        (string)$physical->dispatch_date!==(string)$allocation->dispatch_date ||
+                        (int)$allocation->currency_id!==(int)$recovery->currency_id ||
+                        !$journal || $journal->status!=='posted' ||
+                        $journal->reversal_of_id ||
+                        (int)$journal->currency_id!==(int)$recovery->currency_id ||
+                        (string)$journal->entry_date!==(string)$allocation->dispatch_date ||
+                        DB::table('journal_entries')
+                            ->where('reversal_of_id',$allocation->journal_entry_id)->exists()){
+                        $valid=false;break;
+                    }
+                    if($allocation->sales_invoice_line_id){
+                        $saleCount++;
+                        $source=DB::table('production_invoice_cogs_postings')
+                            ->where('sales_invoice_line_id',$allocation->sales_invoice_line_id)
+                            ->first();
+                        if($allocation->business_purpose!=='customer_sale' ||
+                            $allocation->expense_ledger_id!==null ||
+                            $allocation->finance_historical_dispatch_disposition_id!==null ||
+                            !$source ||
+                            (int)$source->production_batch_cost_posting_id!==(int)$recovery->production_batch_cost_posting_id ||
+                            (int)$source->journal_entry_id!==(int)$journal->id ||
+                            !BigDecimal::of((string)$allocation->source_cost_amount)
+                                ->isEqualTo((string)($source->amount??'0'))){
+                            $valid=false;break;
+                        }
+                    }else{
+                        $expenseCount++;
+                        $source=DB::table('finance_historical_dispatch_cost_lines as expense')
+                            ->join('finance_historical_dispatch_cost_settlements as settlement',
+                                'settlement.id','=','expense.finance_historical_dispatch_cost_settlement_id')
+                            ->where('expense.finished_good_dispatch_line_id',$allocation->finished_good_dispatch_line_id)
+                            ->where('settlement.status','posted')
+                            ->select('expense.*','settlement.business_purpose as posted_purpose',
+                                'settlement.finance_historical_dispatch_disposition_id as posted_disposition_id')
+                            ->first();
+                        if(!in_array($allocation->business_purpose,[
+                                'promotional_sample','production_loss','internal_consumption',
+                            ],true) || !$source ||
+                            $source->posted_purpose!==$allocation->business_purpose ||
+                            (int)$source->posted_disposition_id!==(int)$allocation->finance_historical_dispatch_disposition_id ||
+                            (int)$source->expense_ledger_id!==(int)$allocation->expense_ledger_id ||
+                            (int)$source->production_batch_cost_posting_id!==(int)$recovery->production_batch_cost_posting_id ||
+                            (int)$source->journal_entry_id!==(int)$journal->id ||
+                            !BigDecimal::of((string)$allocation->source_cost_amount)
+                                ->isEqualTo((string)$source->source_cost_amount)){
+                            $valid=false;break;
+                        }
+                    }
+                }
+                if($saleCount!==(int)$recovery->invoice_line_count ||
+                    $expenseCount!==(int)$recovery->non_sale_line_count)$valid=false;
+            }
             if(!$valid)$invalidRecovery++;
         }
         if($invalidRecovery)
