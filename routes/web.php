@@ -124,6 +124,7 @@ Route::middleware('auth')->get('/sales/invoices', [\App\Http\Controllers\SalesIn
 Route::middleware('auth')->get('/sales/invoices/create', [\App\Http\Controllers\SalesInvoiceController::class, 'create'])->name('sales.invoices.create');
 Route::middleware('auth')->post('/sales/invoices', [\App\Http\Controllers\SalesInvoiceController::class, 'store'])->name('sales.invoices.store');
 Route::middleware('auth')->get('/sales/invoices/{invoice}', [\App\Http\Controllers\SalesInvoiceController::class, 'show'])->name('sales.invoices.show');
+Route::middleware('auth')->post('/sales/invoices/{invoice}/reconcile-cost', [\App\Http\Controllers\SalesInvoiceController::class, 'reconcileCOGS'])->name('sales.invoices.cogs.reconcile');
 Route::middleware('auth')->get('/sales/return-quarantine', [\App\Http\Controllers\SalesReturnQuarantineController::class,'index'])->name('sales.returns.quarantine.index');
 Route::middleware('auth')->post('/sales/return-quarantine/{quarantine}/decision', [\App\Http\Controllers\SalesReturnQuarantineController::class,'decision'])->name('sales.returns.quarantine.decision');
 Route::middleware('auth')->get('/sales/invoices/{invoice}/credit-notes/create', [\App\Http\Controllers\SalesCreditNoteController::class, 'create'])->name('sales.credit-notes.create');
