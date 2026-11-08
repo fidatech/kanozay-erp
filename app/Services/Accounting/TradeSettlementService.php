@@ -16,6 +16,16 @@ class TradeSettlementService {
    $document=TradeDocument::whereKey($documentId)->lockForUpdate()->firstOrFail();
    if ($document->type !== $key->type || $document->trade_party_id !== $key->trade_party_id || $document->currency_id !== $key->currency_id) throw ValidationException::withMessages(['trade_document_id'=>'Document party, type or currency changed during allocation. Please retry.']);
    $transaction=MoneyTransaction::whereKey($transactionId)->lockForUpdate()->firstOrFail();
+   // Never allocate draft or reversed source accounting records. An
+   // allocation is metadata only and must correspond to real posted GL lines.
+   if(! $document->journal || $document->journal->status!=='posted'
+      || (int)$document->journal->currency_id!==(int)$document->currency_id){
+    throw ValidationException::withMessages(['trade_document_id'=>'Post and reconcile the source invoice journal before settlement.']);
+   }
+   if(! $transaction->journal || $transaction->journal->status!=='posted'
+      || (int)$transaction->journal->currency_id!==(int)$transaction->currency_id){
+    throw ValidationException::withMessages(['money_transaction_id'=>'Only payments with a posted matching-currency journal can be allocated.']);
+   }
    if(!in_array($document->type,['receivable','payable'],true))throw ValidationException::withMessages(['trade_document_id'=>'Unsupported document type.']);
    if(($document->type==='receivable'?'receipt':'payment')!==$transaction->type || $document->currency_id!==$transaction->currency_id)throw ValidationException::withMessages(['money_transaction_id'=>'Settlement type or currency does not match the document.']);
    $party=DB::table('entity_ledger_accounts')->where(['entity_type'=>$document->type==='receivable'?'customer':'supplier','entity_id'=>$document->trade_party_id,'currency_id'=>$document->currency_id,'purpose'=>$document->type])->value('ledger_account_id');
