@@ -25,8 +25,7 @@
 <label>Paid from cash / bank / sarafi<select name="source_account_id" required><option value="">Choose same-currency source account</option>
 @foreach($accounts as $a)<option value="{{ $a->id }}">{{ $a->name }} · {{ $a->currency?->code }}</option>@endforeach
 </select></label>
-<label>Advance asset ledger<select name="advance_ledger_id" required><option value="">Choose unmapped supplier-prepayment asset</option>
-@foreach($ledgers as $l)<option value="{{ $l->id }}">{{ $l->code }} {{ $l->name }}</option>@endforeach</select></label>
+<div class="sa-warning">The supplier-specific advance asset account is selected automatically from the purchase order currency. It also appears in the supplier statement.</div>
 <label>Payment date<input type="date" name="paid_on" max="{{ now()->toDateString() }}" value="{{ now()->toDateString() }}" required></label>
 <label>Payment amount<input name="amount" inputmode="decimal" required></label>
 <label>Approved payment reference<input name="reference" minlength="3" maxlength="120" required></label>
