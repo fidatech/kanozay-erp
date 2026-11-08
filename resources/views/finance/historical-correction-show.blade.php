@@ -63,6 +63,69 @@ I am not the requester and independently checked the original source documentati
 <button class="btn" type="submit" onclick="return confirm('Record this independent finance decision? No original stock or GL value will change.')">Save independent finance review</button>
 </form></section>
 @endif
+@if($case->case_type==='opening_fifo_unvalued' && $openingPosting)
+<section class="hfcs-card">
+<h2>Original opening-stock valuation journal</h2>
+<div class="hfcs-grid">
+<div><small>Posted journal</small><div><strong>{{ $openingPosting->journal_number }}</strong></div></div>
+<div><small>Posting date</small><div>{{ $openingPosting->posting_date }}</div></div>
+<div><small>Original FIFO cost</small><div>{{ $openingPosting->original_cost }}</div></div>
+<div><small>Original currency ID</small><div>{{ $openingPosting->currency_id }}</div></div>
+<div><small>Inventory asset ledger</small><div>#{{ $openingPosting->inventory_ledger_id }}</div></div>
+<div><small>Opening equity ledger</small><div>#{{ $openingPosting->opening_equity_ledger_id }}</div></div>
+</div>
+<p class="muted">The source physical stock receipt is unchanged. Original opening cost was recognized in the separately dated, independently approved asset/equity journal. The posting status must remain reconciled to the original financial statements.</p>
+</section>
+@endif
+@if($case->status==='approved' && $case->case_type==='opening_fifo_unvalued' &&
+ (auth()->user()->can('finance.update') || auth()->user()->can('administration.update')) &&
+ (int)$case->requested_by!==auth()->id())
+<section class="hfcs-card">
+<h2>Recognize unconsumed original opening inventory</h2>
+<div class="hfcs-alert"><strong>Limited to original physical opening movements with zero FIFO consumption.</strong>
+All original units must remain on hand with verified active warehouse locations. The manufacturing inventory asset ledger must already be approved for the source currency. This posts an asset debit and a signed opening-equity credit on the chosen open accounting date. It will not create new physical stock, alter earlier cost consumptions, or assume a missing original purchase value. If finance previously posted the opening cost manually, do not use this action.</div>
+<form method="POST" action="{{ route('finance.historical-corrections.opening-post',$case->id) }}" class="hfcs-form" style="margin-top:14px">
+@csrf
+<label>Source accounting currency
+<select name="currency_id" required>
+<option value="">Select independently approved inventory policy currency</option>
+@foreach($currencies as $currency)
+<option value="{{ $currency->id }}" @selected(old('currency_id')==$currency->id)>{{ $currency->code }}</option>
+@endforeach
+</select></label>
+<label>Total original lot cost in that currency
+<input type="text" name="original_cost" inputmode="decimal" required
+ value="{{ old('original_cost') }}" placeholder="0.0000"></label>
+<label>Opening-equity posting account
+<select name="opening_equity_ledger_id" required>
+<option value="">Choose active opening-equity account</option>
+@foreach($openingEquityLedgers as $account)
+<option value="{{ $account->id }}" @selected(old('opening_equity_ledger_id')==$account->id)>{{ $account->code }} · {{ $account->name }}</option>
+@endforeach
+</select></label>
+<label>Posting date in an OPEN accounting period
+<input name="posting_date" type="date" value="{{ old('posting_date',now()->toDateString()) }}"
+ max="{{ now()->toDateString() }}" min="{{ $case->source_date }}" required></label>
+<label>Signed opening-valuation evidence
+<input name="evidence_reference" required minlength="4" maxlength="180"
+ value="{{ old('evidence_reference') }}" placeholder="Physical count and original cost authorization"></label>
+<label>Finance reconciliation and opening-equity evidence
+<textarea name="reconciliation_notes" rows="5" minlength="40" maxlength="5000" required
+ placeholder="Identify physical count, original source cost documentation, original currency, opening equity account and evidence no earlier GL inventory valuation exists.">{{ old('reconciliation_notes') }}</textarea></label>
+<label style="display:flex;align-items:center;gap:8px">
+<input type="checkbox" name="confirm_physical_source" value="1" required style="width:auto">
+The source lot is physically counted, entirely unconsumed and fully assigned to verified warehouses.
+</label>
+<label style="display:flex;align-items:center;gap:8px">
+<input type="checkbox" name="confirm_no_prior_gl" value="1" required style="width:auto">
+Finance verified no earlier inventory GL entry has recognized this exact physical opening lot; the chosen equity account and original value are documented.
+</label>
+<button class="btn" type="submit"
+ onclick="return confirm('Post the independently evidenced original FIFO cost as a single asset/equity journal without changing physical stock?')">
+Post verified opening-stock valuation</button>
+</form>
+</section>
+@endif
 @if($case->status==='approved' && $case->case_type==='invoice_missing_cogs' &&
  (auth()->user()->can('finance.update') || auth()->user()->can('administration.update')) &&
  (int)$case->requested_by!==auth()->id())
@@ -81,9 +144,9 @@ I verified the existing original-currency batch cost and acknowledge this action
 </label>
 <button class="btn" type="submit" onclick="return confirm('Post missing original-currency COGS journals for this independently approved case?')">Execute source-verified correction</button>
 </form></section>
-@elseif($case->status==='approved' && $case->case_type!=='invoice_missing_cogs')
+@elseif($case->status==='approved' && !in_array($case->case_type,['invoice_missing_cogs','opening_fifo_unvalued'],true))
 <div class="hfcs-alert"><strong>Approved for investigation only.</strong>
-The ERP does not yet have an authorized automated correction for this legacy stock, source lot, supplier credit or capitalization type. Preserve this case as an unresolved exception until a dedicated historical posting and reconciliation service exists. Do not create an arbitrary journal to mark it resolved.</div>
+The ERP does not yet have an authorized automated correction for this legacy dispatch, consumed source lot, supplier credit or uncapitalized production batch type. An unconsumed, source-verified physical opening FIFO lot has a separate restricted valuation path above. Preserve this case as an unresolved exception until a dedicated historical posting and reconciliation service exists. Do not create an arbitrary journal to mark it resolved.</div>
 @endif
 @if(in_array($case->status,['submitted','approved'],true) &&
     (auth()->user()->can('finance.update') || auth()->user()->can('administration.update')) &&
