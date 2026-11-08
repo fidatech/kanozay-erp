@@ -8,6 +8,7 @@ use App\Models\JournalEntry;
 use App\Models\LedgerAccount;
 use App\Models\Shareholder;
 use App\Models\DocumentSequence;
+use App\Models\MoneyTransaction;
 use App\Services\ShareholderDistributionAllocationService;
 use App\Services\FinancePeriodClosingService;
 use App\Support\LocalizedDecimal;
@@ -303,6 +304,17 @@ class ShareholderGovernanceController extends Controller {
     ['ledger_account_id'=>$cashLedger,'debit'=>'0','credit'=>(string)$amount],
    ]);
    $posting->post($journal,$request->user()->id);
+   // Ensure cashbook and bank statement reconciliation see the payout.
+   MoneyTransaction::create([
+    'submission_token'=>$data['submission_token'],
+    'type'=>'payment','transaction_date'=>$data['paid_on'],
+    'source_account_id'=>$account->id,'destination_account_id'=>null,
+    'counterpart_ledger_account_id'=>$retained->id,
+    'currency_id'=>$resolution->currency_id,
+    'amount'=>(string)$amount,'reference'=>$resolution->number,
+    'description'=>'Shareholder distribution '.$resolution->number.' / '.$party->name,
+    'journal_entry_id'=>$journal->id,'created_by'=>$request->user()->id,
+   ]);
    $id=DB::table('shareholder_profit_distributions')->insertGetId([
     'submission_token'=>$data['submission_token'],'shareholder_resolution_id'=>$resolution->id,
     'shareholder_id'=>$party->id,'currency_id'=>$resolution->currency_id,
