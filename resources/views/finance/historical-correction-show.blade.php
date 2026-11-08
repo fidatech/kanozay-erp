@@ -85,6 +85,26 @@ I verified the existing original-currency batch cost and acknowledge this action
 <div class="hfcs-alert"><strong>Approved for investigation only.</strong>
 The ERP does not yet have an authorized automated correction for this legacy stock, source lot, supplier credit or capitalization type. Preserve this case as an unresolved exception until a dedicated historical posting and reconciliation service exists. Do not create an arbitrary journal to mark it resolved.</div>
 @endif
+@if(in_array($case->status,['submitted','approved'],true) &&
+    (auth()->user()->can('finance.update') || auth()->user()->can('administration.update')) &&
+    (($case->status==='submitted' && (int)$case->requested_by===auth()->id()) ||
+     ($case->status==='approved' && (int)$case->reviewed_by===auth()->id())))
+<section class="hfcs-card">
+<h2>{{ $case->status==='approved'?'Invalidate an unexecuted approval':'Withdraw an unreviewed request' }}</h2>
+<p class="muted">Use this only when original source records have changed or the request should be replaced. Withdrawal preserves the previous review events and creates no stock or GL entry.</p>
+<form method="POST" action="{{ route('finance.historical-corrections.withdraw',$case->id) }}" class="hfcs-form">
+@csrf
+<label>Documented reason
+<textarea name="reason" rows="3" minlength="20" maxlength="3000" required placeholder="Explain changed source records or why a replacement case is required."></textarea></label>
+<label style="display:flex;align-items:center;gap:8px">
+<input type="checkbox" name="confirm_withdrawal" value="1" required style="width:auto">
+I understand that withdrawal cannot reverse a journal and only affects this unexecuted correction case.
+</label>
+<button class="btn btn-light" type="submit"
+ onclick="return confirm('Withdraw this unexecuted case and preserve its complete historical record?')">Withdraw unresolved case</button>
+</form>
+</section>
+@endif
 <section class="hfcs-card">
 <h2>Permanent case event history</h2>
 @forelse($events as $event)
