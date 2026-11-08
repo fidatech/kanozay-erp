@@ -198,11 +198,15 @@ final class HistoricalCustomerReturnDispositionService
             (int)$invoice->currency_id,(string)$invoice->invoice_date);
         $this->journal((int)$note->journal_entry_id,
             (int)$invoice->currency_id,(string)$note->credit_date);
-        if(!$this->net((int)$invoice->journal_entry_id,(int)$receivable)
+        if(DB::table('journal_lines')
+                ->where('journal_entry_id',$invoice->journal_entry_id)->count()!==2 ||
+            DB::table('journal_lines')
+                ->where('journal_entry_id',$note->journal_entry_id)->count()!==2 ||
+            !$this->net((int)$invoice->journal_entry_id,(int)$receivable)
                 ->isEqualTo((string)$invoice->total) ||
             !$this->net((int)$note->journal_entry_id,(int)$receivable)
                 ->isEqualTo(BigDecimal::of((string)$note->total)->negated()))
-            $this->fail('Genuine customer invoice receivable debit and credit-note receivable credit GL must be posted, balanced and match original customer amounts.');
+            $this->fail('Source customer invoice and credited receivable journals must each have exactly two balanced original-income/receivable lines and match the genuine original amounts.');
 
         $income=DB::table('journal_lines as row')
             ->join('ledger_accounts as ledger','ledger.id','=','row.ledger_account_id')
@@ -264,7 +268,22 @@ final class HistoricalCustomerReturnDispositionService
             foreach($previousScrap as $other){
                 $journal=$this->journal((int)$other->journal_entry_id,
                     (int)$cost->currency_id,(string)$other->posting_date);
-                if($other->posting_date>$date ||
+                $priorQc=DB::table('sales_return_quarantines')
+                    ->where('id',$other->sales_return_quarantine_id)->first();
+                $priorLossAccount=DB::table('ledger_accounts')
+                    ->where('id',$other->loss_ledger_id)->first();
+                if(!$priorQc || $priorQc->status!=='scrapped' ||
+                    !$priorQc->decided_by ||
+                    (int)$priorQc->registered_by===(int)$priorQc->decided_by ||
+                    (int)$priorQc->quantity_packages!==(int)$other->quantity_packages ||
+                    (string)$priorQc->decided_on!==(string)$other->posting_date ||
+                    !$priorQc->quality_reference || !$priorQc->decision_notes ||
+                    !$priorLossAccount || $priorLossAccount->type!=='expense' ||
+                    (int)$other->cogs_ledger_id!==(int)$policy->cogs_ledger_id ||
+                    (int)$other->currency_id!==(int)$cost->currency_id ||
+                    DB::table('journal_lines')
+                        ->where('journal_entry_id',$journal->id)->count()!==2 ||
+                    $other->posting_date>$date ||
                     (int)$other->sales_return_quarantine_id===(int)$qc->id ||
                     !$this->net((int)$journal->id,(int)$policy->cogs_ledger_id)
                         ->isEqualTo(
@@ -289,7 +308,13 @@ final class HistoricalCustomerReturnDispositionService
                     ->where('id',$other->sales_return_quarantine_id)->first();
                 $journal=DB::table('journal_entries')
                     ->where('id',$other->journal_entry_id)->first();
-                if(!$qcRelease || !$journal ||
+                $priorCredit=DB::table('sales_credit_note_lines')
+                    ->where('id',$qcRelease?->sales_credit_note_line_id)->first();
+                if(!$qcRelease || !$priorCredit || !$journal ||
+                    (int)$qcRelease->quantity_packages!==(int)$other->quantity_packages ||
+                    (int)$qcRelease->production_batch_id!==(int)$qc->production_batch_id ||
+                    (int)$priorCredit->sales_invoice_line_id!==(int)$sale->id ||
+                    (int)$priorCredit->quantity_packages!==(int)$other->quantity_packages ||
                     $qcRelease->status!=='released' ||
                     $journal->status!=='posted' ||
                     $journal->reversal_of_id ||
