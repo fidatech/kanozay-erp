@@ -50,8 +50,10 @@ class PurchaseReturnLandedCostAdjustmentService
                 $this->reject('This return already has an approved landed-cost financial adjustment.');
             }
             $receipt=$return->receipt()->lockForUpdate()->firstOrFail();
-            if($receipt->status!=='posted'){
-                $this->reject('Source goods receipt is no longer a posted inventory receipt.');
+            if($receipt->status!=='posted' ||
+                (int)$receipt->cost_currency_id!==(int)$return->currency_id ||
+                !$receipt->cost_currency_code){
+                $this->reject('Source goods receipt must be posted in the same captured original currency as the supplier return.');
             }
             $date=$return->returned_on->toDateString();
             $policy=app(ManufacturingLedgerPolicyService::class)
