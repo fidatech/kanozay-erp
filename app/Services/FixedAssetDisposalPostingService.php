@@ -54,7 +54,7 @@ class FixedAssetDisposalPostingService {
        'asset_ledger_id'=>'The previously reconciled acquisition debit must be used for financial disposal.',
     ]);
    }
-   if($matching->count()!==1||
+   if(($verified ? $matching->isEmpty() : $matching->count()!==1)||
        DB::table('fixed_asset_disposal_postings')->where('acquisition_journal_id',$acquisition->id)
         ->where('asset_ledger_id',$assetAccount->id)->exists())
     throw ValidationException::withMessages(['asset_ledger_id'=>
