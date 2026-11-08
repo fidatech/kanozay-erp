@@ -44,10 +44,14 @@ class FinanceCloseReadinessService
             (int)$qc->production_batch_id!==(int)$plan->production_batch_id ||
             (int)$sale->production_batch_id!==(int)$plan->production_batch_id ||
             (int)$credit->production_batch_id!==(int)$plan->production_batch_id ||
+            (int)$credit->sales_invoice_line_id!==(int)$sale->id ||
             (int)$qc->sales_credit_note_line_id!==(int)$credit->id ||
             (int)$credit->sales_invoice_line_id!==(int)$sale->id ||
             (int)$credit->quantity_packages!==(int)$qc->quantity_packages ||
             (int)$qc->quantity_packages!==(int)$entry->quantity_packages ||
+            (int)$qc->registered_by===(int)$qc->decided_by ||
+            !$qc->decided_by || !$qc->quality_reference ||
+            !$qc->released_warehouse_id ||
             (string)$qc->decided_on!==(string)$entry->original_qc_date ||
             (int)$source->production_batch_cost_posting_id!==(int)$batchCost->id ||
             (int)$source->id!==(int)$restored->production_invoice_cogs_posting_id ||
@@ -66,6 +70,19 @@ class FinanceCloseReadinessService
                 ->isEqualTo((string)$entry->original_return_cost_amount))
             return false;
 
+        $movements=DB::table('finished_good_warehouse_movements')
+            ->where('production_batch_id',$qc->production_batch_id)
+            ->where('type','customer_return')
+            ->where('reference','Quarantined customer return QC '.$qc->id)
+            ->get(['destination_warehouse_id','source_warehouse_id',
+                'quantity_packages','occurred_on','created_by']);
+        if($movements->count()!==1 ||
+            (int)$movements->first()->destination_warehouse_id!==(int)$qc->released_warehouse_id ||
+            $movements->first()->source_warehouse_id!==null ||
+            (int)$movements->first()->quantity_packages!==(int)$qc->quantity_packages ||
+            (string)$movements->first()->occurred_on!==(string)$entry->original_qc_date ||
+            (int)$movements->first()->created_by!==(int)$qc->decided_by)
+            return false;
         $asset=BigDecimal::zero();$cogs=BigDecimal::zero();
         foreach(DB::table('journal_lines')
             ->where('journal_entry_id',$journal->id)
