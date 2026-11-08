@@ -52,8 +52,7 @@ class ManufacturingCostAccountingController extends Controller
 
     public function policy(Request $request,ManufacturingLedgerPolicyService $service)
     {
-        abort_unless($request->user()->can('administration.update') ||
-            ($request->user()->can('finance.update') && $request->user()->can('manufacturing.view')),403);
+        abort_unless($request->user()->canAny(['finance.update','administration.update']),403);
         $data=$request->validate([
             'currency_id'=>['required','integer',Rule::exists('currencies','id')->where('is_active',true)],
             'material_inventory_ledger_id'=>['required','integer','exists:ledger_accounts,id'],
@@ -81,8 +80,7 @@ class ManufacturingCostAccountingController extends Controller
     public function capitalize(Request $request,ProductionBatch $batch,
         ManufacturingCostAccountingService $service)
     {
-        abort_unless($request->user()->can('administration.update') ||
-            ($request->user()->can('finance.update') && $request->user()->can('manufacturing.view')),403);
+        abort_unless($request->user()->canAny(['finance.update','administration.update']),403);
         $data=$request->validate([
             'accounting_date'=>['required','date','before_or_equal:today'],
             'approval_reference'=>['required','string','min:4','max:180'],
