@@ -52,6 +52,23 @@ class FinishedGoodsCostPostingService
         return $entry;
     }
 
+    private function assetBalanceAsOf(int $ledgerId,int $currencyId,string $date):BigDecimal
+    {
+        $balance=BigDecimal::zero();
+        foreach(DB::table('journal_lines as line')
+            ->join('journal_entries as entry',
+                'entry.id','=','line.journal_entry_id')
+            ->where('entry.status','posted')
+            ->where('entry.currency_id',$currencyId)
+            ->whereDate('entry.entry_date','<=',$date)
+            ->where('line.ledger_account_id',$ledgerId)
+            ->get(['line.debit','line.credit']) as $row){
+            $balance=$balance->plus((string)$row->debit)
+                ->minus((string)$row->credit);
+        }
+        return $balance;
+    }
+
     public function assertCapitalized(int $batchId,string $saleDate):object
     {
         $posted=DB::table('production_batch_cost_postings')
@@ -146,6 +163,12 @@ class FinishedGoodsCostPostingService
                 $this->reject('The calculated COGS is outside the remaining original-currency batch inventory value.');
             }
             $amount=(string)$amount->toScale(4,RoundingMode::HalfUp);
+            if($this->assetBalanceAsOf(
+                (int)$policy->finished_inventory_ledger_id,
+                (int)$posted->currency_id,$invoice->invoice_date
+            )->isLessThan($amount)){
+                $this->reject('Posted original-currency finished-goods inventory GL balance is insufficient for this sales dispatch cost. Reconcile batch capitalization and prior COGS.');
+            }
             $journal=$this->journal((int)$posted->currency_id,$invoice->invoice_date,
                 $invoice->number,
                 'Original-currency COGS for '.$invoice->number.' / '.$batch->batch_number,
@@ -193,6 +216,11 @@ class FinishedGoodsCostPostingService
                 ->where('sales_invoice_line_id',$credit->sales_invoice_line_id)->first();
             if(!$source){
                 $this->reject('The original sales dispatch lacks a COGS journal. Reconcile historical invoice cost before authorizing saleable return recovery.');
+            }
+            $creditNote=DB::table('sales_credit_notes')
+                ->where('id',$credit->sales_credit_note_id)->first();
+            if(!$creditNote || $date<$creditNote->credit_date){
+                $this->reject('Saleable product return cost cannot be posted before the original customer credit note date.');
             }
             $sale=DB::table('sales_invoice_lines as item')
                 ->join('sales_invoices as invoice','invoice.id','=','item.sales_invoice_id')
