@@ -77,6 +77,14 @@ The Purchasing/Inventory development branch now contains per-warehouse FIFO lot 
 
 **Production caution:** Existing FIFO records were not assigned guessed locations. Historical stock with unknown lot provenance now requires explicit reconciliation before certain transfers, stock issues or production reservations can proceed. Historical inventory with no valuation layer is still a migration gap. This is a development change, not a tested rollout.
 
+## Manufacturing and Production development update
+
+Committed new draft-recipe editing, packaging line classification and issued-packaging checks, manufacturing equipment occupancy/downtime controls, more defensive approved-routing snapshots, production-plan idempotency, full ingredient/packaging source-lot forward and reverse traceability, split frozen batch material cost, actual-versus-planned issue variance reporting, and final source-QC-hold checks before finished-goods release.
+
+[Manufacturing and Production development detail](manufacturing-production-development-2026-11-08.md) records the implemented code, the limitations, and the outstanding formulas, capacity, by-products, WIP/COGS journals and warehouse-specific reservations.
+
+**Status remains integration incomplete.** No tests or migrations were run at user direction. Historical FIFO source records without verifiable consumption will require reconciliation before some older batches can be released.
+
 ## Acceptance and release gates
 
 1. Passing SQLite feature suite and isolated regression suite on the latest commit.
