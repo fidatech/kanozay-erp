@@ -78,6 +78,16 @@ class JournalPostingService {
    if(DB::table('supplier_advance_applications')->where('journal_entry_id',$original->id)->exists()
    || DB::table('customer_advance_applications')->where('journal_entry_id',$original->id)->exists())
     throw ValidationException::withMessages(['status'=>'Applied customer or supplier advances require a dedicated document-level correction workflow.']);
+   if(DB::table('goods_receipt_landed_cost_postings')
+        ->where('journal_entry_id',$original->id)->exists() ||
+      DB::table('goods_receipt_landed_cost_postings as cost')
+        ->join('journal_lines as source',
+            'source.id','=','cost.source_expense_journal_line_id')
+        ->where('source.journal_entry_id',$original->id)->exists()){
+    throw ValidationException::withMessages([
+       'status'=>'A landed-cost source expense or approved inventory reclassification cannot be reversed directly. Review the GRN FIFO lots, WIP and downstream stock postings first.',
+    ]);
+   }
    if(DB::table('production_batch_cost_postings')
       ->where('issue_journal_id',$original->id)
       ->orWhere('capitalization_journal_id',$original->id)->exists() ||
