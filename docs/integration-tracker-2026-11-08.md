@@ -197,6 +197,18 @@ The ordinary supplier debit-note workflow now insists on the full source-priced 
 
 **Development status: abnormal FIFO loss and nonrecoverable landed-cost supplier-return code committed, not runtime verified.** Formal recoverable landed-cost claims, legacy source corrections, complete multilingual transactional UI and production release verification remain. User requested no tests, migrations, syntax lint, MySQL/UAT or deployment at this stage.
 
+## Historical source correction cases and independently approved invoice COGS repair
+
+Added a Historical Financial Correction Center with immutable-source fingerprints, unique open-case constraints, original source-document references, signed independent finance review and permanent approval/execution events. Six source types are handled: posted invoices missing COGS, uncapitalized batches, standalone historic dispatches, unvalued FIFO lots, unposted GRN landed costs and supplier return discrepancies. Recent source candidates are surfaced for review without synthesizing stock values, supplier credits or FX rates.
+
+The existing missing COGS repair is now accessible only through an approved original-invoice case. Its single transaction verifies the source fingerprint, original posted revenue journal, approved source-batch capitalization, original physical dispatch and exact original-currency COGS/finished-stock journal amounts, then marks the case resolved only when every invoice line is reconciled. The old standalone finance COGS button is no longer a posting path. Open source-dated correction cases block accounting month-close, and the cases screen is linked from finance close and manufacturing reconciliation. The Reports navigation title is translated to Pashto and Dari.
+
+Non-COGS correction types remain investigation-only until separate, independently verified original-cost GL/warehouse correction workflows exist. Original FIFO/opening values, historic standalone dispatches, retroactive batch capitalization and disputed supplier credits **are not automatically repaired**.
+
+[Historical Finance Correction Cases](historical-finance-correction-cases-2026-11-08.md) documents the new route, data model, original-source event trail, allowed invoice COGS repair and outstanding legacy stock valuation work.
+
+**Status: source implementation committed, not production verified.** All migration execution, tests, lint, browser/MySQL UAT and final release packaging remain deferred at user instruction.
+
 ## Acceptance and release gates
 
 1. Passing SQLite feature suite and isolated regression suite on the latest commit.
