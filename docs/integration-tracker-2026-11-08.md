@@ -233,6 +233,12 @@ Added `finance_historical_dispatch_cost_settlements` and per-physical-dispatch-l
 
 [Historical Standalone Dispatch Expense Accounting](historical-standalone-dispatch-expense-2026-11-09.md) describes source requirements and unresolved historic capitalization. **Development source committed only; no tests, migrations, browser checks or deployment.** Previously dispatched batches without genuine earlier capitalization remain blocked pending a separately controlled legacy capitalization workflow.
 
+## Historical source-verified invoiced production capitalization
+
+Added a restricted **atomic manufacturing and actual customer invoice COGS backfill** for an existing QC-released batch that was physically dispatched before financial capitalization, but whose **every dispatch** already has a matching, posted customer invoice (same physical date, source batch, product and packages). The original currency and amount are derived from the frozen source material costs, reviewed overhead and excluded abnormal waste. A signed historical `batch_uncapitalized` case, separate financial proposal, independent approval and different finance executor are required. The source-fingerprinted plan captures batch, costs, policy, all dispatches/invoices, real posted sales revenue/receivable journals and the selected original manufacturing accounting date. The original manufacturing date must precede the earliest dispatch; **all original source posting dates and every invoice/COGS date must still be in open accounting periods**. The executor uses the normal strict manufacturing source-validator with a protected historical override, then cost-posts every old invoice line in order, all in one DB transaction. No extra physical stock, duplicate sale, invented receivable, unstated FX or guessed valuation is created. Final review and financial close checks require the original manufacturing/COGS journal links to remain valid.
+
+[Historical Invoiced Production Cost Recovery](historical-invoiced-batch-cost-recovery-2026-11-09.md) specifies accepted evidence and deliberately blocked situations. **Development committed only**: batches with mixed/orphan non-sale dispatches, existing customer returns, unverified sources and closed original months still need separate correction paths. Migrations, lint, automated tests, UAT and deployment remain deferred.
+
 ## Acceptance and release gates
 
 1. Passing SQLite feature suite and isolated regression suite on the latest commit.
