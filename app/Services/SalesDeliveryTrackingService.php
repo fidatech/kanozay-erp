@@ -64,6 +64,10 @@ class SalesDeliveryTrackingService
      'status'=>'delivered','received_by'=>$data['receiver_name'],
      'delivered_at'=>$eventTime->format('Y-m-d H:i:s'),'delivered_by'=>$actorId,
     ]);
+   }elseif($data['status']==='returned'){
+    // Return is a terminal logistics outcome, not an inventory return.
+    // It never increases finished-goods stock or reverses the invoice.
+    $locked->update(['status'=>'returned']);
    }
    ActivityLog::record('sales.delivery.tracking.'.$data['status'],'sales_delivery_note',$locked->id,
     'Recorded delivery tracking milestone for '.$locked->number.'. Inventory and GL unaffected.',
