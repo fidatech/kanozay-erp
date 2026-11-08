@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\GoodsReceipt;
+use App\Models\ActivityLog;
 use App\Models\Currency;
 use App\Models\ExchangeRate;
 use App\Models\GoodsReceiptLine;
@@ -25,6 +26,10 @@ class GoodsReceiptService
     {
         return DB::transaction(function () use ($order, $data, $actorId) {
             $locked = PurchaseOrder::query()->lockForUpdate()->findOrFail($order->id);
+            if (\Carbon\CarbonImmutable::parse($data['received_on'])->startOfDay()
+                ->isBefore(\Carbon\CarbonImmutable::parse($locked->order_date)->startOfDay())) {
+                throw ValidationException::withMessages(['received_on' => 'Goods cannot be received before the purchase-order date.']);
+            }
             if (GoodsReceipt::where('receipt_token', $data['receipt_token'])->exists()) {
                 throw ValidationException::withMessages(['receipt_token' => 'This goods receipt was already submitted.']);
             }
@@ -153,6 +158,10 @@ class GoodsReceiptService
                 'status' => 'posted',
             ]);
             $locked->update(['status' => $allReceived ? 'received' : 'partially_received']);
+            ActivityLog::record('purchases.goods.received', 'goods_receipt', $receipt->id,
+                'GRN '.$receipt->number.' posted for '.$locked->number,
+                ['purchase_order_id'=>$locked->id, 'warehouse_id'=>$data['company_warehouse_id']??null,
+                 'lines'=>count($requested), 'currency_id'=>$locked->currency_id]);
 
             return $receipt;
         });
