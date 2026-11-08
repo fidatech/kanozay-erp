@@ -121,6 +121,13 @@ final class HistoricalCustomerReturnCostRecoveryService
             ->where('sales_invoice_line_id',$sale->id)->get(['quantity_packages']);
         if($allNotes->sum('quantity_packages')>(int)$sale->quantity_packages)
             $this->fail('Total original customer credits exceed source invoiced physical quantity.');
+        $noteTotal=BigDecimal::zero();
+        foreach(DB::table('sales_credit_note_lines')
+            ->where('sales_credit_note_id',$note->id)->get(['line_total']) as $line)
+            $noteTotal=$noteTotal->plus((string)$line->line_total);
+        if(!$noteTotal->isPositive() ||
+            !$noteTotal->isEqualTo((string)$note->total))
+            $this->fail('The posted original customer credit-note header and exact signed line values do not reconcile.');
         $customerLedger=DB::table('entity_ledger_accounts')->where([
             'entity_type'=>'customer','entity_id'=>$invoice->customer_id,
             'currency_id'=>$invoice->currency_id,'purpose'=>'receivable',
@@ -144,6 +151,20 @@ final class HistoricalCustomerReturnCostRecoveryService
             !$this->net((int)$note->journal_entry_id,(int)$customerLedger)
                 ->isEqualTo(BigDecimal::of((string)$note->total)->negated()))
             $this->fail('Original invoiced receivable and posted customer credit journal do not reconcile to the original customer amount.');
+
+        $invoiceIncome=DB::table('journal_lines as source')
+            ->join('ledger_accounts as account','account.id','=','source.ledger_account_id')
+            ->where('source.journal_entry_id',$invoice->journal_entry_id)
+            ->where('account.type','income')
+            ->get(['source.ledger_account_id','source.debit','source.credit']);
+        if($invoiceIncome->count()!==1 ||
+            !BigDecimal::of((string)$invoiceIncome->first()->credit)
+                ->minus((string)$invoiceIncome->first()->debit)
+                ->isEqualTo((string)$invoice->total) ||
+            !$this->net((int)$note->journal_entry_id,
+                (int)$invoiceIncome->first()->ledger_account_id)
+                ->isEqualTo((string)$note->total))
+            $this->fail('A genuine historical customer return must reverse the same posted revenue ledger as its original invoice, for the exact customer credit-note amount.');
 
         $batch=DB::table('production_batches')->where('id',$qc->production_batch_id)->first();
         $source=DB::table('production_invoice_cogs_postings')
