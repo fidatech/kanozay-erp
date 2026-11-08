@@ -228,6 +228,32 @@ class FinanceCloseReadinessService
                 ' landed-cost capitalization(s) refer to missing, reversed or nonposted inventory GL journals.';
         }
 
+        $pendingLandedReturns=DB::table('purchase_return_records')
+            ->whereBetween('returned_on',[$begin,$end])
+            ->where('status','pending_landed_cost_review')->count();
+        if($pendingLandedReturns){
+            $blockers[]=$pendingLandedReturns.
+                ' supplier return request(s) containing landed costs have neither independent GL approval nor physical return posting.';
+        }
+        $invalidLandedReturns=DB::table('purchase_return_landed_cost_adjustments as adjustment')
+            ->join('purchase_return_records as source',
+                'source.id','=','adjustment.purchase_return_record_id')
+            ->join('journal_entries as journal',
+                'journal.id','=','adjustment.journal_entry_id')
+            ->leftJoin('journal_entries as reverse',
+                'reverse.reversal_of_id','=','journal.id')
+            ->whereBetween('source.returned_on',[$begin,$end])
+            ->where(function($q){
+                $q->where('journal.status','!=','posted')
+                    ->orWhereNotNull('journal.reversal_of_id')
+                    ->orWhereNotNull('reverse.id')
+                    ->orWhere('source.status','!=','posted_pending_credit');
+            })->distinct()->count('adjustment.id');
+        if($invalidLandedReturns){
+            $blockers[]=$invalidLandedReturns.
+                ' supplier-return landed-cost expense journal(s) or physical source statuses require reconciliation.';
+        }
+
         $unreviewedOrAbnormalWaste=DB::table('production_material_wastes as waste')
             ->join('production_order_materials as item',
                 'item.id','=','waste.production_order_material_id')
