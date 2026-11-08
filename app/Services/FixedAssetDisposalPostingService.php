@@ -32,6 +32,14 @@ class FixedAssetDisposalPostingService {
       $acquisition->entry_date->toDateString()>$disposal->disposed_on)
     throw ValidationException::withMessages(['acquisition_journal_id'=>
        'Select a posted, unreversed acquisition journal with the exact asset source reference and currency.']);
+   $verified=DB::table('fixed_asset_capitalizations')
+      ->where('fixed_asset_id',$asset->id)->first();
+   if($verified && ((int)$verified->acquisition_journal_id!==(int)$acquisition->id ||
+       (int)$verified->asset_ledger_id!==(int)$data['asset_ledger_id'])){
+    throw ValidationException::withMessages([
+       'acquisition_journal_id'=>'Asset disposal must reuse the posted acquisition journal and PPE ledger verified at capitalization.',
+    ]);
+   }
    $assetAccount=LedgerAccount::findOrFail($data['asset_ledger_id']);
    if($assetAccount->type!=='asset'||!$assetAccount->is_active||$assetAccount->is_group||
       DB::table('entity_ledger_accounts')->where('ledger_account_id',$assetAccount->id)->exists())
@@ -41,6 +49,11 @@ class FixedAssetDisposalPostingService {
       $line->ledger_account_id===$assetAccount->id &&
       BigDecimal::of((string)$line->debit)->isEqualTo($cost) &&
       BigDecimal::of((string)$line->credit)->isZero());
+   if($verified && !$matching->contains(fn($line)=>(int)$line->id===(int)$verified->journal_line_id)){
+    throw ValidationException::withMessages([
+       'asset_ledger_id'=>'The previously reconciled acquisition debit must be used for financial disposal.',
+    ]);
+   }
    if($matching->count()!==1||
        DB::table('fixed_asset_disposal_postings')->where('acquisition_journal_id',$acquisition->id)
         ->where('asset_ledger_id',$assetAccount->id)->exists())
