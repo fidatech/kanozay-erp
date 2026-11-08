@@ -182,7 +182,7 @@ Route::middleware('auth')->post('/shareholders', [\App\Http\Controllers\Sharehol
 Route::middleware('auth')->get('/shareholders/{shareholder}', [\App\Http\Controllers\ShareholderController::class, 'show'])->name('shareholders.show');
 Route::middleware('auth')->post('/shareholders/{shareholder}/transactions', [\App\Http\Controllers\ShareholderController::class, 'postTransaction'])->name('shareholders.transactions.store');
 Route::middleware('auth')->post('/hr/employees', [\App\Http\Controllers\EmployeeProfileController::class, 'store'])->name('hr.employees.store');
-Route::middleware('auth')->patch('/hr/employees/{employee}/status', [\App\Http\Controllers\EmployeeProfileController::class, 'update'])->name('hr.employees.update');
+Route::middleware('auth')->patch('/hr/employees/{employee}/employment-date', [\App\Http\Controllers\EmployeeProfileController::class, 'update'])->name('hr.employees.update');
 Route::middleware('auth')->patch('/hr/employees/{employee}/department', [\App\Http\Controllers\EmployeeProfileController::class, 'assignDepartment'])->name('hr.employees.department');
 Route::middleware('auth')->post('/hr/departments', [\App\Http\Controllers\EmployeeDepartmentController::class, 'store'])->name('hr.departments.store');
 Route::middleware('auth')->patch('/hr/departments/{department}', [\App\Http\Controllers\EmployeeDepartmentController::class, 'update'])->name('hr.departments.update');
@@ -200,6 +200,7 @@ Route::middleware('auth')->post('/hr/payroll/tax-policies/{policy}/apply', [\App
 Route::middleware('auth')->get('/hr/payroll/{period}', [\App\Http\Controllers\PayrollPeriodController::class, 'show'])->name('hr.payroll.show');
 Route::middleware('auth')->post('/hr/payroll', [\App\Http\Controllers\PayrollPeriodController::class, 'store'])->name('hr.payroll.store');
 Route::middleware('auth')->patch('/hr/payroll/{period}/lines/{line}', [\App\Http\Controllers\PayrollPeriodController::class, 'updateLine'])->name('hr.payroll.lines.update');
+Route::middleware('auth')->post('/hr/payroll/{period}/lines/{line}/review', [\App\Http\Controllers\PayrollPeriodController::class, 'reviewLine'])->name('hr.payroll.lines.review');
 Route::middleware('auth')->post('/hr/payroll/{period}/approve', [\App\Http\Controllers\PayrollPeriodController::class, 'approve'])->name('hr.payroll.approve');
 Route::middleware('auth')->post('/hr/payroll/{period}/lines/{line}/pay', [\App\Http\Controllers\PayrollPeriodController::class, 'pay'])->name('hr.payroll.lines.pay');
 Route::middleware('auth')->get('/hr/payroll/{period}/lines/{line}/payslip', [\App\Http\Controllers\PayrollPeriodController::class, 'payslip'])->name('hr.payroll.lines.payslip');
