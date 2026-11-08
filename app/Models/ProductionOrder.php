@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class ProductionOrder extends Model
 {
     protected $fillable = [
-        'number', 'production_recipe_id', 'package_count', 'status', 'notes', 'created_by',
+        'submission_token', 'number', 'production_recipe_id', 'package_count', 'status', 'notes', 'created_by',
         'recipe_name_snapshot', 'product_code_snapshot',
         'package_weight_kg_snapshot', 'package_unit_snapshot',
     ];
