@@ -10,6 +10,7 @@ use App\Models\SalesInvoice;
 use App\Models\SalesOrderLine;
 use App\Models\TradeDocument;
 use App\Models\TradeParty;
+use App\Support\LocalizedDecimal;
 use App\Services\FinishedGoodDispatchService;
 use App\Services\SalesInvoiceService;
 use Brick\Math\BigDecimal;
@@ -47,6 +48,15 @@ class SalesInvoiceController extends Controller
     public function store(Request $request, SalesInvoiceService $invoices)
     {
         abort_unless($request->user()->can('sales.create'), 403);
+        $lines=$request->input('lines');
+        if(is_array($lines))foreach($lines as &$line){
+            if(!is_array($line))continue;
+            foreach(['quantity_packages','unit_price'] as $field){
+                if(array_key_exists($field,$line))$line[$field]=LocalizedDecimal::normalize($line[$field]);
+            }
+        }
+        unset($line);
+        if(is_array($lines))$request->merge(['lines'=>$lines]);
         $data = $request->validate([
             'submission_token' => ['required', 'uuid'],
             'customer_id' => ['required', 'integer', 'exists:trade_parties,id'],
