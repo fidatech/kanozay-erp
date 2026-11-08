@@ -33,6 +33,8 @@ class ProductionCostAllocationService
     throw ValidationException::withMessages(['submission_token'=>'Duplicate cost allocation token already exists.']);
    }
    $batch=ProductionBatch::whereKey($data['production_batch_id'])->lockForUpdate()->firstOrFail();
+   if(DB::table('production_batch_cost_postings')->where('production_batch_id',$batch->id)->exists())
+    throw ValidationException::withMessages(['production_batch_id'=>'Capitalized batches cannot receive late overhead allocations. Reconcile adjustments through a dedicated finance correction.']);
    if(in_array($batch->status,['qc_rejected','rejected'],true)){
     throw ValidationException::withMessages([
       'production_batch_id'=>'Rejected production batches cannot receive new production cost allocations.',
@@ -85,6 +87,8 @@ class ProductionCostAllocationService
     throw ValidationException::withMessages(['decision'=>'Overhead approvals require an independent finance reviewer.']);
    if($decision==='approved'){
     $batch=ProductionBatch::whereKey($row->production_batch_id)->lockForUpdate()->firstOrFail();
+    if(DB::table('production_batch_cost_postings')->where('production_batch_id',$batch->id)->exists())
+     throw ValidationException::withMessages(['decision'=>'Approved finished-goods capitalization freezes overhead amounts. Post a separately reviewed accounting correction instead.']);
     if(in_array($batch->status,['qc_rejected','rejected'],true) ||
       DB::table('finished_good_dispatch_lines')
         ->where('production_batch_id',$batch->id)->exists()){
