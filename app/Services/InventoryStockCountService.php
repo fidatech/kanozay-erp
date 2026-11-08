@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\ActivityLog;
+use App\Models\CompanyWarehouse;
 use App\Models\InventoryMaterial;
 use App\Models\InventoryStockCount;
 use App\Models\User;
@@ -40,18 +41,42 @@ class InventoryStockCountService
                 throw ValidationException::withMessages(['quantities' => 'Only existing active materials can be counted.']);
             }
 
+            $warehouseId=isset($data['company_warehouse_id']) && $data['company_warehouse_id'] !== ''
+                ?(int)$data['company_warehouse_id']:null;
+            if($warehouseId && !CompanyWarehouse::whereKey($warehouseId)->where('is_active',true)->exists()){
+                throw ValidationException::withMessages(['company_warehouse_id'=>'Choose an active warehouse.']);
+            }
+            $balanceRows=DB::table('inventory_warehouse_balances')
+                ->whereIn('inventory_material_id',$materials->pluck('id'))
+                ->lockForUpdate()->get();
+            $warehouseBalances=$balanceRows->groupBy('inventory_material_id');
             $count = InventoryStockCount::create([
                 'number' => 'TMP-'.Str::uuid(),
                 'submission_token' => $data['submission_token'],
                 'counted_on' => $data['counted_on'],
                 'status' => 'draft', 'notes' => $data['notes'] ?? null,
                 'created_by' => $user->id,
+                'company_warehouse_id'=>$warehouseId,
+                'count_scope'=>$warehouseId?'warehouse':'unassigned',
             ]);
 
             foreach ($materials as $material) {
+                $totalAllocated=BigDecimal::zero();
+                $selected=BigDecimal::zero();
+                foreach($warehouseBalances->get($material->id,collect()) as $balanceRow){
+                    $totalAllocated=$totalAllocated->plus((string)$balanceRow->quantity);
+                    if($warehouseId && (int)$balanceRow->company_warehouse_id===$warehouseId){
+                        $selected=BigDecimal::of((string)$balanceRow->quantity);
+                    }
+                }
+                $global=BigDecimal::of((string)$material->on_hand_quantity);
+                if($totalAllocated->isGreaterThan($global)){
+                    throw ValidationException::withMessages(['quantities'=>'Warehouse stock allocations exceed the company stock balance for '.$material->sku.'. Reconcile before counting.']);
+                }
+                $snapshot=$warehouseId?$selected:$global->minus($totalAllocated);
                 $count->lines()->create([
                     'inventory_material_id' => $material->id,
-                    'expected_quantity' => (string) BigDecimal::of((string) $material->on_hand_quantity)->toScale(6),
+                    'expected_quantity' => (string) $snapshot->toScale(6),
                     'counted_quantity' => (string) $quantities[$material->id],
                     'idempotency_key' => (string) Str::uuid(),
                 ]);
@@ -85,7 +110,25 @@ class InventoryStockCountService
             foreach ($lines as $line) {
                 $material = InventoryMaterial::query()->whereKey($line->inventory_material_id)->lockForUpdate()->firstOrFail();
                 $expected = BigDecimal::of((string) $line->expected_quantity);
-                $actual = BigDecimal::of((string) $material->on_hand_quantity);
+                $global=BigDecimal::of((string)$material->on_hand_quantity);
+                $actual=$global;
+                if($locked->count_scope!=='legacy_company'){
+                    $balances=DB::table('inventory_warehouse_balances')
+                        ->where('inventory_material_id',$material->id)->lockForUpdate()->get();
+                    $allocated=BigDecimal::zero();
+                    $selected=BigDecimal::zero();
+                    foreach($balances as $balance){
+                        $allocated=$allocated->plus((string)$balance->quantity);
+                        if($locked->company_warehouse_id &&
+                            (int)$balance->company_warehouse_id===(int)$locked->company_warehouse_id){
+                            $selected=BigDecimal::of((string)$balance->quantity);
+                        }
+                    }
+                    if($allocated->isGreaterThan($global)){
+                        throw ValidationException::withMessages(['count'=>'Warehouse stock exceeds global stock for '.$material->sku.'.']);
+                    }
+                    $actual=$locked->count_scope==='warehouse'?$selected:$global->minus($allocated);
+                }
                 if (! $material->is_active || ! $actual->isEqualTo($expected)) {
                     throw ValidationException::withMessages([
                         'count' => 'Stock changed after counting material '.$material->sku.'. Record a new count using the current balance.',
@@ -106,6 +149,7 @@ class InventoryStockCountService
                     'reason' => 'Approved physical count '.$locked->number.
                         ($locked->notes ? ': '.Str::limit($locked->notes, 400) : ''),
                     'idempotency_key' => $line->idempotency_key,
+                    'company_warehouse_id'=>$locked->count_scope==='warehouse'?$locked->company_warehouse_id:null,
                 ], $user);
 
                 $line->update(['inventory_stock_adjustment_id' => $adjustment->id]);
