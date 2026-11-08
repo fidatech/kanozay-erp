@@ -32,6 +32,10 @@ class MatchedSupplierInvoiceService
             $left=BigDecimal::of((string)$line->quantity);
             foreach($billed->get($line->id,collect()) as $row)$left=$left->minus((string)$row->quantity);
             foreach($returned->get($line->id,collect()) as $row)$left=$left->minus((string)$row->quantity);
+            // A return after an invoice can make received - billed - returned
+            // negative. This indicates no further quantity can be invoiced;
+            // it must never produce a negative "bill now" allowance.
+            if($left->isNegative())$left=BigDecimal::zero();
             $remaining[$line->id]=(string)$left->toScale(6);
         }
         return $remaining;
