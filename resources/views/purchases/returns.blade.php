@@ -46,14 +46,19 @@
 <input name="quantities[{{ $line->id }}]" inputmode="decimal" value="{{ old('quantities.'.$line->id) }}" placeholder="0">
 @else<span>Fully returned</span>@endif</td></tr>@endforeach
 </tbody></table></div>
-<button type="submit" class="btn" onclick="return confirm('Post this supplier return and reduce physical stock?')">Post supplier return</button>
+<button type="submit" class="btn" onclick="return confirm('Request this supplier return? Source lots with landed freight/customs will remain in stock until independent finance approval.')">Submit supplier return</button>
 </form></section>
 @endif
 @endif
-<section class="pr-panel"><h2>Posted purchase returns</h2><div class="pr-wrap"><table><thead><tr><th>Return number</th><th>Receipt</th><th>Supplier</th><th>Return date</th><th>Financial status</th><th>Details</th></tr></thead><tbody>
+<section class="pr-panel"><h2>Supplier return requests and posted returns</h2><div class="pr-wrap"><table><thead><tr><th>Return number</th><th>Receipt</th><th>Supplier</th><th>Return date</th><th>Financial status</th><th>Details</th></tr></thead><tbody>
 @forelse($returns as $return)
 <tr><td>{{ $return->number }}</td><td>{{ $return->receipt?->number }}</td><td>{{ $return->order?->supplier?->name }}</td><td>{{ $return->returned_on?->toDateString() }}</td>
-<td><span class="status">{{ $return->financial_status==='supplier_credit_posted'?'Supplier credit posted':'Supplier credit pending' }}</span></td>
+<td><span class="status">{{ match($return->financial_status){
+  'supplier_credit_posted'=>'Supplier credit posted',
+  'landed_cost_review_pending'=>'Awaiting landed-cost GL and physical stock approval',
+  'cancelled'=>'Cancelled before physical posting',
+  default=>'Physical return posted; supplier credit pending',
+} }}</span></td>
 <td><a href="{{ route('purchases.returns.show',$return) }}">View return</a></td></tr>
 @empty<tr><td colspan="6">No purchase returns have been posted.</td></tr>@endforelse
 </tbody></table></div>{{ $returns->links() }}</section>
