@@ -57,7 +57,11 @@ class ShareholderGovernanceController extends Controller {
     ->select('a.*','s.name as shareholder_name','r.number as resolution_number',
       'r.status as resolution_status','c.code as currency_code')
     ->orderByDesc('a.id')->limit(300)->get();
-  $approvedAllocationOptions=$allocations->where('resolution_status','approved')
+  $approvedAllocationOptions=DB::table('shareholder_distribution_allocations as a')
+    ->join('shareholder_resolutions as r',
+      'r.id','=','a.shareholder_resolution_id')
+    ->where('r.status','approved')
+    ->get(['a.shareholder_resolution_id','a.shareholder_id'])
     ->map(fn($row)=>[
       'resolution'=>(int)$row->shareholder_resolution_id,
       'shareholder'=>(int)$row->shareholder_id,
