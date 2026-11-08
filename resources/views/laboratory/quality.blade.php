@@ -10,7 +10,7 @@
 .qc-note{padding:12px;background:#fff8e7;color:#765c2c;border-radius:8px;font-size:12px;line-height:1.7}
 @media(max-width:880px){.qc-form{grid-template-columns:1fr}}
 </style>
-<div class="heading"><div><h1>{{ $pageTitle }} · Laboratory QC register</h1><p>Approved test criteria, source-linked samples and independent quality decisions</p></div><a class="btn btn-light" href="{{ route('workspace.page',['manufacturing','orders']) }}">Production batches</a></div>
+<div class="heading"><div><h1>{{ $pageTitle }} · Laboratory QC register</h1><p>Approved test criteria, source-linked samples and independent quality decisions</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn btn-light" href="{{ route('inventory.quality-holds.index') }}">Incoming QC holds</a><a class="btn btn-light" href="{{ route('workspace.page',['manufacturing','orders']) }}">Production batches</a></div></div>
 @if(session('success'))<p class="notice">{{ session('success') }}</p>@endif
 @if($errors->any())<p class="notice notice-warning">{{ implode(' ',$errors->all()) }}</p>@endif
 @if($page==='specifications')
@@ -18,7 +18,11 @@
 <section class="qc-panel"><h2>Approve a versioned test specification</h2>
 <form class="qc-form" method="POST" action="{{ route('laboratory.specifications.store') }}">@csrf
 <label>Subject<select name="subject_type"><option value="material">Raw material</option><option value="finished_good">Finished good</option></select></label>
-<label>Subject ID<input type="number" name="subject_id" min="1" required placeholder="See subject references below"></label>
+<label>Subject item<select name="subject_id" id="quality-subject-id" required>
+<option value="">Select a material or finished product</option>
+@foreach($materials as $material)<option value="{{ $material->id }}" data-subject="material">{{ $material->sku }} · {{ $material->name }}</option>@endforeach
+@foreach($goods as $good)<option value="{{ $good->id }}" data-subject="finished_good">{{ $good->sku }} · {{ $good->name }}</option>@endforeach
+</select></label>
 <label>Test name<input name="test_name" maxlength="120" required></label>
 <label>Method<input name="method" maxlength="180"></label>
 <label>Test format<select name="kind"><option value="numeric">Numeric limits</option><option value="qualitative">Qualitative pass / fail</option></select></label>
@@ -43,13 +47,48 @@
 <form class="qc-form" method="POST" action="{{ route('laboratory.samples.store') }}">@csrf
 <input type="hidden" name="submission_token" value="{{ old('submission_token',(string)\Illuminate\Support\Str::uuid()) }}">
 <label>Source type<select name="source_type"><option value="finished_batch">Finished production batch</option><option value="incoming_material">Incoming goods receipt</option></select></label>
-<label>Production batch<select name="production_batch_id"><option value="">None</option>@foreach($batches as $b)<option value="{{ $b->id }}">{{ $b->batch_number }} · {{ $b->finishedGood?->name }}</option>@endforeach</select></label>
-<label>GRN line<select name="goods_receipt_line_id"><option value="">None</option>@foreach($receipts as $line)<option value="{{ $line->id }}">{{ $line->receipt?->number }} · {{ $line->material?->sku }}</option>@endforeach</select></label>
+<label>Production batch<select name="production_batch_id" id="quality-batch-id"><option value="">None</option>@foreach($batches as $b)<option value="{{ $b->id }}">{{ $b->batch_number }} · {{ $b->finishedGood?->name }}</option>@endforeach</select></label>
+<label>GRN line<select name="goods_receipt_line_id" id="quality-grn-id"><option value="">None</option>@foreach($receipts as $line)<option value="{{ $line->id }}">{{ $line->receipt?->number }} · {{ $line->material?->sku }}</option>@endforeach</select></label>
 <label>Collected on<input type="date" name="collected_on" max="{{ now()->toDateString() }}" value="{{ now()->toDateString() }}" required></label>
 <label style="grid-column:span 2">Notes<input name="notes" maxlength="2500"></label>
 <button class="btn">Register sample</button></form>
-<p class="qc-note">For finished-batch QC, select only a production batch. For incoming-material QC, select only a GRN line. Approved specifications must exist for that subject. Incoming-material results are recorded but do not yet quarantine specific inventory lots; do not issue rejected material pending warehouse reconciliation.</p></section>
+<p class="qc-note">For finished-batch QC, choose only a production batch. For incoming-material QC, choose only a posted GRN line. The current approved specification versions are frozen when the sample is registered. Pending or rejected incoming samples block that source lot in inventory and production; a separately authorized manual hold can also restrict an already approved lot.</p></section>
 @endcanany
+<script>
+document.addEventListener('DOMContentLoaded',()=>{
+ const subject=document.querySelector('select[name="subject_type"]');
+ const item=document.getElementById('quality-subject-id');
+ const source=document.querySelector('select[name="source_type"]');
+ const batch=document.getElementById('quality-batch-id');
+ const grn=document.getElementById('quality-grn-id');
+ if(subject&&item){
+  const update=()=>{
+   [...item.options].forEach(option=>{
+    if(!option.value)return;
+    const matches=option.dataset.subject===subject.value;
+    option.disabled=!matches;
+    option.hidden=!matches;
+   });
+   if(item.selectedOptions[0]?.disabled)item.value='';
+   if(window.jQuery?.fn?.select2)window.jQuery(item).trigger('change.select2');
+  };
+  subject.addEventListener('change',update);update();
+ }
+ if(source&&batch&&grn){
+  const update=()=>{
+   const incoming=source.value==='incoming_material';
+   batch.disabled=incoming;
+   grn.disabled=!incoming;
+   if(incoming)batch.value='';else grn.value='';
+   if(window.jQuery?.fn?.select2){
+    window.jQuery(batch).trigger('change.select2');
+    window.jQuery(grn).trigger('change.select2');
+   }
+  };
+  source.addEventListener('change',update);update();
+ }
+});
+</script>
 <section class="qc-panel"><h2>Sample register and outcomes</h2>
 <div class="qc-wrap"><table><thead><tr><th>Reference</th><th>Source</th><th>Collection date</th><th>Review status</th><th>Test outcomes</th><th>Record</th></tr></thead><tbody>
 @forelse($samples as $s)<tr><td>{{ $s->number }}</td>
