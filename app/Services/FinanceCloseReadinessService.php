@@ -15,6 +15,72 @@ use Illuminate\Support\Facades\DB;
  */
 class FinanceCloseReadinessService
 {
+    /**
+     * Original production-batch QC return allocations form one immutable
+     * cost-recovery subledger. This read-only audit is also used for the QC
+     * journal's own month, even if manufacturing was capitalized earlier.
+     */
+    private function historicalBatchReturnCostIsValid(object $entry,object $plan): bool
+    {
+        $qc=DB::table('sales_return_quarantines')
+            ->where('id',$entry->sales_return_quarantine_id)->first();
+        $credit=DB::table('sales_credit_note_lines')
+            ->where('id',$entry->sales_credit_note_line_id)->first();
+        $sale=DB::table('sales_invoice_lines')
+            ->where('id',$entry->sales_invoice_line_id)->first();
+        $restored=DB::table('production_return_cost_postings')
+            ->where('id',$entry->production_return_cost_posting_id)->first();
+        $source=$sale?DB::table('production_invoice_cogs_postings')
+            ->where('sales_invoice_line_id',$sale->id)->first():null;
+        $journal=DB::table('journal_entries')
+            ->where('id',$entry->journal_entry_id)->first();
+        $batchCost=DB::table('production_batch_cost_postings')
+            ->where('id',$plan->production_batch_cost_posting_id)->first();
+        $policy=$batchCost?DB::table('manufacturing_cost_ledger_policies')
+            ->where('id',$batchCost->manufacturing_cost_ledger_policy_id)->first():null;
+        if(!$qc || !$credit || !$sale || !$restored || !$source ||
+            !$journal || !$batchCost || !$policy ||
+            $qc->status!=='released' ||
+            (int)$qc->production_batch_id!==(int)$plan->production_batch_id ||
+            (int)$sale->production_batch_id!==(int)$plan->production_batch_id ||
+            (int)$credit->production_batch_id!==(int)$plan->production_batch_id ||
+            (int)$qc->sales_credit_note_line_id!==(int)$credit->id ||
+            (int)$credit->sales_invoice_line_id!==(int)$sale->id ||
+            (int)$credit->quantity_packages!==(int)$qc->quantity_packages ||
+            (int)$qc->quantity_packages!==(int)$entry->quantity_packages ||
+            (string)$qc->decided_on!==(string)$entry->original_qc_date ||
+            (int)$source->production_batch_cost_posting_id!==(int)$batchCost->id ||
+            (int)$source->id!==(int)$restored->production_invoice_cogs_posting_id ||
+            (int)$restored->sales_return_quarantine_id!==(int)$qc->id ||
+            (int)$restored->quantity_packages!==(int)$entry->quantity_packages ||
+            (int)$entry->currency_id!==(int)$batchCost->currency_id ||
+            $journal->status!=='posted' || $journal->reversal_of_id ||
+            (string)$journal->entry_date!==(string)$entry->original_qc_date ||
+            (int)$journal->currency_id!==(int)$batchCost->currency_id ||
+            (int)$restored->journal_entry_id!==(int)$entry->journal_entry_id ||
+            DB::table('journal_entries')
+                ->where('reversal_of_id',$journal->id)->exists() ||
+            !BigDecimal::of((string)$source->amount)
+                ->isEqualTo((string)$entry->original_invoiced_cogs_amount) ||
+            !BigDecimal::of((string)$restored->amount)
+                ->isEqualTo((string)$entry->original_return_cost_amount))
+            return false;
+
+        $asset=BigDecimal::zero();$cogs=BigDecimal::zero();
+        foreach(DB::table('journal_lines')
+            ->where('journal_entry_id',$journal->id)
+            ->get(['ledger_account_id','debit','credit']) as $line){
+            if((int)$line->ledger_account_id===(int)$policy->finished_inventory_ledger_id)
+                $asset=$asset->plus((string)$line->debit)->minus((string)$line->credit);
+            if((int)$line->ledger_account_id===(int)$policy->cogs_ledger_id)
+                $cogs=$cogs->plus((string)$line->debit)->minus((string)$line->credit);
+        }
+        return $asset->isEqualTo((string)$entry->original_return_cost_amount) &&
+            $cogs->isEqualTo(
+                BigDecimal::of((string)$entry->original_return_cost_amount)->negated()
+            );
+    }
+
     public function inspect(string $month):array
     {
         $start=CarbonImmutable::createFromFormat('!Y-m-d',$month.'-01');
@@ -198,6 +264,21 @@ class FinanceCloseReadinessService
         if($invalidHistoricalReturns)
             $blockers[]=$invalidHistoricalReturns.
                 ' originally QC-released historical customer return(s) have incomplete, reversed or mismatched source-currency finished-asset/COGS recovery journals.';
+        $historicBatchQCReturns=DB::table('finance_historical_batch_return_allocations as entry')
+            ->join('finance_historical_batch_capitalizations as plan',
+                'plan.id','=','entry.finance_historical_batch_capitalization_id')
+            ->where('plan.status','posted')
+            ->whereBetween('entry.original_qc_date',[$begin,$end])
+            ->select('entry.*','plan.production_batch_id',
+                'plan.production_batch_cost_posting_id')->get();
+        $invalidHistoricalBatchReturns=0;
+        foreach($historicBatchQCReturns as $returned){
+            if(!$this->historicalBatchReturnCostIsValid($returned,$returned))
+                $invalidHistoricalBatchReturns++;
+        }
+        if($invalidHistoricalBatchReturns)
+            $blockers[]=$invalidHistoricalBatchReturns.
+                ' approved historical uncapitalized-batch QC-return asset / COGS restorations fail original-currency source, quantity or journal reconciliation.';
         $orphanDispatches=DB::table('finished_good_dispatch_lines as item')
             ->join('finished_good_dispatches as dispatch',
                 'dispatch.id','=','item.finished_good_dispatch_id')
@@ -371,6 +452,18 @@ class FinanceCloseReadinessService
                 }
                 if($saleCount!==(int)$recovery->invoice_line_count ||
                     $expenseCount!==(int)$recovery->non_sale_line_count)$valid=false;
+            }
+            if($valid && $recovery->return_line_count!==null){
+                $returns=DB::table('finance_historical_batch_return_allocations')
+                    ->where('finance_historical_batch_capitalization_id',$recovery->id)
+                    ->get();
+                $valid=$returns->count()===(int)$recovery->return_line_count &&
+                    (int)$recovery->posted_return_lines===(int)$recovery->return_line_count;
+                foreach($returns as $entry){
+                    if(!$this->historicalBatchReturnCostIsValid($entry,$recovery)){
+                        $valid=false;break;
+                    }
+                }
             }
             if(!$valid)$invalidRecovery++;
         }
