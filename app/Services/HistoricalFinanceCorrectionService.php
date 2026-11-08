@@ -227,8 +227,10 @@ class HistoricalFinanceCorrectionService
             if(DB::table('finance_historical_dispatch_dispositions')
                    ->where('finance_historical_correction_case_id',$caseId)->exists() ||
                DB::table('finance_supplier_return_credit_disputes')
+                   ->where('finance_historical_correction_case_id',$caseId)->exists() ||
+               DB::table('finance_historical_batch_capitalizations')
                    ->where('finance_historical_correction_case_id',$caseId)->exists()){
-                $this->fail('This case already contains independently signed physical dispatch or supplier dispute evidence. It cannot be withdrawn without a dedicated source-document amendment workflow.');
+                $this->fail('This case already contains signed source evidence or a historical production cost backfill proposal. It cannot be withdrawn without a dedicated audited amendment workflow.');
             }
             if($case->status==='submitted'){
                 if((int)$case->requested_by!==$actorId)
