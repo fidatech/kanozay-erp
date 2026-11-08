@@ -75,7 +75,7 @@ class ProductionCostReadinessService {
         ($mixedCurrency?'Multiple source currencies; no combined cost':
          ($pending>0?'Unapproved overhead remains':
           ($batch->status!=='released'?'Batch not released':
-           ($batch->accepted_packages<1?'No accepted packages':'Material cost unavailable in source currency'))))),
+           ($batch->accepted_packages<1?'No accepted packages':'Material cost unavailable in source currency')))))),
     ]);
    }
   }
