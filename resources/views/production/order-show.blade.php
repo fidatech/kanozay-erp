@@ -26,7 +26,7 @@
  @endcan
  @endcan
  <p><strong>Material requirements (saved when the plan was created)</strong></p>
- <div class="table-wrap"><table><thead><tr><th>Material</th><th>Required</th><th>Unit</th><th>Packaging</th><th>Stock item</th><th>On hand</th><th>Available</th><th>Reserved</th><th>Issued</th><th>Rejected / waste</th><th>Availability</th></tr></thead><tbody>
+ <div class="table-wrap"><table><thead><tr><th>Material</th><th>Required</th><th>Unit</th><th>Packaging</th><th>Stock item</th><th>On hand</th><th>Available</th><th>Reserved</th><th>Issued</th><th>Issue vs plan</th><th>Rejected / waste</th><th>Availability</th></tr></thead><tbody>
  @forelse($materials as $material)
  <tr>
   <td>{{ $material['name'] }}</td><td>{{ $material['quantity'] }}</td><td>{{ $material['unit'] }}</td><td>{{ $material['packaging'] ? 'Yes' : 'No' }}</td>
@@ -49,6 +49,14 @@
    @endcan
   </td>
   <td>{{ $material['on_hand'] ?? '—' }}</td><td>{{ $material['available'] ?? '—' }}</td><td>{{ $material['reserved'] }}</td><td>{{ $material['issued'] }}</td>
+  @php($usageDiff=\Brick\Math\BigDecimal::of((string)$material['issued'])->minus((string)$material['quantity']))
+  <td>
+  @if(in_array($order->status,['issued','pending_qc','qc_approved','qc_rejected','completed'],true))
+  <span style="color:{{ $usageDiff->isPositive()?'#9d5814':($usageDiff->isNegative()?'#2168a3':'#277748') }}">
+   {{ $usageDiff->isPositive()?'+':'' }}{{ $usageDiff->toScale(6) }} {{ $material['unit'] }}
+  </span>
+  @else<span class="muted">Pending issue</span>@endif
+  </td>
   <td>{{ $material['waste'] }}
   @can('manufacturing.update')
   @if(in_array($order->status, ['issued', 'pending_qc'], true) && (float) $material['issued'] > 0)
@@ -71,7 +79,7 @@
    @else<span style="color:#08734b">Enough stock</span>@endif
   </td>
  </tr>
- @empty<tr><td colspan="11">No saved material requirements are available for this older plan. Do not use its recipe for purchasing or production without reviewing and recreating the plan.</td></tr>@endforelse
+ @empty<tr><td colspan="12">No saved material requirements are available for this older plan. Do not use its recipe for purchasing or production without reviewing and recreating the plan.</td></tr>@endforelse
  </tbody></table></div>
  @if($order->materials->sum(fn ($line) => $line->wastes->count()) > 0)
  <h3>Recorded material waste</h3>
@@ -204,6 +212,6 @@
 
  @can('inventory.view')<p><a href="{{ route('inventory.materials.index') }}">Open raw-material inventory</a></p>@endcan
  <p class="muted">Batch submission requires enough issued packaging for the reported packages according to the approved recipe. Frozen cost snapshots keep ingredient and packaging costs separately in their source currencies. </p>
- <p class="muted">Availability combines demand across lines mapped to the same stock item and excludes stock reserved by other production orders. Reserving does not consume stock. Waste quantities classify materials already issued and do not deduct stock again. Finished goods are added only after laboratory approval and a separate warehouse release. Inventory valuation and financial journals are not yet posted.</p>
+ <p class="muted">Availability combines demand across lines mapped to the same stock item and excludes stock reserved by other production orders. Reserving does not consume stock. Waste quantities classify materials already issued and do not deduct stock again. Finished goods are added only after laboratory approval and a separate warehouse release. Warehouse FIFO issues and material cost snapshots are recorded in their original currencies. Financial capitalization, COGS journals and reviewed overhead remain separate accounting workflows.</p>
 </div>
 @endsection
