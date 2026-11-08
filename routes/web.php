@@ -81,6 +81,8 @@ Route::middleware('auth')->get('/purchases/supplier-debit-notes', [\App\Http\Con
 Route::middleware('auth')->post('/purchases/supplier-debit-notes/{return}', [\App\Http\Controllers\SupplierDebitNoteController::class,'post'])->name('purchases.supplier-debit-notes.post');
 Route::middleware('auth')->post('/purchases/returns', [\App\Http\Controllers\PurchaseReturnController::class,'store'])->name('purchases.returns.store');
 Route::middleware('auth')->get('/purchases/returns/{return}', [\App\Http\Controllers\PurchaseReturnController::class,'show'])->name('purchases.returns.show');
+Route::middleware('auth')->post('/purchases/returns/{return}/landed-cost/finance-approve', [\App\Http\Controllers\PurchaseReturnController::class,'approveLanded'])->name('purchases.returns.landed-approve');
+Route::middleware('auth')->post('/purchases/returns/{return}/cancel-pending', [\App\Http\Controllers\PurchaseReturnController::class,'cancelPending'])->name('purchases.returns.cancel-pending');
 Route::middleware('auth')->post('/assets/maintenance-orders', [\App\Http\Controllers\FixedAssetLifecycleController::class,'requestService'])->name('assets.lifecycle.maintenance.store');
 Route::middleware('auth')->post('/assets/maintenance-orders/{ticket}/transition', [\App\Http\Controllers\FixedAssetLifecycleController::class,'updateService'])->whereNumber('ticket')->name('assets.lifecycle.maintenance.update');
 Route::middleware('auth')->post('/assets/{asset}/location-transfer', [\App\Http\Controllers\FixedAssetLifecycleController::class,'relocate'])->name('assets.lifecycle.transfer');
