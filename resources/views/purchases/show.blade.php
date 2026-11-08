@@ -156,7 +156,7 @@ $hasSubtotal=$subtotal->compareTo(\Brick\Math\BigDecimal::zero())>0;
 <tr><td>{{ $item->description }}</td><td>{{ $item->inventoryMaterial?->name ?? 'Not linked' }} {{ $item->inventoryMaterial?->unit }}</td>
 <td>{{ number_format((float)$item->quantity,4) }}</td><td>{{ number_format((float)$received,6) }}</td>
 <td>@if($item->inventoryMaterial && $remaining > 0)
-<input type="number" name="quantities[{{ $item->id }}]" step="0.000001" min="0.000001" max="{{ number_format($remaining,6,'.','') }}" value="{{ old('quantities.'.$item->id) }}" placeholder="Up to {{ number_format($remaining,6) }}" style="width:160px;padding:9px;border:1px solid #cddbea;border-radius:8px">
+<input type="text" inputmode="decimal" name="quantities[{{ $item->id }}]" value="{{ old('quantities.'.$item->id) }}" placeholder="Up to {{ number_format($remaining,6) }}" aria-label="Receive {{ $item->description }}" style="width:160px;padding:9px;border:1px solid #cddbea;border-radius:8px">
 @else <span class="muted">{{ $remaining <= 0 ? 'Fully received' : 'No material linked' }}</span> @endif</td></tr>
 @endforeach
 </tbody></table></div>
@@ -203,7 +203,7 @@ $hasSubtotal=$subtotal->compareTo(\Brick\Math\BigDecimal::zero())>0;
 @if(!$recordedCosts->contains('component',$value))<option value="{{ $value }}">{{ $label }}</option>@endif
 @endforeach
 </select></label>
-<label>Amount ({{ $receipt->cost_currency_code }})<input type="number" name="amount" min="0.01" step="0.01" required></label>
+<label>Amount ({{ $receipt->cost_currency_code }})<input type="text" name="amount" inputmode="decimal" placeholder="0.00" required></label>
 <label>Reference<input type="text" name="reference" maxlength="100"></label>
 <button type="submit" onclick="return confirm('Record this immutable allocation?')">Record allocation</button>
 </form>
