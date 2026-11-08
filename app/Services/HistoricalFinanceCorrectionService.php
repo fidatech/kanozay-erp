@@ -236,17 +236,46 @@ class HistoricalFinanceCorrectionService
             if($lines->isEmpty())$this->fail('Original invoice lacks source lines.');
             foreach($lines as $line){
                 $entry=DB::table('production_invoice_cogs_postings as cost')
+                    ->join('production_batch_cost_postings as cost_batch',
+                        'cost_batch.id','=','cost.production_batch_cost_posting_id')
+                    ->join('manufacturing_cost_ledger_policies as policy',
+                        'policy.id','=','cost_batch.manufacturing_cost_ledger_policy_id')
                     ->join('journal_entries as journal',
                         'journal.id','=','cost.journal_entry_id')
                     ->where('cost.sales_invoice_line_id',$line->id)
                     ->select('cost.production_batch_cost_posting_id','cost.quantity_packages',
+                        'cost.amount','cost_batch.production_batch_id',
+                        'cost_batch.currency_id as cost_currency_id',
+                        'policy.cogs_ledger_id','policy.finished_inventory_ledger_id',
                         'journal.id as journal_id','journal.status',
+                        'journal.entry_date','journal.currency_id',
                         'journal.reversal_of_id')->first();
                 if(!$entry || $entry->status!=='posted' || $entry->reversal_of_id ||
+                    (int)$entry->production_batch_id!==(int)$line->production_batch_id ||
                     (int)$entry->quantity_packages!==(int)$line->quantity_packages ||
+                    (int)$entry->currency_id!==(int)$entry->cost_currency_id ||
+                    (string)$entry->entry_date!==$source['date'] ||
                     DB::table('journal_entries')
                         ->where('reversal_of_id',$entry->journal_id)->exists()){
-                    $this->fail('Invoice cost reconciliation did not produce a valid, source-matching posted COGS journal for every original invoice line.');
+                    $this->fail('The invoice does not have a valid original-batch, original-currency, same-date COGS journal for every sale line.');
+                }
+                $cogsDebit=BigDecimal::zero();
+                $assetCredit=BigDecimal::zero();
+                foreach(DB::table('journal_lines')
+                    ->where('journal_entry_id',$entry->journal_id)
+                    ->get(['ledger_account_id','debit','credit']) as $glLine){
+                    if((int)$glLine->ledger_account_id===(int)$entry->cogs_ledger_id){
+                        $cogsDebit=$cogsDebit->plus((string)$glLine->debit)
+                            ->minus((string)$glLine->credit);
+                    }
+                    if((int)$glLine->ledger_account_id===(int)$entry->finished_inventory_ledger_id){
+                        $assetCredit=$assetCredit->plus((string)$glLine->credit)
+                            ->minus((string)$glLine->debit);
+                    }
+                }
+                if(!$cogsDebit->isEqualTo((string)$entry->amount) ||
+                    !$assetCredit->isEqualTo((string)$entry->amount)){
+                    $this->fail('Posted source-currency COGS expense and finished-stock asset journal lines do not match the immutable invoice cost.');
                 }
             }
             DB::table('finance_historical_correction_cases')->where('id',$caseId)->update([
