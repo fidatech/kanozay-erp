@@ -27,9 +27,20 @@ class FinancePeriodClosingService
    $start=\Carbon\CarbonImmutable::parse($data['period_start'])->startOfMonth();
    if($data['period_start']!==$start->format('Y-m-d'))
     throw ValidationException::withMessages(['period_start'=>'Use the first day of a calendar month.']);
-   if($start->greaterThan(\Carbon\CarbonImmutable::today()->startOfMonth()))
-    throw ValidationException::withMessages(['period_start'=>'Future months cannot be closed.']);
+   if($start->endOfMonth()->greaterThan(\Carbon\CarbonImmutable::today()))
+    throw ValidationException::withMessages(['period_start'=>'Only completed calendar months may be closed.']);
    $end=$start->addMonth();
+   $readiness=app(FinanceCloseReadinessService::class)->inspect($start->format('Y-m'));
+   if($readiness['blockers']){
+    throw ValidationException::withMessages([
+     'period_start'=>'Cannot close month: '.implode(' ',$readiness['blockers']),
+    ]);
+   }
+   if(empty($data['confirm_source_reconciliation'])){
+    throw ValidationException::withMessages([
+     'confirm_source_reconciliation'=>'Finance must confirm external bank, payroll, inventory and tax reconciliation before closing this period.',
+    ]);
+   }
    $existing=DB::table('finance_period_closures')->where('period_start',$start->format('Y-m-d'))->lockForUpdate()->first();
    if($existing && $existing->status==='closed')
     throw ValidationException::withMessages(['period_start'=>'This month is already closed.']);
