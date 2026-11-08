@@ -78,6 +78,12 @@ class JournalPostingService {
    if(DB::table('supplier_advance_applications')->where('journal_entry_id',$original->id)->exists()
    || DB::table('customer_advance_applications')->where('journal_entry_id',$original->id)->exists())
     throw ValidationException::withMessages(['status'=>'Applied customer or supplier advances require a dedicated document-level correction workflow.']);
+   if(DB::table('purchase_return_landed_cost_adjustments')
+       ->where('journal_entry_id',$original->id)->exists()){
+      throw ValidationException::withMessages([
+        'status'=>'Approved supplier-return landed-cost write-offs cannot be reversed separately from their original physical lot and supplier credit. Use a reviewed source-document correction.',
+      ]);
+   }
    if(DB::table('goods_receipt_landed_cost_postings')
         ->where('journal_entry_id',$original->id)->exists() ||
       DB::table('goods_receipt_landed_cost_postings as cost')
