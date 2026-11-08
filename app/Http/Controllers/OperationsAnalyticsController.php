@@ -32,8 +32,11 @@ class OperationsAnalyticsController extends Controller
                 fputcsv($out,['Currency','Posted invoice count','Gross posted invoice face value',
                     'Credit note count','Credit note face value']);
                 foreach($summary['currencies'] as $row){
-                    fputcsv($out,[$row['currency'],$row['invoices'],$row['invoice_total'],
-                        $row['credits'],$row['credit_total']]);
+                    fputcsv($out,[
+                        ReportCenterController::csvSafe($row['currency']),
+                        $row['invoices'],$row['invoice_total'],
+                        $row['credits'],$row['credit_total'],
+                    ]);
                 }
                 fputcsv($out,[]);
                 fputcsv($out,['Operational metric','Recorded count']);
