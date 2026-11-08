@@ -15,12 +15,20 @@
 @if(session('success'))<div class="depr-panel" style="color:#16704e">{{ session('success') }}</div>@endif
 @if($errors->any())<div class="depr-panel" style="color:#b22c25">@foreach($errors->all() as $error)<p>{{ $error }}</p>@endforeach</div>@endif
 <div class="depr-layout"><section class="depr-panel"><h2>Approved asset policies</h2>
-<p class="depr-note">Use asset acquisition currency and approved expense/contra-asset ledger accounts. Policy changes are forbidden after any depreciation posting.</p>
-<div class="table-wrap"><table><thead><tr><th>Asset</th><th>Acquisition</th><th>Currency</th><th>Life</th><th>Salvage</th><th>Ledger accounts</th></tr></thead><tbody>
+<p class="depr-note">Use asset acquisition currency and approved expense/contra-asset ledger accounts. Before posting depreciation, finance must link an exact posted, unreversed PPE acquisition debit to the asset. Policy changes are forbidden after any depreciation posting.</p>
+<div class="table-wrap"><table><thead><tr><th>Asset</th><th>Acquisition</th><th>Currency</th><th>Life</th><th>Salvage</th><th>Accumulated depreciation</th><th>Book value</th><th>GL acquisition</th><th>Ledger accounts</th></tr></thead><tbody>
 @forelse($assets as $asset)
 @php($policy=$policies->get($asset->id))
-<tr><td><a href="{{ route('assets.show',$asset) }}">{{ $asset->asset_tag }}</a><br>{{ $asset->name }}</td><td>{{ $asset->acquisition_cost }}</td><td>{{ $asset->currency?->code }}</td><td>{{ $policy?->useful_life_months??'Not configured' }}</td><td>{{ $policy?->salvage_value??'—' }}</td><td>{{ $policy?->expenseLedger?->code??'—' }} / {{ $policy?->accumulatedLedger?->code??'—' }}</td></tr>
-@empty<tr><td colspan="6">No registered assets.</td></tr>@endforelse
+<tr><td><a href="{{ route('assets.show',$asset) }}">{{ $asset->asset_tag }}</a><br>{{ $asset->name }}</td><td>{{ $asset->acquisition_cost }}</td><td>{{ $asset->currency?->code }}</td><td>{{ $policy?->useful_life_months??'Not configured' }}</td><td>{{ $policy?->salvage_value??'—' }}</td>
+<td>{{ $bookValues[$asset->id]['accumulated'] }}</td>
+<td>@if($bookValues[$asset->id]['overdepreciated'])<strong style="color:#a72323">Reconciliation mismatch</strong>
+@else{{ $bookValues[$asset->id]['book_value'] }}@endif
+@if($asset->status==='disposed')<div class="muted">Physically disposed; not active PPE</div>@endif
+</td>
+<td>@if($bookValues[$asset->id]['capitalized'])<span style="color:#176b42">Source linked</span>
+@else<a href="{{ route('assets.show',$asset) }}" style="color:#ac621e">Needs GL matching</a>@endif</td>
+<td>{{ $policy?->expenseLedger?->code??'—' }} / {{ $policy?->accumulatedLedger?->code??'—' }}</td></tr>
+@empty<tr><td colspan="9">No registered assets.</td></tr>@endforelse
 </tbody></table></div></section>
 @canany(['finance.update','administration.update'])
 <section class="depr-panel"><h2>Approve depreciation policy</h2><form method="POST" id="depr-policy" class="depr-form">@csrf
@@ -38,19 +46,19 @@
 </select></label>
 <div><button class="btn" type="submit" onclick="return this.form.action.includes('/depreciation-policy')">Approve policy</button></div>
 </form>
-<p class="depr-note">An acquisition reference is required when the asset is registered. Setting this policy does not post the asset acquisition entry; verify asset opening journals independently.</p></section>
+<p class="depr-note">An acquisition reference is required when the asset is registered. A policy may be prepared before finance links the source GL transaction, but depreciation posting will remain blocked until the original acquisition debit has been verified. No asset cost or journal is created by this reconciliation screen.</p></section>
 @endcanany
 </div>
 @canany(['finance.update','administration.update'])
 <section class="depr-panel"><h2>Post completed depreciation month</h2>
 <form method="POST" class="depr-form" id="depr-post">@csrf
 <label class="depr-field">Asset with approved policy<select required onchange="this.form.action='{{ url('/assets') }}/'+this.value+'/depreciation-post';">
-<option value="">Choose</option>@foreach($assets as $asset)@if($policies->has($asset->id) && $asset->status==='active')<option value="{{ $asset->id }}">{{ $asset->asset_tag }} {{ $asset->name }}</option>@endif @endforeach
+<option value="">Choose</option>@foreach($assets as $asset)@if($policies->has($asset->id) && $asset->status==='active' && $bookValues[$asset->id]['capitalized'])<option value="{{ $asset->id }}">{{ $asset->asset_tag }} {{ $asset->name }}</option>@endif @endforeach
 </select></label>
 <label class="depr-field">Completed month<input name="month" type="month" max="{{ now()->subMonthNoOverflow()->format('Y-m') }}" value="{{ now()->subMonthNoOverflow()->format('Y-m') }}" required></label>
 <div><button class="btn" type="submit" onclick="return this.form.action.includes('/depreciation-post')">Post to General Ledger</button></div>
 </form>
-<p class="depr-note">Months must be posted sequentially. The final month adjusts rounding so total depreciation equals acquisition cost minus salvage value. Each month posts once.</p></section>
+<p class="depr-note">Only capitalized assets with reconciled original acquisition journal debits can post. Months are posted sequentially, with final-month rounding, in the asset's original currency. Each month posts once; any reversed acquisition must be reviewed.</p></section>
 @endcanany
 <section class="depr-panel"><h2>Posted depreciation journal register</h2>
 <div class="table-wrap"><table><thead><tr><th>Asset</th><th>Period</th><th>Amount</th><th>Currency</th><th>Posted journal</th></tr></thead><tbody>
