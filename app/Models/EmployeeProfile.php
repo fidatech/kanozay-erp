@@ -8,7 +8,7 @@ class EmployeeProfile extends Model
 {
     protected $fillable = [
         'employee_number', 'full_name', 'father_name', 'gender', 'position', 'department_id',
-        'phone', 'national_id', 'taxpayer_id', 'monthly_salary', 'salary_currency_id', 'is_active', 'created_by',
+        'phone', 'national_id', 'taxpayer_id', 'monthly_salary', 'salary_currency_id', 'is_active', 'hired_on', 'separated_on', 'created_by',
     ];
 
     protected function casts(): array
@@ -21,6 +21,8 @@ class EmployeeProfile extends Model
             'taxpayer_id' => 'encrypted',
             'monthly_salary' => 'decimal:4',
             'is_active' => 'boolean',
+            'hired_on' => 'date',
+            'separated_on' => 'date',
         ];
     }
 
