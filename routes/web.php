@@ -133,6 +133,7 @@ Route::middleware('auth')->get('/finance/historical-corrections/{case}', [\App\H
 Route::middleware('auth')->post('/finance/historical-corrections/{case}/review', [\App\Http\Controllers\HistoricalFinanceCorrectionController::class,'review'])->name('finance.historical-corrections.review');
 Route::middleware('auth')->post('/finance/historical-corrections/{case}/withdraw', [\App\Http\Controllers\HistoricalFinanceCorrectionController::class,'withdraw'])->name('finance.historical-corrections.withdraw');
 Route::middleware('auth')->post('/finance/historical-corrections/{case}/execute-cogs', [\App\Http\Controllers\HistoricalFinanceCorrectionController::class,'execute'])->name('finance.historical-corrections.execute');
+Route::middleware('auth')->post('/finance/historical-corrections/{case}/value-opening-stock', [\App\Http\Controllers\HistoricalFinanceCorrectionController::class,'postOpeningStock'])->name('finance.historical-corrections.opening-post');
 Route::middleware('auth')->post('/sales/invoices/{invoice}/reconcile-cost', [\App\Http\Controllers\SalesInvoiceController::class, 'reconcileCOGS'])->name('sales.invoices.cogs.reconcile');
 Route::middleware('auth')->get('/sales/return-quarantine', [\App\Http\Controllers\SalesReturnQuarantineController::class,'index'])->name('sales.returns.quarantine.index');
 Route::middleware('auth')->post('/sales/return-quarantine/{quarantine}/decision', [\App\Http\Controllers\SalesReturnQuarantineController::class,'decision'])->name('sales.returns.quarantine.decision');
