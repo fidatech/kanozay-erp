@@ -42,8 +42,12 @@ class SalesCreditNoteService
                 if ($quantity < 1 || $alreadyReturned + $quantity > $line->quantity_packages) $this->reject('Return quantity exceeds the uninvolved quantity on an invoice line.');
                 $amount = BigDecimal::of((string) $line->unit_price)->multipliedBy((string) $quantity)->toScale(4, RoundingMode::HalfUp);
                 $total = $total->plus($amount);
-                $prepared[] = [$line, $quantity, $amount, filter_var($input['restock'] ?? false, FILTER_VALIDATE_BOOLEAN),
-                    $input['company_warehouse_id']??null];
+                // Customer returns must enter QC quarantine on receipt. An
+                // invoice-credit form cannot certify physical saleability.
+                if(filter_var($input['restock'] ?? false,FILTER_VALIDATE_BOOLEAN)){
+                    $this->reject('Customer returns require quarantine and independent QC release. Direct restock is not permitted.');
+                }
+                $prepared[] = [$line, $quantity, $amount, $input['company_warehouse_id']??null];
             }
             if(!$total->isGreaterThan(0))$this->reject('Return value must be positive.');
             if($remainingBalance->isLessThan(0))$this->reject('Invoice settlement is inconsistent; reconcile payments and previous credits first.');
@@ -85,31 +89,21 @@ class SalesCreditNoteService
                 'journal_entry_id' => $journal->id, 'credit_date' => $data['credit_date'], 'reason' => $data['reason'],
                 'currency_code' => $invoice->currency_code, 'total' => (string) $total->toScale(4, RoundingMode::HalfUp), 'created_by' => $actorId,
             ]);
-            foreach ($prepared as [$line, $quantity, $amount, $restock, $returnWarehouse]) {
+            foreach ($prepared as [$line, $quantity, $amount, $returnWarehouse]) {
                 $returnLine=$note->lines()->create([
                     'sales_invoice_line_id' => $line->id, 'finished_good_id' => $line->finished_good_id,
                     'production_batch_id' => $line->production_batch_id, 'quantity_packages' => $quantity,
-                    'unit_price' => $line->unit_price, 'line_total' => (string) $amount, 'restocked' => $restock,
+                    'unit_price' => $line->unit_price, 'line_total' => (string) $amount,
+                    'restocked' => false,
                     'company_warehouse_id'=>$returnWarehouse,
                 ]);
-                if(!$restock){
-                    \App\Models\SalesReturnQuarantine::create([
-                        'sales_credit_note_line_id'=>$returnLine->id,
-                        'production_batch_id'=>$line->production_batch_id,
-                        'received_warehouse_id'=>$returnWarehouse,
-                        'quantity_packages'=>$quantity,'status'=>'quarantined',
-                        'registered_by'=>$actorId,
-                    ]);
-                }
-                if ($restock) {
-                    $batch = \App\Models\ProductionBatch::query()->lockForUpdate()->findOrFail($line->production_batch_id);
-                    app(FinishedGoodLotControlService::class)->assertDispatchAllowed($batch,$data['credit_date']);
-                    app(FinishedGoodWarehouseService::class)->restock(
-                        $batch,$returnWarehouse,$quantity,$data['credit_date'],$number,$actorId
-                    );
-                    $good = \App\Models\FinishedGood::query()->lockForUpdate()->findOrFail($line->finished_good_id);
-                    $good->forceFill(['on_hand_packages' => $good->on_hand_packages + $quantity])->save();
-                }
+                \App\Models\SalesReturnQuarantine::create([
+                    'sales_credit_note_line_id'=>$returnLine->id,
+                    'production_batch_id'=>$line->production_batch_id,
+                    'received_warehouse_id'=>$returnWarehouse,
+                    'quantity_packages'=>$quantity,'status'=>'quarantined',
+                    'registered_by'=>$actorId,
+                ]);
             }
             // The original invoice receivable is reduced only by its unpaid
             // remainder; reimbursement of amounts already paid is recorded
