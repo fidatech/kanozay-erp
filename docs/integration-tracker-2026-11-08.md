@@ -221,6 +221,12 @@ The Historical Financial Correction Center now also supports independent **nonpo
 
 **Status: source code committed; full retrospective valuation / dispatch / supplier-credit posting not completed or verified.** All migrations, automated tests, syntax lint, MySQL checks, browser UAT and deployment remain intentionally deferred.
 
+## Original-currency supplier short-credit financial settlement
+
+Added `finance_supplier_short_credit_settlements` and a source-validated financial service for **posted, matched original supplier invoices**. A separate proposer submits the accepted supplier credit and independent claim/loss account; a different reviewer authorizes the treatment; a distinct executor posts one original-currency entry. It debits only the actual supplier credit to the original payable and separately recognized supplier claim or nonrecoverable loss, and credits the full source-priced returned inventory base. Zero-credit supplier refusals are supported without creating false payable credits. It rechecks source GRN lines, original invoice price, posted unreversed GL, payable residual, recognized-account eligibility, open accounting period and uniqueness before posting. The historical physical return remains unchanged, and the system prevents independent reversal of the resulting GL journal.
+
+[Supplier Short-Credit Financial Recognition](supplier-short-credit-recognition-2026-11-08.md) records controls and scope. **Development only, not verified.** Outstanding: historical standalone dispatch GL corrections, consumed opening FIFO stock valuations, approved dispute amendment path, financial close/audit coverage, full translations and release verification. As instructed, migrations/tests/lint/UAT/deployment are deferred.
+
 ## Acceptance and release gates
 
 1. Passing SQLite feature suite and isolated regression suite on the latest commit.
