@@ -18,6 +18,35 @@ $hasSubtotal=$subtotal->compareTo(\Brick\Math\BigDecimal::zero())>0;
 @if($errors->any())<div class="po-error"><ul>@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
 <div class="panel"><h2>Purchase Details</h2><p><strong>Supplier:</strong> {{ $order->supplier?->name }} &nbsp; <strong>Currency:</strong> {{ $currency }} &nbsp; <strong>Expected delivery:</strong> {{ $order->expected_date ?? 'Not specified' }}</p><p>{{ $order->notes }}</p></div>
 @if($order->status==='draft')
+@canany(['administration.update','purchases.update'])
+<div class="panel"><h2>Edit draft purchase order</h2>
+<p class="muted">Supplier and currency remain locked to the original draft. Review quantities, prices and material links before confirming.</p>
+<form method="POST" action="{{ route('purchases.orders.update',$order) }}" class="po-form">@csrf @method('PATCH')
+<label>Source<select name="source" required>
+<option value="local" @selected($order->source==='local')>Local</option>
+<option value="foreign" @selected($order->source==='foreign')>Foreign</option>
+</select></label>
+<label>Order date<input type="date" name="order_date" value="{{ old('order_date',$order->order_date) }}" required></label>
+<label>Expected delivery<input type="date" name="expected_date" value="{{ old('expected_date',$order->expected_date) }}"></label>
+<label>Notes<input name="notes" maxlength="3000" value="{{ old('notes',$order->notes) }}"></label>
+<button type="submit" class="btn">Save draft changes</button>
+</form></div>
+@endcanany
+@endif
+@if(in_array($order->status,['draft','confirmed'],true))
+@canany(['administration.update','purchases.update'])
+<div class="panel">
+ <h2>Cancel an unreceived order</h2>
+ <form method="POST" action="{{ route('purchases.orders.cancel',$order) }}" style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">
+ @csrf
+ <label style="flex:1;min-width:240px">Cancellation reason<input type="text" name="reason" minlength="10" maxlength="1000" required placeholder="Reason for cancellation" style="width:100%;padding:10px;border:1px solid #d0ddeb;border-radius:8px"></label>
+ <button type="submit" class="btn btn-light" onclick="return confirm('Cancel this purchase order? Posted receipts and financial advances prevent cancellation.')">Cancel order</button>
+ </form>
+</div>
+@endcanany
+@endif
+
+@if($order->status==='draft')
 @can('purchases.update')
 <form method="POST" action="{{ route('purchases.orders.confirm',$order) }}" style="margin:12px 0">@csrf
 <button type="submit" class="btn" onclick="return confirm('Confirm this purchase order? Material links and purchase details will be locked.')">Confirm purchase order</button>
@@ -30,20 +59,56 @@ $hasSubtotal=$subtotal->compareTo(\Brick\Math\BigDecimal::zero())>0;
 <div class="po-card"><small>Estimated landed cost</small><strong><x-finance-amount :amount="$landed" /> {{ $currency }}</strong></div>
 <div class="po-card"><small>Supplier balance (unposted)</small><strong><x-finance-amount :amount="$balance" /> {{ $currency }}</strong></div>
 </div>
-<div class="panel"><h2>Items and Estimated Landed Cost</h2><div class="table-wrap"><table><thead><tr><th>Description</th><th>Inventory material</th><th>Quantity</th><th>Unit Price</th><th>Line Total</th><th>Allocated Expenses</th><th>Estimated Landed Total</th></tr></thead><tbody>
+<div class="panel"><h2>Items and Estimated Landed Cost</h2><div class="table-wrap"><table>
+<thead><tr><th>Description</th><th>Inventory material</th><th>Quantity</th><th>Unit Price</th><th>Line Total</th><th>Allocated Expenses</th><th>Estimated Landed Total</th><th>Actions</th></tr></thead>
+<tbody>
 @foreach($order->items as $item)
 @php($line=\Brick\Math\BigDecimal::of((string)$item->quantity)->multipliedBy((string)$item->unit_price)->toScale(4,\Brick\Math\RoundingMode::HalfUp))
 @php($allocated=$hasSubtotal ? $expenses->multipliedBy($line)->dividedBy($subtotal,4,\Brick\Math\RoundingMode::HalfUp) : \Brick\Math\BigDecimal::zero())
-<tr><td>{{ $item->description }}</td><td>
-@if($order->status==='draft')
-@can('purchases.update')
-<form method="POST" action="{{ route('purchases.orders.items.link',[$order,$item]) }}" style="display:flex;gap:6px;align-items:center">@csrf @method('PATCH')
-<select name="inventory_material_id" aria-label="Inventory material for {{ $item->description }}" style="min-width:160px;padding:8px;border:1px solid #cddbea;border-radius:7px"><option value="">Not linked</option>@foreach($materials as $material)<option value="{{ $material->id }}" @selected($item->inventory_material_id==$material->id)>{{ $material->sku }} · {{ $material->name }} ({{ $material->unit }})</option>@endforeach</select><button class="btn" type="submit">Save</button></form>
-@else {{ $item->inventoryMaterial?->name ?? 'Not linked' }} @endcan
-@else {{ $item->inventoryMaterial?->name ?? 'Not linked' }} {{ $item->inventoryMaterial ? '('.$item->inventoryMaterial->unit.')' : '' }} @endif
-</td><td>{{ number_format((float)$item->quantity,4) }}</td><td><x-finance-amount :amount="$item->unit_price" /></td><td><x-finance-amount :amount="$line" /></td><td>{{ $hasSubtotal ? '' : 'Pending' }}@if($hasSubtotal)<x-finance-amount :amount="$allocated" />@endif</td><td>{{ $hasSubtotal ? '' : 'Pending' }}@if($hasSubtotal)<x-finance-amount :amount="$line->plus($allocated)" />@endif</td></tr>
+<tr>
+@if($order->status==='draft' && auth()->user()->canAny(['administration.update','purchases.update']))
+<td><form id="po-edit-{{ $item->id }}" method="POST" action="{{ route('purchases.orders.items.update',[$order,$item]) }}">@csrf @method('PATCH')</form>
+<input name="description" form="po-edit-{{ $item->id }}" value="{{ $item->description }}" maxlength="255" required aria-label="Item description" style="min-width:150px;width:100%;padding:8px;border:1px solid #d0ddeb;border-radius:7px">
+</td>
+<td><select name="inventory_material_id" form="po-edit-{{ $item->id }}" required aria-label="Inventory material for {{ $item->description }}" style="min-width:160px;width:100%;padding:8px;border:1px solid #d0ddeb;border-radius:7px">
+<option value="">Select material</option>
+@foreach($materials as $material)<option value="{{ $material->id }}" @selected($item->inventory_material_id==$material->id)>{{ $material->sku }} · {{ $material->name }} ({{ $material->unit }})</option>@endforeach
+</select></td>
+<td><input name="quantity" form="po-edit-{{ $item->id }}" value="{{ $item->quantity }}" type="text" inputmode="decimal" required aria-label="Order quantity" style="width:115px;padding:8px;border:1px solid #d0ddeb;border-radius:7px"></td>
+<td><input name="unit_price" form="po-edit-{{ $item->id }}" value="{{ $item->unit_price }}" type="text" inputmode="decimal" required aria-label="Unit price" style="width:115px;padding:8px;border:1px solid #d0ddeb;border-radius:7px"></td>
+@else
+<td>{{ $item->description }}</td><td>{{ $item->inventoryMaterial?->name ?? 'Not linked' }}</td>
+<td>{{ number_format((float)$item->quantity,4) }}</td><td><x-finance-amount :amount="$item->unit_price" /></td>
+@endif
+<td><x-finance-amount :amount="$line" /></td>
+<td>{{ $hasSubtotal ? '' : 'Pending' }}@if($hasSubtotal)<x-finance-amount :amount="$allocated" />@endif</td>
+<td>{{ $hasSubtotal ? '' : 'Pending' }}@if($hasSubtotal)<x-finance-amount :amount="$line->plus($allocated)" />@endif</td>
+<td>
+@if($order->status==='draft' && auth()->user()->canAny(['administration.update','purchases.update']))
+<button type="submit" form="po-edit-{{ $item->id }}" class="btn" style="margin-bottom:6px">Save</button>
+<form method="POST" action="{{ route('purchases.orders.items.destroy',[$order,$item]) }}">@csrf @method('DELETE')
+<button type="submit" class="btn btn-light" onclick="return confirm('Remove this unused draft line?')">Remove</button></form>
+@else<span class="muted">Locked</span>@endif
+</td></tr>
 @endforeach
-</tbody><tfoot><tr><th colspan="4">Total ({{ $currency }})</th><th><x-finance-amount :amount="$subtotal" /></th><th>{{ $hasSubtotal ? '' : 'Pending' }}@if($hasSubtotal)<x-finance-amount :amount="$expenses" />@endif</th><th>{{ $hasSubtotal ? '' : 'Pending' }}@if($hasSubtotal)<x-finance-amount :amount="$landed" />@endif</th></tr></tfoot></table></div>
+</tbody><tfoot><tr><th colspan="4">Total ({{ $currency }})</th>
+<th><x-finance-amount :amount="$subtotal" /></th>
+<th>{{ $hasSubtotal ? '' : 'Pending' }}@if($hasSubtotal)<x-finance-amount :amount="$expenses" />@endif</th>
+<th>{{ $hasSubtotal ? '' : 'Pending' }}@if($hasSubtotal)<x-finance-amount :amount="$landed" />@endif</th><th></th></tr></tfoot>
+</table></div>
+@if($order->status==='draft')
+@canany(['administration.update','purchases.update'])
+<h3>Add a purchase item</h3>
+<form method="POST" action="{{ route('purchases.orders.items.store',$order) }}" class="po-form">@csrf
+<label>Item description<input name="description" maxlength="255" required></label>
+<label>Inventory material<select name="inventory_material_id" required><option value="">Select material</option>
+@foreach($materials as $material)<option value="{{ $material->id }}">{{ $material->sku }} — {{ $material->name }} ({{ $material->unit }})</option>@endforeach</select></label>
+<label>Quantity<input name="quantity" type="text" inputmode="decimal" required placeholder="0.0000"></label>
+<label>Unit price ({{ $currency }})<input name="unit_price" type="text" inputmode="decimal" required placeholder="0.0000"></label>
+<button type="submit" class="btn">Add item</button>
+</form>
+@endcanany
+@endif
 <p class="muted">Estimated expenses are allocated proportionally by item value. Expense allocation is an estimate only. Goods receipts post stock quantities and preserve purchase-value snapshots without inventory valuation or finance entries. Zero-value orders cannot be allocated.</p></div>
 <div class="panel">
 <h2>Goods Received Notes</h2>
