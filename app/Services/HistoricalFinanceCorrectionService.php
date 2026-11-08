@@ -8,10 +8,11 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Review and audit historic source discrepancies without inventing missing
- * inventory value or rewriting old documents. Automatic correction is
- * intentionally limited to COGS for a posted invoice already backed by
- * prior approved finished-goods capitalization and exact dispatch evidence.
+ * Review and audit historical source discrepancies without fabricating
+ * inventory, replacing customer credit notes or rewriting old documents.
+ * Every money-changing correction has a dedicated original-source,
+ * independently approved accounting executor; quarantine holds are
+ * documentary only, and scrapped returns never create saleable inventory.
  */
 class HistoricalFinanceCorrectionService
 {
