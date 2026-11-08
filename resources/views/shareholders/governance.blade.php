@@ -42,9 +42,43 @@
 <label>Notes<input name="notes" maxlength="5000"></label>
 <button class="btn" type="submit">Register draft resolution</button></form>
 </section>@endcanany
+<section class="sh-panel">
+<h2>Document each recipient's distribution entitlement</h2>
+<p class="sh-note">Before independently approving a distribution resolution, assign an explicit board-referenced amount to each authorized recipient. Entitlements are in the resolution's original currency, are immutable after approval and cannot exceed the total authorized ceiling. Ownership percentages and contributions do not automatically set profit entitlements.</p>
+@canany(['shareholders.update','administration.update'])
+<form method="POST" action="{{ route('shareholders.governance.allocations') }}" class="sh-form">
+@csrf
+<label>Draft distribution resolution<select name="shareholder_resolution_id" required>
+<option value="">Choose signed draft resolution</option>
+@foreach($resolutions as $resolution)
+@if($resolution->purpose==='distribution' && $resolution->status==='draft')
+<option value="{{ $resolution->id }}">{{ $resolution->number }} · Total ceiling {{ $resolution->distribution_cap }} · Currency #{{ $resolution->currency_id }}</option>
+@endif
+@endforeach
+</select></label>
+<label>Authorized shareholder<select name="shareholder_id" required>
+<option value="">Choose recipient</option>
+@foreach($shareholders as $party)<option value="{{ $party->id }}">{{ $party->name }}</option>@endforeach
+</select></label>
+<label>Recipient's approved amount<input name="authorized_amount" inputmode="decimal" required placeholder="0.0000"></label>
+<label>Signed allocation reference<input name="approval_reference" required minlength="4" maxlength="180" placeholder="Board resolution / allocation schedule"></label>
+<button class="btn" type="submit">Save recipient entitlement</button>
+</form>
+@endcanany
+<div class="sh-wrap"><table><thead><tr><th>Board resolution</th><th>Recipient</th><th>Currency</th><th>Authorized ceiling</th><th>Status</th><th>Reference</th></tr></thead><tbody>
+@forelse($allocations as $allocation)
+<tr><td>{{ $allocation->resolution_number }}</td><td>{{ $allocation->shareholder_name }}</td>
+<td>{{ $allocation->currency_code }}</td><td>{{ $allocation->authorized_amount }}</td>
+<td>{{ ucfirst($allocation->resolution_status) }}</td><td>{{ $allocation->approval_reference }}</td></tr>
+@empty<tr><td colspan="6">No recipient distribution entitlements have been recorded.</td></tr>@endforelse
+</tbody></table></div>
+</section>
 <section class="sh-panel"><h2>Board resolution register</h2><div class="sh-wrap"><table><thead><tr><th>Resolution</th><th>Purpose</th><th>Date</th><th>Distribution ceiling</th><th>Status</th><th>Independent review</th></tr></thead><tbody>
 @forelse($resolutions as $r)<tr><td>{{ $r->number }}<br>{{ $r->title }}</td><td>{{ ucfirst($r->purpose) }}</td><td>{{ $r->resolution_on }}</td><td>{{ $r->distribution_cap?:'—' }}</td><td>{{ ucfirst($r->status) }}</td><td>
 @if($r->status==='draft')
+@if($r->purpose==='distribution')
+<div class="muted" style="margin-bottom:5px">{{ $allocations->where('shareholder_resolution_id',$r->id)->count() }} recipient entitlement(s) recorded</div>
+@endif
 @canany(['shareholders.update','administration.update'])
 <form method="POST" action="{{ route('shareholders.governance.decide',$r->id) }}" style="display:flex;gap:5px">@csrf
 <button name="decision" value="approved" class="btn btn-secondary">Approve</button>
@@ -55,7 +89,7 @@
 </tbody></table></div></section>
 @else
 <section class="sh-panel"><h2>Approved profit distribution</h2>
-<p class="sh-note">A distribution requires an independently approved resolution and actual posted retained earnings (ledger 3200) in the payout currency. Aggregate payments cannot exceed the resolution ceiling. Shareholder drawings are recorded separately; a distribution does not assume ownership-based entitlement.</p>
+<p class="sh-note">A distribution requires an independently approved board resolution, a specific signed entitlement for this recipient, and actual posted retained earnings (ledger 3200) in the payout currency as of the payment date. Neither total payments nor individual recipient payments may exceed their approved ceilings. Owner drawings are separate from profit distributions. No currency conversion or assumed ownership-based entitlement is applied.</p>
 @canany(['shareholders.update','administration.update'])
 @if(auth()->user()->canAny(['finance.update','administration.update']))
 <form method="POST" class="sh-form" action="{{ route('shareholders.governance.distribute') }}">@csrf
@@ -69,6 +103,14 @@
 <button class="btn" type="submit" onclick="return confirm('Post approved distribution against retained earnings and cash ledger?')">Pay approved distribution</button>
 </form>@endif
 @endcanany</section>
+<section class="sh-panel"><h2>Approved payee entitlements</h2>
+<div class="sh-wrap"><table><thead><tr><th>Resolution</th><th>Shareholder</th><th>Authorized amount</th><th>Currency</th><th>Approval evidence</th></tr></thead><tbody>
+@forelse($allocations->where('resolution_status','approved') as $allocation)
+<tr><td>{{ $allocation->resolution_number }}</td><td>{{ $allocation->shareholder_name }}</td>
+<td>{{ $allocation->authorized_amount }}</td><td>{{ $allocation->currency_code }}</td>
+<td>{{ $allocation->approval_reference }}</td></tr>
+@empty<tr><td colspan="5">No approved individual distribution entitlements. Approve the allocation schedule and resolution before any payouts.</td></tr>@endforelse
+</tbody></table></div></section>
 <section class="sh-panel"><h2>Posted profit distributions</h2><div class="sh-wrap"><table><thead><tr><th>Shareholder</th><th>Resolution</th><th>Payment date</th><th>Amount</th><th>GL journal</th></tr></thead><tbody>
 @forelse($distributions as $d)<tr><td>{{ $d->shareholder_name }}</td><td>{{ $d->resolution_number }}</td><td>{{ $d->paid_on }}</td><td>{{ $d->amount }} {{ $d->currency_code }}</td><td>Journal #{{ $d->journal_entry_id }}</td></tr>
 @empty<tr><td colspan="5">No approved profit distributions posted.</td></tr>@endforelse
