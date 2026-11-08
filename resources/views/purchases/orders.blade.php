@@ -9,6 +9,7 @@
 @if($errors->any())<div class="po-alert"><strong>Please correct the following:</strong><ul>@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
 <section class="po-card"><div class="po-card-head"><h2><i class="fa-solid fa-file-circle-plus"></i> New Purchase Order</h2><span class="po-muted">Step 1 · Purchase information</span></div>
 <form method="POST" id="po-form" action="{{ route('purchases.orders.store') }}">@csrf
+<input type="hidden" name="submission_token" value="{{ old('submission_token',(string)\Illuminate\Support\Str::uuid()) }}">
 <div class="po-fields">
 <div class="po-field"><label>PO number · automatic</label><input readonly value="{{ $nextNumber }}" aria-label="Automatic purchase order number"><div class="po-help">Final number assigned securely when saved</div></div>
 <div class="po-field"><label>Purchase type</label><select name="source" required><option value="local" @selected(old('source')==='local')>Local purchase</option><option value="foreign" @selected(old('source')==='foreign')>Foreign / import purchase</option></select></div>
