@@ -268,22 +268,53 @@ class FinishedGoodsCostPostingService
     }
 
     public function postReturnRecovery(SalesReturnQuarantine $quarantine,string $date,int $actorId,
-        ?int $historicalCaseId=null):object
+        ?int $historicalCaseId=null,?int $historicalBatchPlanId=null):object
     {
-        return DB::transaction(function()use($quarantine,$date,$actorId,$historicalCaseId){
+        return DB::transaction(function()use($quarantine,$date,$actorId,$historicalCaseId,$historicalBatchPlanId){
             $record=SalesReturnQuarantine::whereKey($quarantine->id)
                 ->lockForUpdate()->firstOrFail();
             $previous=DB::table('production_return_cost_postings')
                 ->where('sales_return_quarantine_id',$record->id)->first();
+            if($historicalCaseId!==null && $historicalBatchPlanId!==null)
+                $this->reject('Only one independently approved historical source can authorize a return-cost restoration.');
             if($previous){
-                if($historicalCaseId!==null)
+                if($historicalCaseId!==null || $historicalBatchPlanId!==null)
                     $this->reject('A historical QC return already has an original-currency COGS recovery journal.');
                 return $previous;
             }
-            if($historicalCaseId===null){
+            if($historicalCaseId===null && $historicalBatchPlanId===null){
                 if($record->status!=='quarantined'){
                     $this->reject('Only a quarantined return awaiting independent QC release can restore inventory cost.');
                 }
+            }elseif($historicalBatchPlanId!==null){
+                $batchPlan=DB::table('finance_historical_batch_capitalizations')
+                    ->where('id',$historicalBatchPlanId)
+                    ->where('production_batch_id',$record->production_batch_id)
+                    ->lockForUpdate()->first();
+                $allocation=DB::table('finance_historical_batch_return_allocations')
+                    ->where('finance_historical_batch_capitalization_id',$historicalBatchPlanId)
+                    ->where('sales_return_quarantine_id',$record->id)
+                    ->lockForUpdate()->first();
+                $batchCase=$batchPlan?DB::table('finance_historical_correction_cases')
+                    ->where('id',$batchPlan->finance_historical_correction_case_id)
+                    ->first():null;
+                if(!$batchPlan || !$allocation || !$batchCase ||
+                    $batchPlan->status!=='posting' ||
+                    $batchCase->status!=='approved' ||
+                    $batchCase->case_type!=='batch_uncapitalized' ||
+                    $allocation->production_return_cost_posting_id!==null ||
+                    $allocation->journal_entry_id!==null ||
+                    (int)$allocation->quantity_packages!==(int)$record->quantity_packages ||
+                    (int)$allocation->currency_id!==(int)$batchPlan->currency_id ||
+                    (string)$allocation->original_qc_date!==(string)$date ||
+                    $record->status!=='released' || !$record->decided_on ||
+                    (string)$record->decided_on->format('Y-m-d')!==(string)$date ||
+                    in_array($actorId,[
+                        (int)$record->registered_by,(int)$record->decided_by,
+                        (int)$batchCase->requested_by,(int)$batchCase->reviewed_by,
+                        (int)$batchPlan->submitted_by,(int)$batchPlan->approved_by,
+                    ],true))
+                    $this->reject('Original released customer-return COGS may be restored only by an actively executing, independently approved and unchanged manufacturing batch source plan.');
             }else{
                 // The historic released-product exception is never available
                 // to ordinary sales or QC forms. It requires the dedicated
