@@ -126,6 +126,65 @@ Post verified opening-stock valuation</button>
 </form>
 </section>
 @endif
+@if($case->case_type==='supplier_return_unreconciled')
+<section class="hfcs-card">
+<h2>Original supplier physical return and credit discrepancy</h2>
+<p class="muted">Physical return quantities and original supplier unit-price snapshots are the only source of base purchase value. Freight/customs allocations and external supplier claims are separate. No disputed amount is automatically recognized as a receivable, expense or payable reduction.</p>
+<div style="overflow-x:auto"><table style="width:100%;min-width:650px">
+<thead><tr><th>Original GRN line</th><th>Returned quantity</th><th>Unit purchase price</th><th>Original base-credit value</th></tr></thead>
+<tbody>
+@forelse($supplierReturnLines as $line)
+<tr><td>#{{ $line->goods_receipt_line_id }}</td>
+<td>{{ $line->quantity }}</td><td>{{ $line->unit_price_snapshot??'Unverified' }}</td>
+<td>{{ $line->supplier_credit_value_snapshot??'Unverified' }} {{ $supplierCreditCurrency }}</td></tr>
+@empty<tr><td colspan="4">Original supplier return lacks line evidence.</td></tr>@endforelse
+</tbody></table></div>
+@if($supplierDispute)
+<h3>Independently reviewed short credit</h3>
+<div class="hfcs-grid">
+<div><small>Source-priced returned base value</small><div>{{ $supplierDispute->source_base_return_value }} {{ $supplierCreditCurrency }}</div></div>
+<div><small>Supplier-offered credit</small><div>{{ $supplierDispute->supplier_offered_credit }} {{ $supplierCreditCurrency }}</div></div>
+<div><small>Unresolved original-currency difference</small><div><strong>{{ $supplierDispute->unresolved_difference }} {{ $supplierCreditCurrency }}</strong></div></div>
+<div><small>Evidence document</small><div>{{ $supplierDispute->supplier_document_reference }}</div></div>
+<div><small>Proposed treatment</small><div>{{ str_replace('_',' ',ucfirst($supplierDispute->requested_treatment)) }}</div></div>
+<div><small>Independent reviewer</small><div>#{{ $supplierDispute->reviewed_by }}</div></div>
+</div>
+<p style="white-space:pre-wrap">{{ $supplierDispute->source_evidence }}</p>
+<p><strong>Required accounting action:</strong></p><p style="white-space:pre-wrap">{{ $supplierDispute->remaining_approval_action }}</p>
+<p class="hfcs-alert">The original return remains awaiting a fully reconciled supplier debit note or a separately approved disputed-value accounting procedure. This document does not book an enforceable supplier claim or expense and does not resolve the financial correction case.</p>
+@elseif($case->status==='approved' &&
+ (auth()->user()->can('finance.update') || auth()->user()->can('administration.update')) &&
+ (int)$case->requested_by!==auth()->id())
+<h3>Document independently reviewed supplier short-credit evidence</h3>
+<p class="hfcs-alert">A supplier credit below the verified returned base purchase value leaves a difference requiring approved receivable, loss or offset treatment. This form records the original supplier offer only; it does not write GL or customer/supplier books. The normal supplier debit-note service continues requiring a fully reconciled base-value credit.</p>
+<form method="POST" action="{{ route('finance.historical-corrections.supplier-credit-dispute',$case->id) }}" class="hfcs-form">
+@csrf
+<label>Supplier offered original-currency credit ({{ $supplierCreditCurrency }})
+<input name="supplier_offered_credit" type="text" inputmode="decimal" required value="{{ old('supplier_offered_credit','0') }}" placeholder="0.0000"></label>
+<label>Proposed next accounting review
+<select name="requested_treatment" required>
+<option value="">Select independently evidenced follow-up</option>
+<option value="supplier_claim_pending">Supplier reimbursement/claim review required</option>
+<option value="potential_nonrecoverable_loss">Potential nonrecoverable loss requiring approval</option>
+<option value="unresolved">Supplier evidence remains incomplete</option>
+</select></label>
+<label>Supplier's actual credit document / correspondence reference
+<input name="supplier_document_reference" required minlength="4" maxlength="180"></label>
+<label>Independent supporting source evidence
+<textarea name="source_evidence" required minlength="30" maxlength="5000" rows="4"
+ placeholder="Identify original GRN, returned physical quantities, actual supplier offered credit and signed supporting correspondence."></textarea></label>
+<label>Outstanding payable / receivable / loss approval action
+<textarea name="remaining_approval_action" required minlength="30" maxlength="5000" rows="4"
+ placeholder="Describe which source-backed accounting documents and authorization must still be obtained. Do not guess recoverability."></textarea></label>
+<label style="display:flex;align-items:center;gap:8px">
+<input type="checkbox" name="confirm_review_only" value="1" required style="width:auto">
+This records a disputed supplier proposal only; it does not recognize a claim, expense, inventory asset or payable credit.
+</label>
+<button class="btn" type="submit" onclick="return confirm('Document this source-priced supplier dispute without posting any financial transaction?')">Record supplier short-credit review</button>
+</form>
+@endif
+</section>
+@endif
 @if($case->case_type==='standalone_dispatch')
 <section class="hfcs-card">
 <h2>Recorded physical dispatch and source-batch cost evidence</h2>
