@@ -99,6 +99,7 @@ class FixedAssetLifecycleController extends Controller
     public function updateService(Request $request,int $ticket)
     {
         $this->guard($request,true);
+        $request->merge(['actual_cost'=>\App\Support\LocalizedDecimal::normalize($request->input('actual_cost'))]);
         $data=$request->validate([
             'status'=>['required',Rule::in(['scheduled','in_progress','completed','cancelled'])],
             'planned_on'=>['nullable','date'],
@@ -183,6 +184,7 @@ class FixedAssetLifecycleController extends Controller
     public function dispose(Request $request,FixedAsset $asset)
     {
         $this->guard($request,true,true);
+        $request->merge(['proceeds'=>\App\Support\LocalizedDecimal::normalize($request->input('proceeds'))]);
         $data=$request->validate([
             'disposed_on'=>['required','date','before_or_equal:today'],
             'method'=>['required',Rule::in(['sale','scrap','donation','write_off'])],
