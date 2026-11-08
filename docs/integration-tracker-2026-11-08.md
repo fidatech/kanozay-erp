@@ -211,6 +211,16 @@ Non-COGS correction types remain investigation-only until separate, independentl
 
 **Status: source implementation committed, not production verified.** All migration execution, tests, lint, browser/MySQL UAT and final release packaging remain deferred at user instruction.
 
+## Source-backed legacy opening FIFO valuation and historical dispatch/supplier dispute review
+
+Added a restricted `finance_opening_fifo_valuations` correction path for **existing, completely unconsumed and physically located** original opening FIFO layers. After a distinct finance reviewer approves the historical correction case and confirms independently documented source value, the executor posts the **original-currency raw inventory asset debit / approved opening-equity credit** in an open accounting period. Only then does it attach the approved amount and currency to the existing FIFO cost layer; the physical stock movement and quantity are unchanged. It rejects stock previously consumed, unknown warehouse positions, duplicate source valuation, unapproved source currency/GL policy, prior dated inconsistencies and reversal of the resulting journal. Subsequent raw-material issues, manufacturing WIP capitalization and abnormal waste costing recognize corrected opening FIFO only against the linked, posted and unreversed source journal. Period-close audits invalid opening valuation records.
+
+The Historical Financial Correction Center now also supports independent **nonposting** source-purpose classifications for legacy warehouse-only finished-goods dispatches and original-currency **supplier short-credit dispute evidence** derived exactly from purchase-return source price snapshots. Signed evidence and remaining account-treatment actions are stored without creating a fictitious sale, receivable, inventory valuation or loss expense. Both kinds of unresolved cases remain open until the missing source-specific accounting workflow is implemented; their evidence cannot be silently discarded through case withdrawal. The inventory valuation screen now links to opening-stock historical reconciliation.
+
+[Historical Opening FIFO and Dispatch/Credit Investigations](historical-opening-fifo-and-dispatch-credit-investigations-2026-11-08.md) documents the supported cost-accounting constraints, exact source records, independent approvals, nonposting legacy investigation boundaries and outstanding recoverable/disputed supplier credit, consumed opening stock and historic dispatch GL correction work.
+
+**Status: source code committed; full retrospective valuation / dispatch / supplier-credit posting not completed or verified.** All migrations, automated tests, syntax lint, MySQL checks, browser UAT and deployment remain intentionally deferred.
+
 ## Acceptance and release gates
 
 1. Passing SQLite feature suite and isolated regression suite on the latest commit.
