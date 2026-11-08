@@ -112,6 +112,70 @@ class FinanceCloseReadinessService
             $blockers[]=$missingReturnCost.
                 ' saleable returned-lot recovery transaction(s) have no associated inventory asset/COGS reversal journal.';
         }
+        $orphanDispatches=DB::table('finished_good_dispatch_lines as item')
+            ->join('finished_good_dispatches as dispatch',
+                'dispatch.id','=','item.finished_good_dispatch_id')
+            ->leftJoin('sales_invoice_lines as invoiced',
+                'invoiced.dispatch_id','=','dispatch.id')
+            ->whereBetween('dispatch.dispatch_date',[$begin,$end])
+            ->whereNull('invoiced.id')->count();
+        if($orphanDispatches){
+            $blockers[]=$orphanDispatches.
+                ' physical finished-goods dispatch line(s) have no linked customer invoice and COGS cost trail. Reconcile legacy standalone dispatches.';
+        }
+        $invalidProductionJournals=DB::table('production_batch_cost_postings as cost')
+            ->join('journal_entries as wip','wip.id','=','cost.issue_journal_id')
+            ->join('journal_entries as finished','finished.id','=','cost.capitalization_journal_id')
+            ->leftJoin('journal_entries as wip_reversal',
+                'wip_reversal.reversal_of_id','=','wip.id')
+            ->leftJoin('journal_entries as finished_reversal',
+                'finished_reversal.reversal_of_id','=','finished.id')
+            ->whereBetween('cost.accounting_date',[$begin,$end])
+            ->where(function($q){
+                $q->where('wip.status','!=','posted')
+                    ->orWhere('finished.status','!=','posted')
+                    ->orWhereNotNull('wip.reversal_of_id')
+                    ->orWhereNotNull('finished.reversal_of_id')
+                    ->orWhereNotNull('wip_reversal.id')
+                    ->orWhereNotNull('finished_reversal.id');
+            })->distinct()->count('cost.id');
+        if($invalidProductionJournals){
+            $blockers[]=$invalidProductionJournals.
+                ' manufacturing WIP/finished inventory cost posting(s) reference unposted or reversed journals.';
+        }
+        $invalidCostJournals=DB::table('production_invoice_cogs_postings as cost')
+            ->join('journal_entries as journal','journal.id','=','cost.journal_entry_id')
+            ->join('sales_invoice_lines as item','item.id','=','cost.sales_invoice_line_id')
+            ->join('sales_invoices as invoice','invoice.id','=','item.sales_invoice_id')
+            ->leftJoin('journal_entries as reversal',
+                'reversal.reversal_of_id','=','journal.id')
+            ->whereBetween('invoice.invoice_date',[$begin,$end])
+            ->where(function($q){
+                $q->where('journal.status','!=','posted')
+                    ->orWhereNotNull('journal.reversal_of_id')
+                    ->orWhereNotNull('reversal.id');
+            })->distinct()->count('cost.id');
+        if($invalidCostJournals){
+            $blockers[]=$invalidCostJournals.
+                ' original-currency sales COGS posting(s) reference unposted or reversed cost journals.';
+        }
+        $invalidRecoveries=DB::table('production_return_cost_postings as cost')
+            ->join('journal_entries as journal','journal.id','=','cost.journal_entry_id')
+            ->join('sales_return_quarantines as quarantine',
+                'quarantine.id','=','cost.sales_return_quarantine_id')
+            ->leftJoin('journal_entries as reversal',
+                'reversal.reversal_of_id','=','journal.id')
+            ->whereBetween('quarantine.decided_on',[$begin,$end])
+            ->where(function($q){
+                $q->where('journal.status','!=','posted')
+                    ->orWhereNotNull('journal.reversal_of_id')
+                    ->orWhereNotNull('reversal.id')
+                    ->orWhere('quarantine.status','!=','released');
+            })->distinct()->count('cost.id');
+        if($invalidRecoveries){
+            $blockers[]=$invalidRecoveries.
+                ' QC-return cost recovery posting(s) are not backed by a currently released QC return and valid posted journal.';
+        }
         $unreviewedOverhead=DB::table('production_overhead_allocations as allocation')
             ->join('production_batches as batch','batch.id','=','allocation.production_batch_id')
             ->join('finished_good_movements as movement',
