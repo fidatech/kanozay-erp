@@ -44,8 +44,8 @@
       <td><select name="lines[{{ $index }}][company_warehouse_id]"><option value="">Unassigned stock</option>
        @foreach($warehouses as $warehouse)<option value="{{ $warehouse->id }}" @selected(($line['company_warehouse_id']??'')==$warehouse->id)>{{ $warehouse->code }} / {{ $warehouse->name }}</option>@endforeach
       </select></td>
-      <td><input name="lines[{{ $index }}][quantity_packages]" type="number" min="1" step="1" value="{{ $line['quantity_packages']??'' }}" required></td>
-      <td><input name="lines[{{ $index }}][unit_price]" type="number" min="0.0001" step="0.0001" value="{{ $line['unit_price']??'' }}" required></td>
+      <td><input name="lines[{{ $index }}][quantity_packages]" type="text" inputmode="numeric" min="1" step="1" value="{{ $line['quantity_packages']??'' }}" required></td>
+      <td><input name="lines[{{ $index }}][unit_price]" type="text" inputmode="decimal" min="0.0001" step="0.0001" value="{{ $line['unit_price']??'' }}" required></td>
       <td><button type="button" class="btn btn-light remove-invoice-line" aria-label="Remove item">Remove</button></td>
      </tr>
     @endforeach
@@ -62,8 +62,8 @@
   <td><select data-batch-select required><option value="">Select released batch</option>@foreach($batches as $batch)<option value="{{ $batch->id }}" data-good="{{ $batch->finished_good_id }}" data-available="{{ $batch->available_packages }}">{{ $batch->batch_number }} · {{ $batch->finishedGood->sku }} — {{ $batch->finishedGood->name }} · {{ $batch->available_packages }} available</option>@endforeach</select><input data-dispatch-token type="hidden"></td>
   <td><select data-warehouse><option value="">Unassigned stock</option>
   @foreach($warehouses as $warehouse)<option value="{{ $warehouse->id }}">{{ $warehouse->code }} / {{ $warehouse->name }}</option>@endforeach</select></td>
-  <td><input data-quantity type="number" min="1" step="1" required></td>
-  <td><input data-unit-price type="number" min="0.0001" step="0.0001" required></td>
+  <td><input data-quantity type="text" inputmode="numeric" min="1" step="1" required></td>
+  <td><input data-unit-price type="text" inputmode="decimal" min="0.0001" step="0.0001" required></td>
   <td><button type="button" class="btn btn-light remove-invoice-line" aria-label="Remove item">Remove</button></td>
  </tr>
 </template>
