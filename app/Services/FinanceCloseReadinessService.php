@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Carbon\CarbonImmutable;
+use Brick\Math\BigDecimal;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -30,6 +31,18 @@ class FinanceCloseReadinessService
             ->where('status','draft')->count();
         if($draftJournals){
             $blockers[]=$draftJournals.' draft GL journal(s) remain in the month.';
+        }
+        $debits=BigDecimal::zero();$credits=BigDecimal::zero();
+        foreach(DB::table('journal_lines as line')
+            ->join('journal_entries as entry','entry.id','=','line.journal_entry_id')
+            ->where('entry.status','posted')
+            ->whereBetween('entry.entry_date',[$begin,$end])
+            ->get(['line.debit','line.credit']) as $row){
+            $debits=$debits->plus((string)$row->debit);
+            $credits=$credits->plus((string)$row->credit);
+        }
+        if(!$debits->isEqualTo($credits)){
+            $blockers[]='Posted GL debits and credits do not balance for this accounting month.';
         }
         $draftPayroll=DB::table('payroll_periods')
             ->where('period_start',$begin)->where('status','draft')->count();
