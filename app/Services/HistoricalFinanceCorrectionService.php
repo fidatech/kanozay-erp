@@ -361,6 +361,64 @@ class HistoricalFinanceCorrectionService
         });
     }
 
+    /**
+     * Record the independently evidenced purpose of a legacy physical
+     * dispatch. This does NOT post COGS, create revenue, restock a lot or
+     * mark the historical finance case resolved.
+     */
+    public function classifyStandaloneDispatch(int $caseId,array $data,int $actorId):object
+    {
+        return DB::transaction(function()use($caseId,$data,$actorId){
+            $case=DB::table('finance_historical_correction_cases')
+                ->where('id',$caseId)->lockForUpdate()->first();
+            abort_unless($case,404);
+            if($case->case_type!=='standalone_dispatch' || $case->status!=='approved'){
+                $this->fail('Only independently approved warehouse-only dispatch investigations may have a financial-purpose classification.');
+            }
+            if((int)$case->requested_by===$actorId){
+                $this->fail('The person who requested the correction cannot classify their own historical dispatch.');
+            }
+            $source=$this->source('standalone_dispatch',(int)$case->source_id);
+            if(!hash_equals($source['fingerprint'],$case->source_fingerprint)){
+                $this->fail('Historical dispatch source changed after finance review. Withdraw the case and verify the original movement.');
+            }
+            $unlinked=DB::table('finished_good_dispatch_lines as detail')
+                ->leftJoin('sales_invoice_lines as line',
+                    'line.dispatch_id','=','detail.finished_good_dispatch_id')
+                ->where('detail.finished_good_dispatch_id',$case->source_id)
+                ->whereNotNull('line.id')->exists();
+            if($unlinked){
+                $this->fail('This dispatch has acquired a sales-invoice link. Reconcile the actual invoice and original COGS journal instead.');
+            }
+            if(DB::table('finance_historical_dispatch_dispositions')
+                ->where('finished_good_dispatch_id',$case->source_id)->exists()){
+                $this->fail('This historical dispatch already has an independently signed classification. A new case and formal correction are needed to change the approved evidence.');
+            }
+            $purposes=['customer_sale','promotional_sample','production_loss',
+                'internal_consumption','unresolved'];
+            if(!in_array($data['business_purpose'],$purposes,true)){
+                $this->fail('Choose a documented dispatch purpose.');
+            }
+            $id=DB::table('finance_historical_dispatch_dispositions')->insertGetId([
+                'finance_historical_correction_case_id'=>$caseId,
+                'finished_good_dispatch_id'=>$case->source_id,
+                'business_purpose'=>$data['business_purpose'],
+                'supporting_document_reference'=>trim($data['supporting_document_reference']),
+                'source_evidence'=>trim($data['source_evidence']),
+                'remaining_financial_action'=>trim($data['remaining_financial_action']),
+                'reviewed_by'=>$actorId,
+                'created_at'=>now(),'updated_at'=>now(),
+            ]);
+            $this->log($caseId,'disposition_recorded',$source,
+                'Physical warehouse-only dispatch reviewed as '.$data['business_purpose'].
+                '. Further original-currency financial correction remains outstanding. '.
+                trim($data['remaining_financial_action']),
+                $actorId,$data['supporting_document_reference']);
+            return DB::table('finance_historical_dispatch_dispositions')
+                ->where('id',$id)->first();
+        });
+    }
+
     public function activity(int $caseId):\Illuminate\Support\Collection
     {
         return DB::table('finance_historical_correction_events')
