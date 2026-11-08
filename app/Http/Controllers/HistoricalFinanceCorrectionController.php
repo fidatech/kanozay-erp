@@ -141,6 +141,20 @@ class HistoricalFinanceCorrectionController extends Controller
                     'finished_journal.status as capitalization_journal_status')
                 ->orderBy('detail.id')->get();
         }
+        $supplierDispute=null;
+        $supplierReturnLines=collect();
+        $supplierCreditCurrency=null;
+        if($row->case_type==='supplier_return_unreconciled'){
+            $supplierDispute=DB::table('finance_supplier_return_credit_disputes')
+                ->where('finance_historical_correction_case_id',$row->id)->first();
+            $supplierReturnLines=DB::table('purchase_return_record_lines')
+                ->where('purchase_return_record_id',$row->source_id)
+                ->orderBy('id')->get();
+            $sourceCurrency=DB::table('purchase_return_records')
+                ->where('id',$row->source_id)->value('currency_id');
+            $supplierCreditCurrency=DB::table('currencies')
+                ->where('id',$sourceCurrency)->value('code');
+        }
         return view('finance.historical-correction-show',[
             'case'=>$row,'types'=>HistoricalFinanceCorrectionService::TYPES,
             'events'=>$service->activity($row->id),
@@ -148,6 +162,9 @@ class HistoricalFinanceCorrectionController extends Controller
             'currencies'=>$currencies,'openingPosting'=>$openingPosting,
             'dispatchDisposition'=>$dispatchDisposition,
             'dispatchEvidence'=>$dispatchEvidence,
+            'supplierDispute'=>$supplierDispute,
+            'supplierReturnLines'=>$supplierReturnLines,
+            'supplierCreditCurrency'=>$supplierCreditCurrency,
         ]);
     }
 
@@ -162,6 +179,35 @@ class HistoricalFinanceCorrectionController extends Controller
         ]);
         $service->review($case,$data,(int)$request->user()->id);
         return back()->with('success','Independent historical correction review recorded without changing a source document or accounting value.');
+    }
+
+    public function classifySupplierCredit(Request $request,int $case,
+        HistoricalFinanceCorrectionService $service)
+    {
+        $this->gate($request,true);
+        $request->merge([
+            'supplier_offered_credit'=>\App\Support\LocalizedDecimal::normalize(
+                $request->input('supplier_offered_credit')
+            ),
+        ]);
+        $data=$request->validate([
+            'supplier_offered_credit'=>[
+                'required','regex:/^(?:0|[1-9][0-9]{0,15})(?:\\.[0-9]{1,4})?$/',
+                'numeric','min:0',
+            ],
+            'requested_treatment'=>['required',Rule::in([
+                'supplier_claim_pending','potential_nonrecoverable_loss','unresolved',
+            ])],
+            'supplier_document_reference'=>['required','string','min:4','max:180'],
+            'source_evidence'=>['required','string','min:30','max:5000'],
+            'remaining_approval_action'=>['required','string','min:30','max:5000'],
+            'confirm_review_only'=>['accepted'],
+        ]);
+        $service->classifySupplierCreditDispute(
+            $case,$data,(int)$request->user()->id
+        );
+        return back()->with('success',
+            'Supplier-offered short credit documented against immutable original return price. No financial liability, receivable or loss was posted; approved accounting treatment is still outstanding.');
     }
 
     public function classifyDispatch(Request $request,int $case,
