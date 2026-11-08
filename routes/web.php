@@ -144,6 +144,12 @@ Route::middleware('auth')->post('/purchases/quick-customer', [\App\Http\Controll
 Route::middleware('auth')->post('/purchases/quick-currency', [\App\Http\Controllers\PurchaseOrderController::class,'quickCurrency'])->name('purchases.quick-currency');
 Route::middleware('auth')->post('/purchases/orders', [\App\Http\Controllers\PurchaseOrderController::class,'store'])->name('purchases.orders.store');
 Route::middleware('auth')->patch('/purchases/orders/{order}/items/{item}/inventory', [\App\Http\Controllers\PurchaseOrderController::class,'linkMaterial'])->name('purchases.orders.items.link');
+Route::middleware('auth')->patch('/purchases/orders/{order}', [\App\Http\Controllers\PurchaseOrderController::class,'updateDraft'])->name('purchases.orders.update');
+Route::middleware('auth')->post('/purchases/orders/{order}/items', [\App\Http\Controllers\PurchaseOrderController::class,'addDraftItem'])->name('purchases.orders.items.store');
+Route::middleware('auth')->patch('/purchases/orders/{order}/items/{item}', [\App\Http\Controllers\PurchaseOrderController::class,'updateDraftItem'])->name('purchases.orders.items.update');
+Route::middleware('auth')->delete('/purchases/orders/{order}/items/{item}', [\App\Http\Controllers\PurchaseOrderController::class,'removeDraftItem'])->name('purchases.orders.items.destroy');
+Route::middleware('auth')->post('/purchases/orders/{order}/cancel', [\App\Http\Controllers\PurchaseOrderController::class,'cancel'])->name('purchases.orders.cancel');
+
 Route::middleware('auth')->post('/purchases/orders/{order}/goods-receipts/{receipt}/landed-costs', [\App\Http\Controllers\GoodsReceiptLandedCostController::class, 'store'])->name('purchases.orders.receipts.landed-costs.store');
 Route::middleware('auth')->post('/purchases/orders/{order}/goods-receipts', [\App\Http\Controllers\GoodsReceiptController::class,'store'])->name('purchases.orders.receipts.store');
 Route::middleware('auth')->post('/purchases/orders/{order}/confirm', [\App\Http\Controllers\PurchaseOrderController::class,'confirm'])->name('purchases.orders.confirm');
