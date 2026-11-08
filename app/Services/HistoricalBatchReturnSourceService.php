@@ -201,7 +201,8 @@ final class HistoricalBatchReturnSourceService
                         $credit->unit_price,$credit->line_total,$credit->restocked],
                     'note'=>[$note->id,$note->number,$note->sales_invoice_id,
                         $note->trade_document_id,$note->journal_entry_id,
-                        $note->credit_date,$note->total,$note->currency_code],
+                        $note->credit_date,$note->total,$note->currency_code,
+                        $note->created_by],
                     'sale'=>[$sale->id,$sale->sales_invoice_id,$sale->dispatch_id,
                         $sale->production_batch_id,$sale->quantity_packages,
                         $sale->unit_price,$sale->line_total],
@@ -218,7 +219,10 @@ final class HistoricalBatchReturnSourceService
                     'source_income_ledger_id'=>$incomes->first()->ledger_account_id,
                     'source_receivable_ledger_id'=>$customerLedger,
                 ],
-                'actors'=>[(int)$qc->registered_by,(int)$qc->decided_by],
+                'actors'=>array_values(array_unique(array_filter([
+                    (int)$qc->registered_by,(int)$qc->decided_by,
+                    (int)($note->created_by??0),
+                ]))),
             ];
         }
         usort($result,fn($a,$b)=>[$a['date'],$a['qc_id']]
