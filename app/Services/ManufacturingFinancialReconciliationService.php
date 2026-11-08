@@ -78,8 +78,11 @@ class ManufacturingFinancialReconciliationService
                 'item.id','=','waste.production_order_material_id')
             ->leftJoin('production_waste_financial_reviews as review',
                 'review.production_material_waste_id','=','waste.id')
+            ->leftJoin('production_abnormal_waste_cost_reviews as cost',
+                'cost.production_material_waste_id','=','waste.id')
             ->whereIn('item.production_order_id',$batches->pluck('production_order_id'))
-            ->select('item.production_order_id','waste.id','review.treatment')
+            ->select('item.production_order_id','waste.id','review.treatment',
+                'cost.source_cost_amount','cost.expense_ledger_id','cost.currency_id')
             ->get()->groupBy('production_order_id');
         $result=collect();
         foreach($batches as $batch){
@@ -109,9 +112,10 @@ class ManufacturingFinancialReconciliationService
             if($wasteRows->contains(fn($row)=>$row->treatment===null)){
                 $issues[]='Original production material loss has no independent finance review. Reconcile the issued waste source and signed manufacturing policy.';
             }
-            if($wasteRows->contains(fn($row)=>in_array($row->treatment,
-                ['abnormal_loss','rework_required'],true))){
-                $issues[]='Abnormal material loss or unresolved rework must not be silently included in saleable finished-goods inventory value.';
+            if($wasteRows->contains(fn($row)=>
+                $row->treatment==='rework_required' ||
+                ($row->treatment==='abnormal_loss' && $row->source_cost_amount===null))){
+                $issues[]='Abnormal loss lacks an exact FIFO cost approval, or rework remains unresolved.';
             }
             $policy=null;$amount=null;$currency=null;
             if($capital){
@@ -128,9 +132,27 @@ class ManufacturingFinancialReconciliationService
                 if((int)$capital->accepted_packages!==$received){
                     $issues[]='Physical warehouse receipts differ from the accepted package count financially capitalized.';
                 }
+                $abnormalAmount=$this->decimal($capital->abnormal_waste_amount);
                 if(!$this->decimal($capital->material_amount)
-                    ->plus((string)$capital->overhead_amount)->isEqualTo($amount)){
-                    $issues[]='Capitalized materials and approved overhead do not add up to the posted finished-goods value.';
+                    ->plus((string)$capital->overhead_amount)
+                    ->minus($abnormalAmount)->isEqualTo($amount)){
+                    $issues[]='Capitalized value must equal issued materials plus approved overhead less independently expensed abnormal loss.';
+                }
+                $approvedAbnormal=BigDecimal::zero();
+                $byLedger=[];
+                foreach($wasteRows as $waste){
+                    if($waste->treatment!=='abnormal_loss' || $waste->source_cost_amount===null)continue;
+                    $approvedAbnormal=$approvedAbnormal->plus((string)$waste->source_cost_amount);
+                    $id=(int)$waste->expense_ledger_id;
+                    $byLedger[$id]=($byLedger[$id]??BigDecimal::zero())
+                        ->plus((string)$waste->source_cost_amount);
+                    if((int)$waste->currency_id!==(int)$capital->currency_id){
+                        $issues[]='An abnormal loss source uses a different currency than the batch costing policy.';
+                    }
+                }
+                if(!$approvedAbnormal->toScale(4,\Brick\Math\RoundingMode::HalfUp)
+                    ->isEqualTo($abnormalAmount)){
+                    $issues[]='The batch abnormal loss expense differs from its independently approved lot-cost sources.';
                 }
                 if(!$this->journalIsValid((int)$capital->issue_journal_id) ||
                     !$this->journalIsValid((int)$capital->capitalization_journal_id)){
@@ -141,10 +163,23 @@ class ManufacturingFinancialReconciliationService
                     $fg=(int)$policy->finished_inventory_ledger_id;
                     if(!$this->ledgerNet((int)$capital->issue_journal_id,$wip)->isEqualTo($amount) ||
                        !$this->ledgerNet((int)$capital->issue_journal_id,$raw)
-                            ->isEqualTo($amount->minus((string)$capital->overhead_amount)->negated()) ||
+                            ->isEqualTo($this->decimal($capital->material_amount)->negated()) ||
                        !$this->ledgerNet((int)$capital->capitalization_journal_id,$fg)->isEqualTo($amount) ||
                        !$this->ledgerNet((int)$capital->capitalization_journal_id,$wip)->isEqualTo($amount->negated())){
                         $issues[]='Posted manufacturing journal inventory or WIP account balance does not reconcile to its frozen cost snapshot.';
+                    }
+                    $lossPosted=BigDecimal::zero();
+                    foreach($byLedger as $expenseLedgerId=>$originalSourceCost){
+                        $ledgerAmount=$this->ledgerNet(
+                            (int)$capital->issue_journal_id,$expenseLedgerId
+                        );
+                        if(!$ledgerAmount->isPositive()){
+                            $issues[]='An abnormal loss expense ledger lacks its original approved journal debit.';
+                        }
+                        $lossPosted=$lossPosted->plus($ledgerAmount);
+                    }
+                    if(!$lossPosted->isEqualTo($abnormalAmount)){
+                        $issues[]='Posted abnormal loss expense does not reconcile to the total FIFO loss cost excluded from finished-goods inventory.';
                     }
                 }
                 $postings=$cogs->get($capital->id,collect());
