@@ -61,6 +61,12 @@ class ProductionCostAllocationService
      BigDecimal::of((string)$line->debit)->isLessThanOrEqualTo(0) ||
      BigDecimal::of((string)$line->credit)->isGreaterThan(0))
     throw ValidationException::withMessages(['source_journal_line_id'=>'Select a posted debit expense line.']);
+   if(DB::table('goods_receipt_landed_cost_postings')
+      ->where('source_expense_journal_line_id',$line->id)->exists()){
+    throw ValidationException::withMessages([
+      'source_journal_line_id'=>'This expense debit has already been reclassified into a supplier receipt landed-cost asset. It cannot also fund production overhead.',
+    ]);
+   }
    $amount=BigDecimal::of((string)$data['amount'])->toScale(4);
    if(!$amount->isPositive() || $amount->isGreaterThan($this->available($line->id)))
     throw ValidationException::withMessages(['amount'=>'Allocation exceeds unallocated expense debit of the source journal line.']);
@@ -109,6 +115,12 @@ class ProductionCostAllocationService
        ]);
     }
     $line=JournalLine::whereKey($row->source_journal_line_id)->lockForUpdate()->firstOrFail();
+    if(DB::table('goods_receipt_landed_cost_postings')
+        ->where('source_expense_journal_line_id',$line->id)->exists()){
+       throw ValidationException::withMessages([
+        'decision'=>'This source expense has already been capitalized into a GRN landed cost and cannot also be approved as manufacturing overhead.',
+       ]);
+    }
     // Excludes this submitted row, which already reserves its source amount.
     $total=BigDecimal::of((string)$row->amount);
     foreach(DB::table('production_overhead_allocations')
