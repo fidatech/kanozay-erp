@@ -186,6 +186,9 @@ class ModulePageController extends Controller
             return app(PurchaseOrderController::class)->index($request);
         }
 
+        if($module==='reports' && $page==='production-waste'){
+            return app(ProductionWasteFinancialReportController::class)->index($request);
+        }
         if($module==='reports' && $page==='manufacturing-financial'){
             return app(ManufacturingFinancialReconciliationController::class)->index(
                 $request,app(\App\Services\ManufacturingFinancialReconciliationService::class)
