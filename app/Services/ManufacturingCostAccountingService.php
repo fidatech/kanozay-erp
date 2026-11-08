@@ -283,9 +283,10 @@ class ManufacturingCostAccountingService
         return $balance;
     }
 
-    public function capitalize(int $batchId,array $data,int $actorId):object
+    public function capitalize(int $batchId,array $data,int $actorId,
+        ?int $historicalCaseId=null):object
     {
-        return DB::transaction(function()use($batchId,$data,$actorId){
+        return DB::transaction(function()use($batchId,$data,$actorId,$historicalCaseId){
             $batch=ProductionBatch::whereKey($batchId)->lockForUpdate()->firstOrFail();
             $existing=DB::table('production_batch_cost_postings')
                 ->where('production_batch_id',$batchId)->first();
@@ -312,16 +313,42 @@ class ManufacturingCostAccountingService
             if(!$receipt || $receipt->occurred_on>$data['accounting_date']){
                 $this->reject('The cost capitalization date cannot precede the QC-approved physical finished goods receipt.');
             }
-            // A legacy physical dispatch already removed packages without
-            // an original-cost COGS journal. Backdating capitalization does
-            // not recover that missing COGS and would overstate FG assets.
-            if(DB::table('finished_good_dispatch_lines')
-                ->where('production_batch_id',$batchId)->exists()){
-                $this->reject('This batch has existing physical dispatches. Complete a controlled legacy inventory and COGS backfill before initial capitalization. Backdating the asset journal alone is prohibited.');
-            }
-            if(DB::table('sales_invoice_lines')
-                ->where('production_batch_id',$batchId)->exists()){
-                $this->reject('This batch already has invoice lines. Reconcile the legacy cost trail before new capitalization.');
+            // A historical recovery is the *only* permitted bypass for an
+            // already-dispatched batch. A signed, approved case plus a
+            // complete original-invoice COGS executor must accompany it;
+            // ordinary manufacturing capitalization keeps the original block.
+            $hasDispatched=DB::table('finished_good_dispatch_lines')
+                ->where('production_batch_id',$batchId)->exists();
+            $hasInvoices=DB::table('sales_invoice_lines')
+                ->where('production_batch_id',$batchId)->exists();
+            if($hasDispatched || $hasInvoices){
+                if($historicalCaseId===null){
+                    $this->reject('This batch has prior physical dispatches/invoices. Use an independently approved, atomic source-costed legacy manufacturing and invoice-COGS reconciliation.');
+                }
+                $history=DB::table('finance_historical_batch_capitalizations')
+                    ->where('finance_historical_correction_case_id',$historicalCaseId)
+                    ->where('production_batch_id',$batchId)->lockForUpdate()->first();
+                $case=DB::table('finance_historical_correction_cases')
+                    ->where('id',$historicalCaseId)->first();
+                if(!$history || !$case || $case->case_type!=='batch_uncapitalized' ||
+                    $case->status!=='approved' || $history->status!=='approved' ||
+                    (string)$history->accounting_date!==(string)$data['accounting_date'] ||
+                    $history->approval_reference!==trim($data['approval_reference']) ||
+                    $history->production_batch_cost_posting_id ||
+                    in_array($actorId,[
+                        (int)$history->submitted_by,(int)$history->approved_by,
+                        (int)$case->requested_by,(int)$case->reviewed_by,
+                    ],true)){
+                    $this->reject('Already-dispatched batch capitalization requires an independently authorized, unchanged historical correction and separate finance executor.');
+                }
+                $dispatches=DB::table('finished_good_dispatch_lines')
+                    ->where('production_batch_id',$batchId);
+                if((int)$dispatches->count()!==(int)$history->invoice_line_count ||
+                    (int)$dispatches->sum('quantity_packages')!==(int)$history->dispatched_packages){
+                    $this->reject('The originally authorized physical dispatch quantities changed since the historical recovery proposal.');
+                }
+            }elseif($historicalCaseId!==null){
+                $this->reject('Historical manufacturing override applies only to previously dispatched, actually invoiced batches.');
             }
             $costs=$batch->costs()->get();
             if($costs->count()!==1 || $costs->first()->currency_id===null ||
