@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\GoodsReceipt;
+use App\Support\LocalizedDecimal;
 use App\Models\PurchaseOrder;
 use App\Services\GoodsReceiptLandedCostService;
 use Illuminate\Http\Request;
@@ -15,6 +16,7 @@ class GoodsReceiptLandedCostController extends Controller
         abort_unless($request->user()->can('inventory.update'), 403);
         abort_unless((int) $receipt->purchase_order_id === (int) $order->id, 404);
 
+        $request->merge(['amount'=>LocalizedDecimal::normalize($request->input('amount'))]);
         $data = $request->validate([
             'component' => ['required', Rule::in(['freight', 'customs', 'transport', 'handling', 'insurance', 'other'])],
             'amount' => ['required', 'regex:/^(?:0|[1-9][0-9]{0,13})(?:\\.[0-9]{1,2})?$/'],
