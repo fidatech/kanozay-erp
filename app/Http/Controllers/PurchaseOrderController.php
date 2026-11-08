@@ -100,6 +100,100 @@ class PurchaseOrderController extends Controller {
    'warehouses'=>\App\Models\CompanyWarehouse::where('is_active',true)->orderBy('code')->get(),
   ]);
  }
+ public function updateDraft(Request $request,PurchaseOrder $order) {
+  abort_unless($request->user()->canAny(['administration.update','purchases.update']),403);
+  $data=$request->validate([
+   'source'=>['required',Rule::in(['local','foreign'])],
+   'order_date'=>['required','date'],
+   'expected_date'=>['nullable','date','after_or_equal:order_date'],
+   'notes'=>['nullable','string','max:3000'],
+  ]);
+  DB::transaction(function()use($order,$data){
+   $locked=PurchaseOrder::whereKey($order->id)->lockForUpdate()->firstOrFail();
+   abort_unless($locked->status==='draft',422,'Only draft orders may be edited.');
+   $locked->update([
+    'source'=>$data['source'],'order_date'=>$data['order_date'],
+    'expected_date'=>$data['expected_date']??null,'notes'=>$data['notes']??null,
+   ]);
+   ActivityLog::record('purchase_order.updated','purchase_order',$locked->id,'Draft purchase order header updated.');
+  });
+  return back()->with('success','Draft purchase order updated.');
+ }
+ public function updateDraftItem(Request $request,PurchaseOrder $order,\App\Models\PurchaseOrderItem $item) {
+  abort_unless($request->user()->canAny(['administration.update','purchases.update']),403);
+  abort_unless((int)$item->purchase_order_id===(int)$order->id,404);
+  $data=$request->validate([
+   'description'=>['required','string','max:255'],
+   'inventory_material_id'=>['required','integer',Rule::exists('inventory_materials','id')->where('is_active',true)],
+   'quantity'=>['required','numeric','gt:0','decimal:0,4','max:999999999999.9999'],
+   'unit_price'=>['required','numeric','min:0','decimal:0,4','max:999999999999.9999'],
+  ]);
+  DB::transaction(function()use($order,$item,$data){
+   $locked=PurchaseOrder::whereKey($order->id)->lockForUpdate()->firstOrFail();
+   abort_unless($locked->status==='draft',422,'A confirmed purchase order cannot be edited.');
+   $lockedItem=$locked->items()->whereKey($item->id)->lockForUpdate()->firstOrFail();
+   if($lockedItem->receiptLines()->exists())
+    throw \Illuminate\Validation\ValidationException::withMessages(['items'=>'A received item cannot be edited.']);
+   $lockedItem->update($data);
+   ActivityLog::record('purchase_order.item_updated','purchase_order',$locked->id,'Draft line '.$lockedItem->id.' updated.');
+  });
+  return back()->with('success','Purchase order line updated.');
+ }
+ public function addDraftItem(Request $request,PurchaseOrder $order) {
+  abort_unless($request->user()->canAny(['administration.update','purchases.update']),403);
+  $data=$request->validate([
+   'description'=>['required','string','max:255'],
+   'inventory_material_id'=>['required','integer',Rule::exists('inventory_materials','id')->where('is_active',true)],
+   'quantity'=>['required','numeric','gt:0','decimal:0,4','max:999999999999.9999'],
+   'unit_price'=>['required','numeric','min:0','decimal:0,4','max:999999999999.9999'],
+  ]);
+  DB::transaction(function()use($order,$data){
+   $locked=PurchaseOrder::whereKey($order->id)->lockForUpdate()->firstOrFail();
+   abort_unless($locked->status==='draft',422,'A confirmed purchase order cannot gain lines.');
+   if($locked->items()->count()>=100)
+    throw \Illuminate\Validation\ValidationException::withMessages(['items'=>'A purchase order supports at most 100 lines.']);
+   $item=$locked->items()->create($data);
+   ActivityLog::record('purchase_order.item_added','purchase_order',$locked->id,'Draft line '.$item->id.' added.');
+  });
+  return back()->with('success','Purchase order line added.');
+ }
+ public function removeDraftItem(Request $request,PurchaseOrder $order,\App\Models\PurchaseOrderItem $item) {
+  abort_unless($request->user()->canAny(['administration.update','purchases.update']),403);
+  abort_unless((int)$item->purchase_order_id===(int)$order->id,404);
+  DB::transaction(function()use($order,$item){
+   $locked=PurchaseOrder::whereKey($order->id)->lockForUpdate()->firstOrFail();
+   abort_unless($locked->status==='draft',422,'Only draft purchase order lines can be removed.');
+   $lockedItem=$locked->items()->whereKey($item->id)->lockForUpdate()->firstOrFail();
+   if($lockedItem->receiptLines()->exists())
+    throw \Illuminate\Validation\ValidationException::withMessages(['items'=>'Received purchase order lines cannot be removed.']);
+   try {
+    $lockedItem->delete();
+   } catch(\Illuminate\Database\QueryException $error){
+    throw \Illuminate\Validation\ValidationException::withMessages(['items'=>'This line is referenced by another workflow and cannot be removed.']);
+   }
+   ActivityLog::record('purchase_order.item_removed','purchase_order',$locked->id,'Unused draft line '.$item->id.' removed.');
+  });
+  return back()->with('success','Draft purchase order line removed.');
+ }
+ public function cancel(Request $request,PurchaseOrder $order) {
+  abort_unless($request->user()->canAny(['administration.update','purchases.update']),403);
+  $data=$request->validate(['reason'=>['required','string','min:10','max:1000']]);
+  DB::transaction(function()use($order,$data){
+   $locked=PurchaseOrder::whereKey($order->id)->lockForUpdate()->firstOrFail();
+   abort_unless(in_array($locked->status,['draft','confirmed'],true),422,
+    'Only unreceived draft or confirmed purchase orders can be cancelled.');
+   if($locked->receipts()->exists() ||
+      DB::table('supplier_advance_postings')->where('purchase_order_id',$locked->id)->exists()){
+    throw \Illuminate\Validation\ValidationException::withMessages([
+     'reason'=>'This order has posted receipts or supplier advances and requires a documented correction workflow.',
+    ]);
+   }
+   $locked->update(['status'=>'cancelled']);
+   ActivityLog::record('purchase_order.cancelled','purchase_order',$locked->id,
+    'Unreceived purchase order cancelled: '.$data['reason']);
+  });
+  return back()->with('success','Purchase order cancelled. No stock or financial entry was reversed.');
+ }
  public function linkMaterial(Request $request, PurchaseOrder $order, \App\Models\PurchaseOrderItem $item) {
   abort_unless($request->user()->can('purchases.update'),403);
   abort_unless($item->purchase_order_id===$order->id,404);
