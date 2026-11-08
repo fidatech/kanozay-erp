@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\FinishedGood;
+use App\Models\ActivityLog;
 use App\Models\ProductionBatch;
 use App\Models\ProductionOrder;
 use Brick\Math\BigDecimal;
@@ -57,7 +58,9 @@ class ProductionBatchService
             ]);
             $batch->forceFill(['batch_number' => 'BAT-'.str_pad((string) $batch->id, 7, '0', STR_PAD_LEFT)])->save();
             $order->update(['status' => 'pending_qc']);
-
+            ActivityLog::record('production.batch.submitted','production_batch',$batch->id,
+                'Actual finished packages submitted for laboratory review.',
+                ['order_id'=>$order->id,'reported_packages'=>$reported,'finished_good_id'=>$good->id]);
             return $batch;
         });
     }
@@ -77,6 +80,10 @@ class ProductionBatchService
                 'result' => $data['result'],
                 'recorded_by' => $actor,
             ]);
+            ActivityLog::record('production.batch.qc_check','production_batch',$batch->id,
+                'Batch laboratory check recorded.',[
+                    'test_name'=>$data['test_name'],'result'=>$data['result'],
+                ]);
         });
     }
 
@@ -112,6 +119,11 @@ class ProductionBatchService
                     'decided_at' => now(),
                 ])->save();
                 $batch->order()->update(['status' => 'qc_approved']);
+                ActivityLog::record('production.batch.qc_approved','production_batch',$batch->id,
+                    'Laboratory accepted reported batch packages for warehouse release.',[
+                        'accepted_packages'=>$batch->reported_packages-$rejected,
+                        'rejected_packages'=>$rejected,
+                    ]);
             } elseif ($decision === 'reject') {
                 if (! $failed) {
                     $this->reject('A failed laboratory check is required to reject a batch.');
@@ -125,6 +137,10 @@ class ProductionBatchService
                     'decided_at' => now(),
                 ])->save();
                 $batch->order()->update(['status' => 'qc_rejected']);
+                ActivityLog::record('production.batch.qc_rejected','production_batch',$batch->id,
+                    'Laboratory rejected the batch; no finished goods may be released.',[
+                        'rejected_packages'=>$batch->reported_packages,
+                    ]);
             } else {
                 $this->reject('Invalid laboratory decision.');
             }
@@ -159,6 +175,10 @@ class ProductionBatchService
             app(FinishedGoodWarehouseService::class)->receipt($batch,$warehouseId,(int)$batch->accepted_packages,$date,$actor);
             $batch->forceFill(['status' => 'released', 'released_by' => $actor, 'released_at' => now()])->save();
             $batch->order()->update(['status' => 'completed']);
+            ActivityLog::record('production.batch.released','production_batch',$batch->id,
+                'QC-approved finished packages released into the selected warehouse.',
+                ['warehouse_id'=>$warehouseId,'packages'=>$batch->accepted_packages,
+                 'released_on'=>$date,'cost_snapshot_rows'=>$batch->costs()->count()]);
         });
     }
 
