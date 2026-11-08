@@ -73,6 +73,14 @@ class ManufacturingFinancialReconciliationService
             ->where('credit.restocked',true)->whereNull('quarantine.id')
             ->select('credit.production_batch_id','credit.quantity_packages')
             ->get()->groupBy('production_batch_id');
+        $wasteTreatments=DB::table('production_material_wastes as waste')
+            ->join('production_order_materials as item',
+                'item.id','=','waste.production_order_material_id')
+            ->leftJoin('production_waste_financial_reviews as review',
+                'review.production_material_waste_id','=','waste.id')
+            ->whereIn('item.production_order_id',$batches->pluck('production_order_id'))
+            ->select('item.production_order_id','waste.id','review.treatment')
+            ->get()->groupBy('production_order_id');
         $result=collect();
         foreach($batches as $batch){
             $issues=[];$capital=$posted->get($batch->id);
@@ -96,6 +104,14 @@ class ManufacturingFinancialReconciliationService
             }
             if(!$capital && ($received>0 || $physical || $invoices->has($batch->id))){
                 $issues[]='Physically received, dispatched or invoiced batch has no source-backed financial capitalization.';
+            }
+            $wasteRows=$wasteTreatments->get($batch->production_order_id,collect());
+            if($wasteRows->contains(fn($row)=>$row->treatment===null)){
+                $issues[]='Original production material loss has no independent finance review. Reconcile the issued waste source and signed manufacturing policy.';
+            }
+            if($wasteRows->contains(fn($row)=>in_array($row->treatment,
+                ['abnormal_loss','rework_required'],true))){
+                $issues[]='Abnormal material loss or unresolved rework must not be silently included in saleable finished-goods inventory value.';
             }
             $policy=null;$amount=null;$currency=null;
             if($capital){
