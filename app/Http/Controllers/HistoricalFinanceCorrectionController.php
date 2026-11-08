@@ -155,6 +155,32 @@ class HistoricalFinanceCorrectionController extends Controller
             $supplierCreditCurrency=DB::table('currencies')
                 ->where('id',$sourceCurrency)->value('code');
         }
+        $shortCreditSettlement=null;
+        $shortCreditPayables=collect();
+        $shortCreditDifferenceLedgers=collect();
+        if($row->case_type==='supplier_return_unreconciled'){
+            $shortCreditSettlement=DB::table('finance_supplier_short_credit_settlements')
+                ->where('finance_historical_correction_case_id',$row->id)->first();
+            if($supplierDispute && $row->status==='approved' &&
+                $request->user()->canAny(['finance.update','administration.update'])){
+                $return=DB::table('purchase_return_records')
+                    ->where('id',$row->source_id)->first();
+                if($return){
+                    $shortCreditPayables=DB::table('matched_supplier_invoices as invoice')
+                        ->join('trade_documents as payable','payable.id','=','invoice.trade_document_id')
+                        ->where('invoice.goods_receipt_id',$return->goods_receipt_id)
+                        ->where('invoice.status','posted')
+                        ->where('payable.currency_id',$return->currency_id)
+                        ->get(['payable.id','payable.number','payable.amount','invoice.supplier_invoice_number']);
+                }
+                if($supplierDispute->requested_treatment!=='unresolved'){
+                    $requiredType=$supplierDispute->requested_treatment==='supplier_claim_pending'?'asset':'expense';
+                    $shortCreditDifferenceLedgers=\App\Models\LedgerAccount::query()
+                        ->where('type',$requiredType)->where('is_active',true)
+                        ->where('is_group',false)->orderBy('code')->get(['id','code','name']);
+                }
+            }
+        }
         return view('finance.historical-correction-show',[
             'case'=>$row,'types'=>HistoricalFinanceCorrectionService::TYPES,
             'events'=>$service->activity($row->id),
@@ -165,6 +191,9 @@ class HistoricalFinanceCorrectionController extends Controller
             'supplierDispute'=>$supplierDispute,
             'supplierReturnLines'=>$supplierReturnLines,
             'supplierCreditCurrency'=>$supplierCreditCurrency,
+            'shortCreditSettlement'=>$shortCreditSettlement,
+            'shortCreditPayables'=>$shortCreditPayables,
+            'shortCreditDifferenceLedgers'=>$shortCreditDifferenceLedgers,
         ]);
     }
 
@@ -227,6 +256,46 @@ class HistoricalFinanceCorrectionController extends Controller
         $service->classifyStandaloneDispatch($case,$data,(int)$request->user()->id);
         return back()->with('success',
             'Historical warehouse-only dispatch purpose independently documented. No invoice, COGS journal or stock movement was created; the financial correction case remains open.');
+    }
+
+    public function submitShortCredit(Request $request,int $case,
+        \App\Services\SupplierShortCreditSettlementService $service)
+    {
+        $this->gate($request,true);
+        $data=$request->validate([
+            'trade_document_id'=>['required','integer','exists:trade_documents,id'],
+            'difference_ledger_id'=>['required','integer','exists:ledger_accounts,id'],
+            'treatment'=>['required',Rule::in(['recognized_supplier_claim','approved_nonrecoverable_loss'])],
+            'posting_date'=>['required','date','before_or_equal:today'],
+            'settlement_reference'=>['required','string','min:4','max:180'],
+            'recognition_evidence'=>['required','string','min:50','max:5000'],
+            'confirm_signed_recognition'=>['accepted'],
+        ]);
+        $service->submit($case,$data,(int)$request->user()->id);
+        return back()->with('success','Source-matched supplier short-credit settlement submitted for independent approval. No GL journal was posted.');
+    }
+
+    public function approveShortCredit(Request $request,int $case,
+        \App\Services\SupplierShortCreditSettlementService $service)
+    {
+        $this->gate($request,true);
+        $data=$request->validate([
+            'decision'=>['required',Rule::in(['approve','reject'])],
+            'approval_reference'=>['required','string','min:4','max:180'],
+            'approval_notes'=>['required','string','min:40','max:5000'],
+            'confirm_independent_settlement'=>['accepted'],
+        ]);
+        $service->approve($case,$data,(int)$request->user()->id);
+        return back()->with('success','Independent supplier claim/loss decision recorded without posting a journal.');
+    }
+
+    public function postShortCredit(Request $request,int $case,
+        \App\Services\SupplierShortCreditSettlementService $service)
+    {
+        $this->gate($request,true);
+        $request->validate(['confirm_post_short_credit'=>['accepted']]);
+        $settlement=$service->post($case,(int)$request->user()->id);
+        return back()->with('success','Source-priced supplier partial credit and approved claim/loss posted in journal #'.$settlement->journal_entry_id.'. No new physical stock movement was made.');
     }
 
     public function withdraw(Request $request,int $case,HistoricalFinanceCorrectionService $service)
