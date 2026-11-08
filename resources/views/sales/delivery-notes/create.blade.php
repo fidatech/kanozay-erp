@@ -25,7 +25,7 @@
 <input type="hidden" name="sales_invoice_id" value="{{ $invoice->id }}">
 <input type="hidden" name="submission_token" value="{{ old('submission_token',(string)\Illuminate\Support\Str::uuid()) }}">
 <div class="dn-form-grid">
-<label>Delivery date<input type="date" name="delivery_date" required value="{{ old('delivery_date',now()->toDateString()) }}" max="{{ now()->toDateString() }}"></label>
+<label>Delivery date<input type="date" name="delivery_date" required min="{{ $invoice->invoice_date?->format('Y-m-d') }}" value="{{ old('delivery_date',now()->toDateString()) }}" max="{{ now()->toDateString() }}"></label>
 <label>Vehicle number<input name="vehicle_number" maxlength="100" value="{{ old('vehicle_number') }}"></label>
 <label>Driver name<input name="driver_name" maxlength="150" value="{{ old('driver_name') }}"></label>
 <label>Delivery address<input name="delivery_address" maxlength="500" value="{{ old('delivery_address',$invoice->customer?->address) }}"></label>
