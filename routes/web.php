@@ -170,6 +170,7 @@ Route::middleware('auth')->delete('/purchases/orders/{order}/items/{item}', [\Ap
 Route::middleware('auth')->post('/purchases/orders/{order}/cancel', [\App\Http\Controllers\PurchaseOrderController::class,'cancel'])->name('purchases.orders.cancel');
 
 Route::middleware('auth')->post('/purchases/orders/{order}/goods-receipts/{receipt}/landed-costs', [\App\Http\Controllers\GoodsReceiptLandedCostController::class, 'store'])->name('purchases.orders.receipts.landed-costs.store');
+Route::middleware('auth')->post('/purchases/orders/{order}/receipts/{receipt}/landed-costs/{cost}/capitalize', [\App\Http\Controllers\GoodsReceiptLandedCostController::class,'capitalize'])->name('purchases.orders.receipts.landed-costs.capitalize');
 Route::middleware('auth')->post('/purchases/orders/{order}/goods-receipts', [\App\Http\Controllers\GoodsReceiptController::class,'store'])->name('purchases.orders.receipts.store');
 Route::middleware('auth')->post('/purchases/orders/{order}/confirm', [\App\Http\Controllers\PurchaseOrderController::class,'confirm'])->name('purchases.orders.confirm');
 Route::middleware('auth')->post('/purchases/orders/{order}/expenses', [\App\Http\Controllers\PurchaseOrderController::class,'addExpense'])->name('purchases.orders.expenses.store');
