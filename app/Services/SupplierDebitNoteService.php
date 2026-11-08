@@ -51,6 +51,19 @@ class SupplierDebitNoteService {
       'trade_document_id'=>'This GRN has verified supplier invoices. Select the payable linked to this original receipt.',
      ]);
     }
+    $matchedLines=DB::table('matched_supplier_invoice_lines')
+     ->where('matched_supplier_invoice_id',$selected->id)
+     ->get(['goods_receipt_line_id','quantity'])
+     ->keyBy('goods_receipt_line_id');
+    foreach($locked->lines as $returnLine){
+     $billed=$matchedLines->get($returnLine->goods_receipt_line_id);
+     if(!$billed || BigDecimal::of((string)$billed->quantity)
+      ->isLessThan((string)$returnLine->quantity)){
+      throw ValidationException::withMessages([
+       'trade_document_id'=>'The selected payable does not cover every returned receipt-line quantity. Review the original supplier invoices before posting this return credit.',
+      ]);
+     }
+    }
     if((int)$selected->inventory_ledger_id!==(int)$data['credit_offset_ledger_id']){
      throw ValidationException::withMessages([
       'credit_offset_ledger_id'=>'Return credits for matched invoices must reverse the same inventory asset account used by the original payable.',
