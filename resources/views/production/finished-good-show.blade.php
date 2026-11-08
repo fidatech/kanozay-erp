@@ -12,30 +12,17 @@
 <div class="card" style="padding:20px">
  @if(session('success'))<p role="status" style="color:#08734b">{{ session('success') }}</p>@endif
  @if($errors->any())<p role="alert" style="color:#b42318">{{ $errors->first() }}</p>@endif
- <h3>Available released batches</h3>
- @can('inventory.update')
-  @forelse($availableBatches as $batch)
-   <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;border-bottom:1px solid #e5ebf2;padding:10px 0">
-    <span><strong>{{ $batch->batch_number }}</strong> · {{ $batch->available_packages }} packages remaining @if($batch->order) · {{ $batch->order->number }} @endif</span>
-    <button type="button" class="btn" onclick="document.getElementById('dispatch-{{ $batch->id }}').showModal()">Dispatch</button>
-   </div>
-   <dialog class="k-modal" id="dispatch-{{ $batch->id }}">
-    <form method="POST" action="{{ route('production.finished-goods.dispatches.store', $good) }}" class="modal-form" data-confirm-dispatch>
-     @csrf <input type="hidden" name="submission_token" value="{{ old('submission_token', (string) \Illuminate\Support\Str::uuid()) }}">
-     <input type="hidden" name="production_batch_id" value="{{ $batch->id }}">
-     <div class="modal-head"><h2>Dispatch {{ $good->name }}</h2><button type="button" class="modal-close" onclick="this.closest('dialog').close()">&times;</button></div>
-     <div class="modal-body">
-      <p>Batch {{ $batch->batch_number }} has {{ $batch->available_packages }} packages available.</p>
-      <label>Packages <input name="quantity_packages" type="number" min="1" max="{{ $batch->available_packages }}" step="1" required></label>
-      <label>Dispatch date <input name="dispatch_date" type="date" value="{{ now()->toDateString() }}" required></label>
-      <label>Customer or dispatch reference <input name="reference" maxlength="100"></label>
-      <label>Notes <textarea name="notes" maxlength="2000" rows="3"></textarea></label>
-     </div>
-     <div class="modal-foot"><button type="button" class="btn btn-light" onclick="this.closest('dialog').close()">Cancel</button><button class="btn" type="submit">Post dispatch</button></div>
-    </form>
-   </dialog>
-  @empty<p class="muted">No released batch packages are available to dispatch.</p>@endforelse
- @else<p class="muted">You need inventory update permission to post a dispatch.</p>@endcan
+ <h3>Available QC-released batches</h3>
+ <p class="muted">A physical customer dispatch must be created by a posted sales invoice, with inventory and original-currency COGS recorded in the same transaction. Use warehouse transfer for internal stock movements. Older warehouse-only dispatches remain below for financial reconciliation.</p>
+ @can('sales.create')
+ <p><a class="btn" href="{{ route('sales.invoices.create') }}">Create invoice and dispatch</a></p>
+ @endcan
+ @forelse($availableBatches as $batch)
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;border-bottom:1px solid #e5ebf2;padding:10px 0">
+   <span><strong>{{ $batch->batch_number }}</strong> · {{ $batch->available_packages }} packages remaining @if($batch->order) · {{ $batch->order->number }} @endif</span>
+   <span class="muted">Invoice required</span>
+  </div>
+ @empty<p class="muted">No released batch packages are currently available.</p>@endforelse
  <h3 style="margin-top:24px">Stock receipts from approved batches</h3>
  <div class="table-wrap"><table><thead><tr><th>Date</th><th>Batch</th><th>Production order</th><th>Movement</th><th>Packages received</th></tr></thead><tbody>
  @forelse($movements as $movement)
@@ -61,12 +48,5 @@
 <div class="card" style="padding:18px;margin-top:18px"><h2>Customer returns</h2><p>Returns linked to the original invoice line and batch.</p><div class="table-wrap"><table><thead><tr><th>Date</th><th>Credit note</th><th>Batch</th><th>Packages</th><th>Disposition</th></tr></thead><tbody>
 @forelse($returnLines as $line)<tr><td>{{ $line->creditNote->credit_date->format('Y-m-d') }}</td><td><a href="{{ route('sales.credit-notes.show',$line->creditNote) }}">{{ $line->creditNote->number }}</a></td><td>{{ $line->production_batch_id }}</td><td>{{ number_format($line->quantity_packages) }}</td><td>{{ $line->restocked?'QC approved to saleable stock':'Quarantined / not restocked' }}</td></tr>@empty<tr><td colspan="5" class="empty">No customer returns recorded.</td></tr>@endforelse
 </tbody></table></div>{{ $returnLines->links() }}</div>
-<script>
-document.querySelectorAll('[data-confirm-dispatch]').forEach(form=>form.addEventListener('submit',async event=>{
- if(form.dataset.confirmed==='yes')return;
- event.preventDefault();
- const result=await Swal.fire({icon:'warning',title:'Post this dispatch?',text:'The warehouse balance will be reduced and the dispatch will be locked.',showCancelButton:true,confirmButtonText:'Post dispatch',cancelButtonText:'Review',confirmButtonColor:'#b42318'});
- if(result.isConfirmed){form.dataset.confirmed='yes';form.requestSubmit();}
-}));
-</script>
+
 @endsection
