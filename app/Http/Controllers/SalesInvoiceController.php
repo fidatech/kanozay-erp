@@ -78,19 +78,16 @@ class SalesInvoiceController extends Controller
         return redirect()->route('sales.invoices.show', $invoice)->with('success', 'Invoice posted, customer receivable recorded and selected batch stock dispatched.');
     }
 
-    public function reconcileCOGS(Request $request,SalesInvoice $invoice,
-        \App\Services\FinishedGoodsCostPostingService $service)
+    public function reconcileCOGS(Request $request,SalesInvoice $invoice)
     {
         abort_unless($request->user()->canAny(['finance.update','administration.update']),403);
-        $data=$request->validate([
-            'reconciliation_reference'=>['required','string','min:4','max:180'],
-            'confirm_source_evidence'=>['accepted'],
-        ]);
-        $count=$service->reconcilePostedInvoice(
-            $invoice->id,$data['reconciliation_reference'],$request->user()->id
-        );
-        return back()->with('success',$count.
-            ' original-currency COGS journal(s) reconciled without changing the posted invoice or physical dispatch.');
+        // Historic COGS postings now require a separately approved,
+        // source-fingerprinted correction case with immutable event history.
+        // The old endpoint is intentionally nonposting for existing clients.
+        return redirect()->route('finance.historical-corrections.index',[
+            'type'=>'invoice_missing_cogs','source_id'=>$invoice->id,
+        ])->with('success',
+            'Submit the source invoice as a historical correction case for independent finance review. The direct posting shortcut has been disabled.');
     }
 
     public function show(Request $request, SalesInvoice $invoice)
