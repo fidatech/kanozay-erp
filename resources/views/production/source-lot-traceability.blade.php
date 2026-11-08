@@ -13,6 +13,13 @@
 </div>
 <section class="source-panel">
 <h2>Original material provenance</h2>
+@if($sourceQcHeld)
+<p class="source-note" role="alert" style="color:#9b312a;background:#fff1ed">
+This source FIFO lot is currently on incoming-material QC hold. Review all affected batches listed below, including already released finished goods, under the approved quality and recall procedure. This report does not automatically recall or quarantine existing finished goods.
+</p>
+@else
+<p style="color:#19734f">Current incoming-material QC check: no active hold identified for this source lot.</p>
+@endif
 <p><strong>Source:</strong> {{ str_replace('_',' ',$layer->source_type) }} #{{ $layer->source_id }}
  · <strong>Received:</strong> {{ $layer->received_on?->format('Y-m-d') }}
  · <strong>Initial quantity:</strong> {{ $layer->original_quantity }} {{ $layer->material?->unit }}
