@@ -120,6 +120,11 @@ class InventoryCostService
                     'quantity'=>'The source goods receipt lot is missing its FIFO cost layer. Reconcile the receipt before returning physical stock.',
                 ]);
             }
+            if($movement->occurred_on->toDateString()<$origin->received_on->toDateString()){
+                throw ValidationException::withMessages([
+                    'occurred_on'=>'A supplier return cannot predate its original receipt FIFO lot.',
+                ]);
+            }
             $remaining = BigDecimal::of((string)$origin->remaining_quantity);
             $returnQty = BigDecimal::of((string)$movement->quantity);
             if ($remaining->isLessThan($returnQty)) {
@@ -176,6 +181,11 @@ class InventoryCostService
             $qty=$available->isLessThan($needed)?$available:$needed;
             if($layerRemaining->isLessThan($qty))$qty=$layerRemaining;
             if(!$qty->isPositive())continue;
+            if($movement->occurred_on->toDateString()<$layer->received_on->toDateString()){
+                throw ValidationException::withMessages([
+                    'occurred_on'=>'An inventory issue cannot consume a FIFO lot received after the issue date.',
+                ]);
+            }
 
             $amount=$this->amountForConsumption($layer,$qty);
             $locations->consume($layer,$warehouseId,$qty);
