@@ -11,6 +11,7 @@ use App\Models\LedgerAccount;
 use App\Models\PayrollLine;
 use App\Models\PayrollPeriod;
 use App\Services\PayrollPeriodService;
+use App\Services\PayrollLineReviewService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -39,7 +40,10 @@ class PayrollPeriodController extends Controller
             ->where('status', 'approved')
             ->whereDate('starts_on', '<=', $end)->whereDate('ends_on', '>=', $start)
             ->orderBy('starts_on')->get()->groupBy('employee_profile_id');
+        $reviewStates=app(PayrollLineReviewService::class)
+            ->overview($period,$period->lines);
         return view('hr.payroll.show', [
+            'reviewStates'=>$reviewStates,
             'period' => $period,
             'attendance' => $attendance,
             'approvedLeave' => $approvedLeave,
@@ -71,6 +75,19 @@ class PayrollPeriodController extends Controller
         ]);
         $service->adjust($period, $line, $data['payable_amount'], $data['adjustment_reason'] ?? null);
         return back()->with('success', 'Draft amount updated.');
+    }
+
+    public function reviewLine(Request $request,PayrollPeriod $period,PayrollLine $line,PayrollLineReviewService $service)
+    {
+        abort_unless($request->user()->can('hr.update') &&
+            $request->user()->can('finance.update'),403);
+        $data=$request->validate([
+            'reference'=>['required','string','min:3','max:180'],
+            'review_notes'=>['required','string','min:15','max:2000'],
+            'confirm_evidence'=>['accepted'],
+        ]);
+        $service->review($period,$line,$data,$request->user()->id);
+        return back()->with('success','This employee payroll evidence was reviewed and fingerprinted. If its details change, review it again.');
     }
 
     public function approve(Request $request, PayrollPeriod $period, PayrollPeriodService $service)
