@@ -352,7 +352,12 @@ class ManufacturingCostAccountingService
                 }
                 $dispatches=DB::table('finished_good_dispatch_lines')
                     ->where('production_batch_id',$batchId);
-                if((int)$dispatches->count()!==(int)$history->invoice_line_count ||
+                $expectedDispatchLines=$history->dispatch_line_count===null
+                    ?(int)$history->invoice_line_count
+                    :(int)$history->dispatch_line_count;
+                if((int)$dispatches->count()!==$expectedDispatchLines ||
+                    $expectedDispatchLines!==(int)$history->invoice_line_count+
+                        (int)$history->non_sale_line_count ||
                     (int)$dispatches->sum('quantity_packages')!==(int)$history->dispatched_packages){
                     $this->reject('The originally authorized physical dispatch quantities changed since the historical recovery proposal.');
                 }
