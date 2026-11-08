@@ -148,6 +148,14 @@ class ProductionAbnormalWasteCostService
                     ->where('ledger_account_id',$ledger->id)->exists()){
                 $this->reject('Choose a distinct active abnormal production loss expense ledger, not COGS or a mapped party account.');
             }
+            if($batch && DB::table('production_overhead_allocations as overhead')
+                ->join('journal_lines as source',
+                    'source.id','=','overhead.source_journal_line_id')
+                ->where('overhead.production_batch_id',$batch->id)
+                ->whereIn('overhead.status',['submitted','approved'])
+                ->where('source.ledger_account_id',$ledger->id)->exists()){
+                $this->reject('Abnormal loss expense must be independent from any source overhead expense ledger allocated to the same production batch.');
+            }
             if(DB::table('production_abnormal_waste_cost_reviews')
                 ->where('production_material_waste_id',$wasteId)->exists()){
                 $this->reject('Concurrent abnormal-loss allocation already exists.');
