@@ -13,6 +13,7 @@
 <p>Compare physical finished batches, QC returns and original-currency GL inventory journals.</p>
 </div><div class="actions">
 <a class="btn btn-light" href="{{ route('manufacturing.cost-accounting.index') }}">Manufacturing cost accounting</a>
+<a class="btn btn-light" href="{{ route('finance.historical-corrections.index') }}">Historical source corrections</a>
 <a class="btn" href="{{ route('reports.manufacturing-financial.index',array_merge(request()->query(),['export'=>'csv'])) }}">Export all matching CSV</a>
 </div></div>
 <p class="mfr-alert"><strong>Review before financial close.</strong>
