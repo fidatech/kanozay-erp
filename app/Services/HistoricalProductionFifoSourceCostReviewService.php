@@ -393,7 +393,15 @@ final class HistoricalProductionFifoSourceCostReviewService
     {
         $plan=DB::table('finance_historical_fifo_production_cost_reviews')
             ->where('id',$planId)->first();
-        if(!$plan || !in_array($plan->status,['submitted','approved','rejected'],true))
+        if(!$plan)return false;
+        if($plan->status==='posted'){
+            $recovery=DB::table('finance_historical_fifo_production_recoveries')
+                ->where('finance_historical_fifo_production_cost_review_id',
+                    $plan->id)->first();
+            return $recovery && app(HistoricalProductionFifoRecoveryService::class)
+                ->auditPosted((int)$recovery->id);
+        }
+        if(!in_array($plan->status,['submitted','approved','rejected'],true))
             return false;
         try{
             $state=$this->unchanged($plan);
