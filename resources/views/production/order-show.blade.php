@@ -131,7 +131,11 @@
        <label style="display:grid;gap:4px;font-size:12px">
         FIFO issue #{{ $source->id }} · lot #{{ $source->inventory_cost_layer_id??'Unknown' }}
         · issued {{ $source->quantity }} {{ $line->unit }} 
-        @if($source->is_valued)· source amount {{ $source->amount }} {{ $source->currency_code }}@else· Unvalued, cannot approve@endif
+        @if($source->is_valued)
+        · source amount {{ $source->amount }} {{ $source->currency_code }}
+        @else
+        · Unvalued, cannot approve
+        @endif
         <input type="text" inputmode="decimal" name="allocations[{{ $source->id }}]" value="0"
             placeholder="Source lost quantity" required @disabled(!$source->is_valued)>
        </label>
