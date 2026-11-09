@@ -391,7 +391,23 @@ class InventoryCostService
         $totalCost = BigDecimal::of((string) $layer->original_cost)->plus((string) $landed);
         $used = BigDecimal::zero();
         foreach ($layer->consumptions()->where('is_valued', true)->pluck('amount') as $prior) $used = $used->plus((string) $prior);
-        return $totalCost->minus($used);
+        // Earlier original opening FIFO issues remain IMMUTABLE/unvalued.
+        // Separately approved and posted source loss journals are bound to
+        // those same historical issues without rewriting their old costs.
+        $historic=DB::table('finance_historical_fifo_adjustment_cost_lines as cost')
+            ->join('finance_historical_fifo_adjustment_valuations as approved',
+                'approved.id','=','cost.finance_historical_fifo_adjustment_valuation_id')
+            ->where('approved.inventory_cost_layer_id',$layer->id)
+            ->where('approved.status','posted')
+            ->whereNotNull('cost.journal_entry_id')
+            ->pluck('cost.amount');
+        foreach($historic as $prior)$used=$used->plus((string)$prior);
+        $remaining=$totalCost->minus($used);
+        if($remaining->isNegative())
+            throw ValidationException::withMessages([
+                'quantity'=>'Source FIFO remaining value became negative after recognized historic adjustment issues. Reconcile original consumed costs before another stock movement.',
+            ]);
+        return $remaining;
     }
 
     private function formatDecimal(string $value): string
