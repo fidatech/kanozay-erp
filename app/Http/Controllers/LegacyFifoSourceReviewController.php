@@ -126,6 +126,35 @@ final class LegacyFifoSourceReviewController extends Controller
             ->orderBy('allocation.original_material_issue_date')
             ->orderBy('allocation.inventory_cost_consumption_id')->get()
             ->groupBy('finance_historical_fifo_production_cost_review_id');
+        $productionBatchIds=$productionAllocations->flatten()
+            ->pluck('production_batch_id')->unique()->values();
+        $productionBatchDependencies=collect();
+        if($productionBatchIds->isNotEmpty()){
+            $sourceBatchCosts=DB::table('production_batch_costs')
+                ->whereIn('production_batch_id',$productionBatchIds)
+                ->get()->keyBy('production_batch_id');
+            $existingBatchGL=DB::table('production_batch_cost_postings')
+                ->whereIn('production_batch_id',$productionBatchIds)
+                ->get()->keyBy('production_batch_id');
+            $sourceDispatches=DB::table('finished_good_dispatch_lines')
+                ->whereIn('production_batch_id',$productionBatchIds)
+                ->select('production_batch_id')->get()
+                ->groupBy('production_batch_id');
+            $genuineInvoices=DB::table('sales_invoice_lines')
+                ->whereIn('production_batch_id',$productionBatchIds)
+                ->select('production_batch_id')->get()
+                ->groupBy('production_batch_id');
+            $productionBatchDependencies=$productionBatchIds->mapWithKeys(
+                fn($id)=>[$id=>[
+                    'frozen_material_cost'=>$sourceBatchCosts->get($id)?->material_cost,
+                    'unvalued_quantity'=>$sourceBatchCosts->get($id)?->unvalued_quantity,
+                    'currency_code'=>$sourceBatchCosts->get($id)?->currency_code,
+                    'manufacturing_gl_id'=>$existingBatchGL->get($id)?->id,
+                    'dispatched_lines'=>$sourceDispatches->get($id,collect())->count(),
+                    'invoiced_lines'=>$genuineInvoices->get($id,collect())->count(),
+                ]]
+            );
+        }
         $currencies=DB::table('currencies')
             ->where('is_active',true)->orderBy('code')->get(['id','code']);
         $equityLedgers=DB::table('ledger_accounts')
@@ -140,6 +169,7 @@ final class LegacyFifoSourceReviewController extends Controller
             'productionSourceReviews'=>$productionSourceReviews,
             'productionPlans'=>$productionPlans,
             'productionAllocations'=>$productionAllocations,
+            'productionBatchDependencies'=>$productionBatchDependencies,
             'historicCostPlans'=>$historicCostPlans,
             'historicIssueCosts'=>$historicIssueCosts,
             'currencies'=>$currencies,
