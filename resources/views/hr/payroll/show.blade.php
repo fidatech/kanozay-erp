@@ -6,7 +6,9 @@
 <p><a class="btn btn-light" href="{{ route('hr.payroll.tax-policies.index',['period_id'=>$period->id]) }}">Reviewed payroll tax policies and withholding preview</a></p>
 <div class="card" style="padding:20px;margin-bottom:16px"><h2>Employee amounts</h2><p>Amounts shown are in {{ $period->currency->code }}. Attendance and approved leave are reviewed evidence, not automatic salary deductions. Every employee requires an evidence reference and documented review before the payroll accrual can be approved.</p>
 @if($period->status==='draft')
-@php($reviewCounts=collect($reviewStates)->countBy('status'))
+@php
+    $reviewCounts=collect($reviewStates)->countBy('status');
+@endphp
 <p style="padding:11px;border:1px solid #dce7f0;border-radius:8px"><strong>Evidence review:</strong>
 {{ $reviewCounts['reviewed']??0 }} current,
 {{ $reviewCounts['pending']??0 }} pending,
@@ -51,7 +53,9 @@ No records
 </form></details>
 @endif
 </td><td>
-@php($review=$reviewStates[$line->id]??['status'=>'pending'])
+@php
+    $review=$reviewStates[$line->id]??['status'=>'pending'];
+@endphp
 @if($period->status==='draft')
 <strong style="color:{{ $review['status']==='reviewed'?'#16764b':($review['status']==='stale'?'#a15b1b':'#a12e2e') }}">{{ ucwords($review['status']) }}</strong>
 @if(!empty($review['reference']))<div class="muted">{{ $review['reference'] }}</div>@endif
