@@ -318,6 +318,22 @@ class InventoryCostService
                 $recovered=DB::table('finance_historical_fifo_production_recoveries')
                     ->where('inventory_cost_layer_id',$layer->id)
                     ->where('status','posted')->first();
+                $multi=DB::table('finance_historical_fifo_multi_recovery_lots as lot')
+                    ->join('finance_historical_fifo_multi_recoveries as case',
+                        'case.id','=','lot.finance_historical_fifo_multi_recovery_id')
+                    ->where('lot.inventory_cost_layer_id',$layer->id)
+                    ->where('case.status','posted')
+                    ->select('case.id','case.currency_id','lot.original_opening_date')
+                    ->first();
+                if($multi &&
+                    ($multi->original_opening_date>
+                        $movement->occurred_on->toDateString() ||
+                     (int)$multi->currency_id!==(int)$layer->currency_id ||
+                     !app(HistoricalProductionFifoMultiRecoveryService::class)
+                         ->auditPosted((int)$multi->id)))
+                    throw ValidationException::withMessages([
+                        'quantity'=>'This original FIFO lot has an unreconciled multi-opening historical WIP/finished/customer COGS source accounting chain. Further physical FIFO consumption is blocked.',
+                    ]);
                 if($recovered &&
                     ($recovered->original_opening_date>
                         $movement->occurred_on->toDateString() ||
@@ -441,33 +457,43 @@ class InventoryCostService
         $produced=DB::table('finance_historical_fifo_production_cost_lines as source')
             ->join('finance_historical_fifo_production_cost_reviews as signed',
                 'signed.id','=','source.finance_historical_fifo_production_cost_review_id')
-            ->join('finance_historical_fifo_production_recoveries as executed',
+            ->leftJoin('finance_historical_fifo_production_recoveries as executed',
                 'executed.finance_historical_fifo_production_cost_review_id','=','signed.id')
+            ->leftJoin('finance_historical_fifo_multi_recovery_lots as member',
+                'member.finance_historical_fifo_production_cost_review_id','=','signed.id')
+            ->leftJoin('finance_historical_fifo_multi_recoveries as multi',
+                'multi.id','=','member.finance_historical_fifo_multi_recovery_id')
             ->leftJoin('journal_entries as journal',
                 'journal.id','=','source.historical_wip_journal_id')
             ->where('signed.inventory_cost_layer_id',$layer->id)
             ->where('signed.status','posted')
-            ->where('executed.status','posted')
+            ->where(function($query){
+                $query->where('executed.status','posted')
+                    ->orWhere('multi.status','posted');
+            })
             ->get(['source.proposed_original_wip_cost',
                 'source.original_material_issue_date',
                 'source.historical_wip_journal_id',
-                'executed.wip_journal_id',
+                'executed.wip_journal_id as single_wip_journal_id',
+                'multi.wip_journal_id as multi_wip_journal_id',
                 'signed.currency_id',
                 'journal.status as journal_status',
                 'journal.reversal_of_id',
                 'journal.entry_date',
                 'journal.currency_id as journal_currency_id']);
         foreach($produced as $original){
+            $recognizedWipId=$original->single_wip_journal_id ??
+                $original->multi_wip_journal_id;
             if(!$original->historical_wip_journal_id ||
                 (int)$original->historical_wip_journal_id!==
-                    (int)$original->wip_journal_id ||
+                    (int)$recognizedWipId ||
                 $original->journal_status!=='posted' ||
                 $original->reversal_of_id ||
                 (int)$original->currency_id!==(int)$layer->currency_id ||
                 (int)$original->journal_currency_id!==(int)$layer->currency_id ||
                 (string)$original->entry_date!==$original->original_material_issue_date ||
                 DB::table('journal_entries')
-                    ->where('reversal_of_id',$original->wip_journal_id)->exists())
+                    ->where('reversal_of_id',$recognizedWipId)->exists())
                 throw ValidationException::withMessages([
                     'quantity'=>'A historical production FIFO WIP issue has no valid source-linked, posted original-date and original-currency journal. Current remaining raw-material cost cannot be assumed.',
                 ]);
