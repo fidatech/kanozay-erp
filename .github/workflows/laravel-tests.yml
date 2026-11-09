@@ -50,6 +50,20 @@ jobs:
         run: |
           cp .env.example .env
           php artisan key:generate
+      - name: Verify compiled PHP and Blade syntax
+        run: |
+          php artisan view:cache
+          FAILED=0
+          while IFS= read -r -d '' file; do
+            if ! php -l "$file" >/tmp/kanozay-php-lint.txt 2>&1; then
+              echo "::error file=$file::Compiled Blade contains invalid PHP"
+              cat /tmp/kanozay-php-lint.txt
+              nl -ba "$file" | tail -n 180
+              FAILED=1
+            fi
+          done < <(find storage/framework/views -type f -name '*.php' -print0)
+          if [ "$FAILED" -ne 0 ]; then exit 1; fi
+          php artisan view:clear
       - name: Verify supplier invoice accounting regression first
         run: php artisan test tests/Feature/MatchedSupplierInvoiceTest.php --stop-on-failure
       - name: Run Laravel test suite
