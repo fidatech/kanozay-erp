@@ -78,6 +78,14 @@ class JournalPostingService {
    if(DB::table('supplier_advance_applications')->where('journal_entry_id',$original->id)->exists()
    || DB::table('customer_advance_applications')->where('journal_entry_id',$original->id)->exists())
     throw ValidationException::withMessages(['status'=>'Applied customer or supplier advances require a dedicated document-level correction workflow.']);
+   if(DB::table('finance_historical_fifo_multi_recovery_lots')
+        ->where('opening_journal_id',$original->id)->exists() ||
+       DB::table('finance_historical_fifo_multi_recoveries')
+        ->where('wip_journal_id',$original->id)
+        ->orWhere('finished_journal_id',$original->id)->exists())
+     throw ValidationException::withMessages([
+       'status'=>'Separately approved multiple original FIFO opening assets and one combined WIP/finished/COGS posting are an inseparable source-linked historic manufacturing correction. Reversing only one lot or one WIP/finished journal is prohibited.',
+     ]);
    if(DB::table('finance_historical_fifo_production_recoveries')
         ->where('opening_journal_id',$original->id)
         ->orWhere('wip_journal_id',$original->id)
