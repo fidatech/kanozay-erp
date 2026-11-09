@@ -57,7 +57,7 @@
 <section class="lfr-panel">
 <h2>Submit independent consumption provenance evidence</h2>
 <p class="lfr-muted">Only documented original opening FIFO consumptions are eligible. This is an evidence review, not a retrospective valuation or GL correction. A separate reviewer must verify the original issue movement quantities and reference documents.</p>
-@foreach($layers->filter(fn($lot)=>(float)$lot->consumed_quantity>0) as $lot)
+@foreach($layers->filter(fn($lot)=>(float)$lot->consumed_quantity>0 && $lot->original_cost===null) as $lot)
 <details id="consumed-{{ $lot->id }}" style="margin:10px 0;padding:11px;border:1px solid #d9e5f1;border-radius:9px">
 <summary style="cursor:pointer;font-weight:650">{{ $lot->sku }} — lot #{{ $lot->id }} · {{ $lot->consumed_quantity }} historically consumed</summary>
 <form action="{{ route('inventory.legacy-fifo-reviews.consumed') }}" method="POST" class="lfr-grid" style="margin:13px 0">
