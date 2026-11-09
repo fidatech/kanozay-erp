@@ -1296,6 +1296,45 @@ class FinanceCloseReadinessService
             $blockers[]=$awaitingProductionGL.
                 ' independently signed original production FIFO recovery plan(s) still need a separate authorized all-or-nothing raw/WIP/finished/COGS posting. Document review alone is not financial capitalization.';
 
+        // Coordinated multi-lot historical recoveries are a single source
+        // cost event. Every independently opened lot, the original issue,
+        // the QC finished receipt and every genuine customer invoice month
+        // must recognize ALL matched source journals or remain unclosed.
+        $multiFifoRecoveries=DB::table('finance_historical_fifo_multi_recoveries as case')
+            ->where(function($query)use($begin,$end){
+                $query->whereBetween('case.original_issue_date',[$begin,$end])
+                    ->orWhereBetween('case.original_finished_date',[$begin,$end])
+                    ->orWhereExists(function($open)use($begin,$end){
+                        $open->selectRaw('1')
+                            ->from('finance_historical_fifo_multi_recovery_lots as lot')
+                            ->whereColumn('lot.finance_historical_fifo_multi_recovery_id','case.id')
+                            ->whereBetween('lot.original_opening_date',[$begin,$end]);
+                    })
+                    ->orWhereExists(function($sold)use($begin,$end){
+                        $sold->selectRaw('1')
+                            ->from('sales_invoice_lines as line')
+                            ->join('sales_invoices as invoice',
+                                'invoice.id','=','line.sales_invoice_id')
+                            ->whereColumn('line.production_batch_id','case.production_batch_id')
+                            ->whereBetween('invoice.invoice_date',[$begin,$end]);
+                    });
+            })->get(['case.*']);
+        $invalidMultiCost=0;$pendingMultiCost=0;
+        foreach($multiFifoRecoveries as $case){
+            if($case->status==='posted'){
+                if(!app(HistoricalProductionFifoMultiRecoveryService::class)
+                    ->auditPosted((int)$case->id))
+                    $invalidMultiCost++;
+            }elseif(in_array($case->status,['submitted','approved'],true))
+                $pendingMultiCost++;
+        }
+        if($invalidMultiCost)
+            $blockers[]=$invalidMultiCost.
+                ' independently posted original multi-FIFO opening/equity, combined WIP, QC finished goods or actual customer invoice COGS batches have invalid source costs, dates, currencies, journals or physical quantity reconciliation.';
+        if($pendingMultiCost)
+            $blockers[]=$pendingMultiCost.
+                ' historic multi-FIFO original opening lots still have a pending independently approved full-batch raw/WIP/QC-finished/customer-COGS source recovery. All original events must post atomically before month close.';
+
         $unvaluedOpeningIssues=DB::table('inventory_cost_consumptions as consumed')
             ->join('inventory_cost_layers as lot',
                 'lot.id','=','consumed.inventory_cost_layer_id')
@@ -1316,6 +1355,10 @@ class FinanceCloseReadinessService
                 'plan.id','=','produced.finance_historical_fifo_production_cost_review_id')
             ->leftJoin('finance_historical_fifo_production_recoveries as execution',
                 'execution.finance_historical_fifo_production_cost_review_id','=','plan.id')
+            ->leftJoin('finance_historical_fifo_multi_recovery_lots as member',
+                'member.finance_historical_fifo_production_cost_review_id','=','plan.id')
+            ->leftJoin('finance_historical_fifo_multi_recoveries as combined',
+                'combined.id','=','member.finance_historical_fifo_multi_recovery_id')
             ->whereBetween('issue.occurred_on',[$begin,$end])
             ->where(function($query){
                 $query->whereNull('lot.original_cost')
@@ -1331,8 +1374,15 @@ class FinanceCloseReadinessService
                     $production->whereNull('produced.historical_wip_journal_id')
                         ->orWhereNull('plan.id')
                         ->orWhere('plan.status','!=','posted')
-                        ->orWhereNull('execution.id')
-                        ->orWhere('execution.status','!=','posted');
+                        ->orWhere(function($unposted){
+                            $unposted->where(function($single){
+                                $single->whereNull('execution.id')
+                                    ->orWhere('execution.status','!=','posted');
+                            })->where(function($multi){
+                                $multi->whereNull('combined.id')
+                                    ->orWhere('combined.status','!=','posted');
+                            });
+                        });
                 });
             })->distinct()->count('consumed.id');
         if($unvaluedOpeningIssues)
