@@ -1227,6 +1227,39 @@ class FinanceCloseReadinessService
             $blockers[]=$pendingHistoricAdjustment.
                 ' original consumed-opening FIFO financial valuation proposal(s) await signed review or actual journal execution. Documentation alone is not a booked source cost.';
 
+        // Independent source-cost approval for historical PRODUCTION FIFO is
+        // NOT a raw/WIP/finished-goods/COGS GL posting. The source plan
+        // spans the original opening and genuine material issue months;
+        // prevent either period from being certified merely because
+        // an accountant approved a projected original-currency WIP budget.
+        $productionFifoPlans=DB::table('finance_historical_fifo_production_cost_reviews as plan')
+            ->join('inventory_cost_layers as lot',
+                'lot.id','=','plan.inventory_cost_layer_id')
+            ->where(function($query)use($begin,$end){
+                $query->whereBetween('lot.received_on',[$begin,$end])
+                    ->orWhereExists(function($sub)use($begin,$end){
+                        $sub->selectRaw('1')
+                            ->from('finance_historical_fifo_production_cost_lines as line')
+                            ->whereColumn('line.finance_historical_fifo_production_cost_review_id',
+                                'plan.id')
+                            ->whereBetween('line.original_material_issue_date',[$begin,$end]);
+                    });
+            })->select('plan.*')->get();
+        $pendingProductionWip=0;$invalidProductionSource=0;
+        foreach($productionFifoPlans as $sourcePlan){
+            if(!app(HistoricalProductionFifoSourceCostReviewService::class)
+                ->audit((int)$sourcePlan->id))
+                $invalidProductionSource++;
+            if(in_array($sourcePlan->status,['submitted','approved'],true))
+                $pendingProductionWip++;
+        }
+        if($invalidProductionSource)
+            $blockers[]=$invalidProductionSource.
+                ' original production FIFO source-cost proposal(s) have changed physical issue, manufacturing snapshot, currency or independent authorization evidence.';
+        if($pendingProductionWip)
+            $blockers[]=$pendingProductionWip.
+                ' historical production FIFO original-currency WIP plans are SOURCE REVIEW ONLY, not posted cost: original raw inventory, production WIP, released finished goods and any genuine invoiced COGS need a single separately authorized original-date financial recovery before this accounting month can close.';
+
         $unvaluedOpeningIssues=DB::table('inventory_cost_consumptions as consumed')
             ->join('inventory_cost_layers as lot',
                 'lot.id','=','consumed.inventory_cost_layer_id')
