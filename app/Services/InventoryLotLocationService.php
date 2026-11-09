@@ -195,76 +195,19 @@ class InventoryLotLocationService
      * physical warehouse or the unassigned pool. Never manufacture a lot or
      * increase stock, and never attribute beyond either available balance.
      */
+    /**
+     * Kept as an explicit backwards-compatible denial. Legacy FIFO location
+     * changes now require an independently approved original-source review
+     * in LegacyFifoSourceReviewService. No old UI or direct service caller
+     * may bypass the physical count, original FIFO and reviewer controls.
+     */
     public function assignLegacy(
         int $layerId, ?int $warehouseId, string $quantity,
         string $reference, string $reason, int $actorId
     ): object {
-        return DB::transaction(function () use ($layerId,$warehouseId,$quantity,$reference,$reason,$actorId) {
-            $source = InventoryCostLayer::findOrFail($layerId);
-            $material = InventoryMaterial::whereKey($source->inventory_material_id)->lockForUpdate()->firstOrFail();
-            $layer = InventoryCostLayer::whereKey($layerId)->lockForUpdate()->firstOrFail();
-            if ($warehouseId && ! CompanyWarehouse::whereKey($warehouseId)->where('is_active',true)->exists()) {
-                throw ValidationException::withMessages(['company_warehouse_id'=>'Choose an active destination warehouse.']);
-            }
-            $qty = $this->amount($quantity);
-            $positions = DB::table('inventory_cost_layer_locations')
-                ->where('inventory_cost_layer_id',$layer->id)->lockForUpdate()->get();
-            $positioned = BigDecimal::zero();
-            foreach($positions as $position)$positioned=$positioned->plus((string)$position->quantity);
-            $available = BigDecimal::of((string)$layer->remaining_quantity)->minus($positioned);
-            if ($available->isLessThan($qty)) {
-                throw ValidationException::withMessages(['quantity'=>'Attribution exceeds the remaining quantity of this source lot.']);
-            }
-
-            $balances = DB::table('inventory_warehouse_balances')
-                ->where('inventory_material_id',$material->id)->lockForUpdate()->get();
-            $allocated = BigDecimal::zero();$locationPhysical = BigDecimal::zero();
-            foreach($balances as $balance) {
-                $allocated=$allocated->plus((string)$balance->quantity);
-                if($warehouseId && (int)$balance->company_warehouse_id===$warehouseId) {
-                    $locationPhysical=BigDecimal::of((string)$balance->quantity);
-                }
-            }
-            $global = BigDecimal::of((string)$material->on_hand_quantity);
-            if($allocated->isGreaterThan($global)) {
-                throw ValidationException::withMessages(['quantity'=>'Global and warehouse quantities must be reconciled first.']);
-            }
-            if($warehouseId===null)$locationPhysical=$global->minus($allocated);
-            $located = DB::table('inventory_cost_layer_locations as position')
-                ->join('inventory_cost_layers as layer','layer.id','=','position.inventory_cost_layer_id')
-                ->where('layer.inventory_material_id',$material->id)
-                ->where('position.location_key',$this->key($warehouseId))
-                ->lockForUpdate()->pluck('position.quantity');
-            $alreadyAttributed = BigDecimal::zero();
-            foreach($located as $value)$alreadyAttributed=$alreadyAttributed->plus((string)$value);
-            if($locationPhysical->minus($alreadyAttributed)->isLessThan($qty)) {
-                throw ValidationException::withMessages([
-                    'quantity'=>'This location lacks sufficient unattributed physical stock. Check the source count and existing lot positions.',
-                ]);
-            }
-
-            $current = $positions->firstWhere('location_key',$this->key($warehouseId));
-            if($current) {
-                DB::table('inventory_cost_layer_locations')->where('id',$current->id)
-                    ->update(['quantity'=>(string)BigDecimal::of((string)$current->quantity)
-                        ->plus($qty)->toScale(6),'updated_at'=>now()]);
-            } else {
-                DB::table('inventory_cost_layer_locations')->insert([
-                    'inventory_cost_layer_id'=>$layerId,'company_warehouse_id'=>$warehouseId,
-                    'location_key'=>$this->key($warehouseId),'quantity'=>(string)$qty,
-                    'created_at'=>now(),'updated_at'=>now(),
-                ]);
-            }
-            $id=DB::table('inventory_legacy_lot_assignments')->insertGetId([
-                'inventory_cost_layer_id'=>$layerId,'company_warehouse_id'=>$warehouseId,
-                'quantity'=>(string)$qty,'reference'=>$reference,'reason'=>$reason,
-                'assigned_by'=>$actorId,'created_at'=>now(),'updated_at'=>now(),
-            ]);
-            ActivityLog::record('inventory.lot.position_reconciled','inventory_cost_layer',$layerId,
-                'Legacy source lot attributed to a verified physical location.',
-                ['assignment_id'=>$id,'material_id'=>$material->id,'warehouse_id'=>$warehouseId,
-                 'quantity'=>(string)$qty,'reference'=>$reference]);
-            return DB::table('inventory_legacy_lot_assignments')->where('id',$id)->first();
-        });
+        throw ValidationException::withMessages([
+            'legacy_fifo'=>'Direct legacy FIFO attribution is disabled. Submit the original physical opening and warehouse count to the independent FIFO review center.',
+        ]);
     }
+
 }
