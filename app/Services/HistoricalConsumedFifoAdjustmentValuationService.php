@@ -80,6 +80,12 @@ final class HistoricalConsumedFifoAdjustmentValuationService
                 ->where('inventory_cost_layer_id',$source['layer']->id)->exists())
             $this->fail('Original FIFO issue, inventory, source price, accounting, physical location or opening evidence changed since independent documentary review.');
 
+        if(DB::table('finance_historical_correction_cases')
+            ->where('case_type','opening_fifo_unvalued')
+            ->where('source_id',$source['layer']->id)
+            ->whereIn('status',['submitted','approved'])->exists())
+            $this->fail('An earlier original opening FIFO correction case for this same lot is still open. Withdraw or independently resolve that source case first; never book two competing historic opening asset/equity valuations.');
+
         if($source['consumptions']->count()>100)
             $this->fail('More than 100 original source adjustment issues need a separately supported chunked accounting correction.');
         $issues=[];$actors=[
@@ -122,6 +128,9 @@ final class HistoricalConsumedFifoAdjustmentValuationService
             ];
             $actors[]=(int)$consumed->created_by;
             $actors[]=(int)$adjustment->created_by;
+            if((int)$review->reviewed_by===(int)$adjustment->created_by ||
+                (int)$review->requested_by===(int)$adjustment->created_by)
+                $this->fail('Source consumption provenance requester/reviewer must be independent of original historic stock-adjustment author; seek a new fully independent audited source review.');
         }
         if(!$issues)
             $this->fail('The source has no genuine consumed FIFO stock-adjustment write-offs to correct.');
@@ -197,7 +206,7 @@ final class HistoricalConsumedFifoAdjustmentValuationService
             $issue['amount']=(string)$share->toScale(4);
             $issue['fingerprint']=hash('sha256',json_encode([
                 'original_source'=>$issue['source'],
-                'source_cost'=>$cost->toScale(4)->__toString(),
+                'source_cost'=>(string)$cost->toScale(4),
                 'currency_id'=>(int)$currency->id,
                 'amount'=>$issue['amount'],
                 'expense_ledger'=>(int)$expense->id,
