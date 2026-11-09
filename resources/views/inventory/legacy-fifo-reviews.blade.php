@@ -547,4 +547,175 @@ Post original raw inventory, WIP, finished and customer COGS atomically</button>
 @endforelse
 </tbody></table></div>
 </section>
+
+<section class="lfr-panel">
+<h2>Multiple original FIFO lots → one QC-released batch: jointly authorized full-chain recovery</h2>
+<p class="lfr-warning">
+Only 2–12 independently approved originally unvalued FIFO opening lots that together account for ALL raw material and packaging movements of ONE genuine QC-released batch can enter this workflow. Every source lot must use the SAME authentic original currency and approved manufacturing ledger policy. All physical source issues must have the SAME original material issue date. Actual remaining lot positions must already be counted, and all historical opening, WIP, finished-goods and customer invoice months must be OPEN. Any extra suppliers, mixed valued inputs, waste, overhead, non-sale dispatch, customer return/credit, prior capitalization or unmatched posted customer invoice blocks execution. No historic rate or raw quantity is invented.
+</p>
+@if(auth()->user()->can('finance.update') || auth()->user()->can('administration.update'))
+@foreach($multiRecoveryCandidates as $group)
+<details class="lfr-review" style="margin:13px 0">
+<summary style="font-weight:700;cursor:pointer">
+Batch #{{ $group['batch_id'] }} · {{ $group['batch_number'] }} ·
+{{ $group['plans']->count() }} independently source-reviewed opening FIFO lots available
+</summary>
+<form action="{{ route('inventory.legacy-fifo-reviews.multi-recovery-submit') }}"
+method="POST" class="lfr-grid" style="margin:13px 0">
+@csrf
+<div style="grid-column:span 3">
+<strong>Original independently signed FIFO source costs (select all actual source lots)</strong>
+<p class="lfr-muted">Select each lot belonging to this real batch. The financial service rejects a partial selection, unsupported shared batches and any extra original material issue.</p>
+@foreach($group['plans'] as $source)
+<label style="display:flex;flex-direction:row;align-items:center;gap:8px;padding:5px 0">
+<input type="checkbox" name="source_cost_review_ids[]" value="{{ $source->id }}" checked style="width:auto">
+FIFO opening lot #{{ $source->inventory_cost_layer_id }} · original review #{{ $source->id }}
+· source currency {{ $source->currency_code }}
+· original total {{ $source->original_lot_cost }}
+· material WIP {{ $source->consumed_production_cost }}
+· remaining raw {{ $source->remaining_inventory_cost }}
+</label>
+@endforeach
+</div>
+<label>Verified common original opening-equity ledger
+<select name="opening_equity_ledger_id" required>
+<option value="">Original source ownership equity account</option>
+@foreach($equityLedgers as $ledger)
+<option value="{{ $ledger->id }}">{{ $ledger->code }} · {{ $ledger->name }}</option>
+@endforeach
+</select></label>
+<label style="grid-column:span 2">Original lot/ownership and batch accounting approval reference
+<input name="approval_reference" minlength="4" maxlength="180" required
+placeholder="Genuine original cost documents for ALL opening lots"></label>
+<label style="grid-column:span 3">Describe every original material source and dated receipt, actual issued FIFO quantities, common factory currency and ownership, QC finished quantity, revenue and potential earlier manual GL
+<textarea name="reconciliation_notes" minlength="120" maxlength="5000" rows="5" required
+placeholder="List each original authenticated FIFO receipt and cost document, each actual physical issue, all verified original accounting dates, QC released product, previously invoiced physical sales and evidence of no other unposted raw, waste, overhead or manually booked finance cost."></textarea></label>
+<label style="grid-column:span 3;flex-direction:row;align-items:center">
+<input type="checkbox" name="confirm_original_ownership_sources" value="1" required style="width:auto">
+Every selected opening lot has genuine independent original ownership/cost evidence. One source currency and opening equity account are supported by those documents.</label>
+<label style="grid-column:span 3;flex-direction:row;align-items:center">
+<input type="checkbox" name="confirm_all_material_inputs" value="1" required style="width:auto">
+All real material/packaging issues for this batch came from exactly these selected opening FIFO lots. No extra supplier lot, waste, overhead, mixed dispatch or customer credits exist.</label>
+<label style="grid-column:span 3;flex-direction:row;align-items:center">
+<input type="checkbox" name="confirm_one_currency_one_issue_date" value="1" required style="width:auto">
+All selected source lots share ONE authentic currency and ONE original material issue date; the proposed values are not based on assumed exchange rates.</label>
+<div style="grid-column:span 3"><button class="btn" type="submit">
+Submit complete multi-opening-lot raw/WIP/finished/COGS source for independent review
+</button></div>
+</form></details>
+@endforeach
+@endif
+@if($multiRecoveryCandidates->isEmpty())
+<p class="lfr-muted">No batch currently has two or more approved original FIFO WIP source-review plans in this register. Existing multi-lot recoveries appear below.</p>
+@endif
+<h3 style="margin:16px 0 12px">Signed historical multi-opening FIFO accounting register</h3>
+<div class="lfr-table"><table>
+<thead><tr>
+<th>Genuine production source</th><th>Original full FIFO cost allocation</th>
+<th>Original source GL and dates</th><th>Independent authorization</th>
+</tr></thead><tbody>
+@forelse($multiRecoveryCases as $case)
+<tr>
+<td><strong>Recovery #{{ $case->id }}</strong> · {{ strtoupper($case->status) }}
+<div>QC Batch #{{ $case->production_batch_id }} · {{ $case->batch_number }}</div>
+<div class="lfr-muted">{{ $case->source_lot_count }} opening FIFO lots ·
+{{ $case->original_issue_line_count }} actual material consumption rows ·
+{{ $case->genuine_invoice_line_count }} already-issued genuine customer invoice lines</div>
+</td>
+<td>
+Original opening equity/raw value:
+<strong>{{ $case->original_opening_total }} {{ $case->currency_code }}</strong>
+<div>Combined WIP / QC finished: <strong>{{ $case->source_material_total }}</strong></div>
+<div>Unconsumed original raw asset: <strong>{{ $case->remaining_original_raw_total }}</strong></div>
+<details><summary>View original lot proof, values and independent journals</summary>
+@foreach($multiRecoveryLots->get($case->id,collect()) as $lot)
+<div style="padding:7px 0;border-bottom:1px solid #e3ebf3">
+Original lot #{{ $lot->inventory_cost_layer_id }} · finance source review #{{ $lot->finance_historical_fifo_production_cost_review_id }}
+· opened {{ $lot->original_opening_date }}
+<div>Total original {{ $lot->original_source_total }}
+· consumed WIP {{ $lot->consumed_wip_cost }}
+· remaining original raw {{ $lot->remaining_raw_cost }}</div>
+<div class="lfr-muted">
+Original asset/equity journal:
+{{ $lot->opening_journal_number??'Not posted' }}
+</div></div>
+@endforeach</details>
+</td>
+<td>
+Original material WIP issue {{ $case->original_issue_date }}
+<div>QC finished {{ $case->original_finished_date }}</div>
+@if($case->status==='posted')
+<div>WIP journal: <strong>{{ $case->wip_journal_number }}</strong></div>
+<div>Finished asset journal: <strong>{{ $case->finished_journal_number }}</strong></div>
+<div>Manufacturing batch capitalization #{{ $case->production_batch_cost_posting_id }}</div>
+<div class="lfr-muted">Authentic original customer invoice COGS is linked to the same batch posting.</div>
+@else
+<div class="lfr-muted">No historical source cost GL posted.</div>
+@endif
+</td>
+<td>
+Source proposer #{{ $case->submitted_by }}
+@if($case->approved_by)
+<div>Independent reviewer #{{ $case->approved_by }}</div>
+@endif
+@if($case->executed_by)
+<div>Separate executor #{{ $case->executed_by }}</div>
+@endif
+<div><strong>{{ $case->approval_reference }}</strong></div>
+<div class="lfr-muted" style="white-space:pre-wrap">{{ $case->reconciliation_notes }}</div>
+@if($case->review_reference)
+<div>{{ $case->review_reference }}</div>
+<div class="lfr-muted" style="white-space:pre-wrap">{{ $case->review_notes }}</div>
+@endif
+@if($case->status==='submitted' &&
+(auth()->user()->can('finance.update') || auth()->user()->can('administration.update')) &&
+(int)$case->submitted_by!==auth()->id())
+<form method="POST"
+action="{{ route('inventory.legacy-fifo-reviews.multi-recovery-review',$case->id) }}"
+class="lfr-review" style="margin:11px 0">
+@csrf
+<label>Independent full source decision<select name="decision" required>
+<option value="">Select decision</option>
+<option value="approve">Approve complete original multiple FIFO lot / WIP / QC finished / COGS source</option>
+<option value="reject">Reject incomplete sources or duplicate previously booked GL</option>
+</select></label>
+<label>Signed independent source reference
+<input name="review_reference" minlength="4" maxlength="180" required></label>
+<label style="grid-column:span 2">Independent review of EVERY authentic opening, original currency, ALL actual material issues, QC finished receipt, customer revenue/COGS and original period/accounting ownership
+<textarea name="review_notes" rows="5" minlength="120" maxlength="5000" required></textarea></label>
+<label style="grid-column:span 2;flex-direction:row;align-items:center">
+<input type="checkbox" name="confirm_independently_reviewed_all_lots" value="1" required style="width:auto">
+I independently verified the source costs of every lot, no old manually posted GL and no unsupported extra batch costs or customer returns.</label>
+<button class="btn" type="submit">Record independent multi-FIFO recovery decision</button>
+</form>
+@endif
+@if($case->status==='approved' &&
+(auth()->user()->can('finance.update') || auth()->user()->can('administration.update')) &&
+(int)$case->submitted_by!==auth()->id() &&
+(int)$case->approved_by!==auth()->id())
+<form method="POST"
+action="{{ route('inventory.legacy-fifo-reviews.multi-recovery-post',$case->id) }}"
+class="lfr-review" style="margin:11px 0">
+@csrf
+<p class="lfr-warning" style="grid-column:span 2">
+Final execution posts each independently verified original opening asset/equity value, one combined original WIP, QC finished asset and all genuine customer COGS under one original-period-locked DB transaction. The original immutable stock issues, source production cost snapshot and posted customer revenue are never edited. Failure rolls back all new GL and cost links.
+</p>
+<label style="grid-column:span 2;flex-direction:row;align-items:center">
+<input type="checkbox" name="confirm_original_months_open" value="1" required style="width:auto">
+Every original opening, material issue, QC finished release and actual customer invoice source month is OPEN.</label>
+<label style="grid-column:span 2;flex-direction:row;align-items:center">
+<input type="checkbox" name="confirm_no_duplicate_manual_GL" value="1" required style="width:auto">
+I independently verified no previous manual opening asset, original WIP, finished or customer COGS journal is already booked.</label>
+<label style="grid-column:span 2;flex-direction:row;align-items:center">
+<input type="checkbox" name="confirm_atomic_full_chain" value="1" required style="width:auto">
+I am a different executor and authorize ONLY the entire genuine original multi-lot manufacturing source chain.</label>
+<button class="btn" type="submit" onclick="return confirm('Post ALL separately approved original opening, combined WIP, QC finished asset and actual invoice COGS in one atomic financial transaction?')">
+Post full approved multi-FIFO accounting chain atomically</button>
+</form>
+@endif
+</td></tr>
+@empty<tr><td colspan="4">No signed multi-opening FIFO accounting recovery case has been submitted.</td></tr>
+@endforelse
+</tbody></table></div>
+</section>
 @endsection
