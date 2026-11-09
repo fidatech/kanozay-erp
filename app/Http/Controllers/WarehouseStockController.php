@@ -102,7 +102,7 @@ class WarehouseStockController extends Controller
         ]);
     }
 
-    public function assignLegacy(Request $request, InventoryLotLocationService $service)
+    public function assignLegacy(Request $request, \App\Services\LegacyFifoSourceReviewService $service)
     {
         abort_unless(
             $request->user()->can('administration.update') ||
@@ -112,21 +112,22 @@ class WarehouseStockController extends Controller
         $request->merge(['quantity'=>LocalizedDecimal::normalize($request->input('quantity'))]);
         $data=$request->validate([
             'inventory_cost_layer_id'=>['required','integer','exists:inventory_cost_layers,id'],
-            'company_warehouse_id'=>['nullable','integer',
+            'company_warehouse_id'=>['required','integer',
                 Rule::exists('company_warehouses','id')->where('is_active',true)],
             'quantity'=>['required','numeric','gt:0',
                 'regex:/^(?:0|[1-9][0-9]{0,13})(?:\\.[0-9]{1,6})?$/'],
-            'reference'=>['required','string','min:3','max:160'],
-            'reason'=>['required','string','min:15','max:2000'],
+            'reference'=>['required','string','min:4','max:160'],
+            'reason'=>['required','string','min:60','max:2000'],
         ]);
-        $service->assignLegacy(
-            (int)$data['inventory_cost_layer_id'],
-            empty($data['company_warehouse_id'])?null:(int)$data['company_warehouse_id'],
-            (string)$data['quantity'],trim($data['reference']),trim($data['reason']),
-            $request->user()->id
-        );
-        return redirect()->route('inventory.warehouse-stock.index')
-            ->with('success','Historical FIFO lot location attributed without creating stock or changing its cost.');
+        $service->submit((int)$data['inventory_cost_layer_id'],[
+            'review_type'=>'locate_remaining',
+            'company_warehouse_id'=>(int)$data['company_warehouse_id'],
+            'quantity'=>(string)$data['quantity'],
+            'source_evidence_reference'=>$data['reference'],
+            'source_reconciliation_notes'=>$data['reason'],
+        ],(int)$request->user()->id);
+        return redirect()->route('inventory.legacy-fifo-reviews.index')
+            ->with('success','Legacy FIFO source/warehouse evidence submitted. Existing stock will not be attributed until a different authorized finance reviewer independently approves the source and physical count.');
     }
 
     private function normalize(mixed $value):mixed
