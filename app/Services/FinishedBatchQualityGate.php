@@ -15,6 +15,17 @@ class FinishedBatchQualityGate
 {
     public function assertApproved(ProductionBatch $batch): void
     {
+        // Failed/source-critical investigations opened AFTER an earlier QC
+        // approval must still block both later dispatch and capitalization.
+        if(DB::table('quality_nonconformances as ncr')
+            ->join('quality_samples as sample',
+                'sample.id','=','ncr.quality_sample_id')
+            ->where('sample.production_batch_id',$batch->id)
+            ->whereIn('ncr.severity',['major','critical'])
+            ->whereIn('ncr.status',['open','investigating'])->exists())
+            throw ValidationException::withMessages([
+                'batch'=>'This production batch has an unresolved major/critical QC nonconformance linked to a real sample. Do not release, capitalize or dispatch the affected finished goods before independent QA closure.',
+            ]);
         $active=DB::table('quality_specifications')->where([
             'subject_type'=>'finished_good','subject_id'=>$batch->finished_good_id,
             'is_active'=>true,

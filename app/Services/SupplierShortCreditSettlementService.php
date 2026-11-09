@@ -62,6 +62,17 @@ final class SupplierShortCreditSettlementService
                 DB::table('journal_entries')->where('reversal_of_id',$id)->exists())
                 $this->fail('Original supplier payable/inventory accounting entry is unposted or reversed.');
         }
+        // A real supplier invoice must have already booked enough original
+        // source-currency inventory debit and payable credit to support the
+        // historical physical goods return. A posted but unrelated journal
+        // cannot silently fund a supplier claim or nonrecoverable loss.
+        $sourceInvoiceGL=DB::table('journal_entries')
+            ->where('id',$invoice->journal_entry_id)->first();
+        if(!$sourceInvoiceGL ||
+            (string)$sourceInvoiceGL->entry_date>
+                substr((string)$return->returned_on,0,10))
+            $this->fail('Original supplier purchase inventory/liability journal cannot occur after the actual dated physical return.');
+
         $lines=DB::table('purchase_return_record_lines')->where('purchase_return_record_id',$return->id)->get();
         $billed=DB::table('matched_supplier_invoice_lines')
             ->where('matched_supplier_invoice_id',$invoice->id)->get()->keyBy('goods_receipt_line_id');
@@ -81,6 +92,31 @@ final class SupplierShortCreditSettlementService
             $base=$base->plus((string)$line->supplier_credit_value_snapshot);
         }
         $base=$base->toScale(4,RoundingMode::HalfUp);
+        $recognizedInventory=BigDecimal::zero();
+        foreach(DB::table('journal_lines')
+            ->where('journal_entry_id',$sourceInvoiceGL->id)
+            ->where('ledger_account_id',$invoice->inventory_ledger_id)
+            ->get(['debit','credit']) as $row){
+            $recognizedInventory=$recognizedInventory
+                ->plus((string)$row->debit)->minus((string)$row->credit);
+        }
+        $originalSourcePayable=DB::table('entity_ledger_accounts')->where([
+            'entity_type'=>'supplier','entity_id'=>$order->supplier_id,
+            'currency_id'=>$return->currency_id,'purpose'=>'payable',
+        ])->value('ledger_account_id');
+        if(!$originalSourcePayable)
+            $this->fail('The original posted supplier invoice has no mapped same-currency payable ledger.');
+        $recognizedPayable=BigDecimal::zero();
+        foreach(DB::table('journal_lines')
+            ->where('journal_entry_id',$sourceInvoiceGL->id)
+            ->where('ledger_account_id',$originalSourcePayable)
+            ->get(['debit','credit']) as $row){
+            $recognizedPayable=$recognizedPayable
+                ->plus((string)$row->credit)->minus((string)$row->debit);
+        }
+        if($recognizedInventory->isLessThan($base) ||
+            $recognizedPayable->isLessThan($base))
+            $this->fail('Original matched supplier invoice source GL must contain enough raw-inventory debit and supplier payable credit to cover the authenticated physical returned base cost; no invented or duplicated payable credit is allowed.');
         $offered=BigDecimal::of((string)$dispute->supplier_offered_credit);
         $difference=$base->minus($offered);
         if(!$base->isPositive() || $offered->isNegative() || !$difference->isPositive() ||

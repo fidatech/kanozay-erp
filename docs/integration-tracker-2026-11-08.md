@@ -313,6 +313,14 @@ Additional integrations ensure that `LegacyFifoSourceReviewService`, `InventoryC
 
 [Detailed original-source multi-opening FIFO recovery](historical-multi-opening-fifo-atomic-cost-recovery-2026-11-10.md). **D02 remains 🟡 Partial:** multiple batches per lot, multiple issue dates, mixed original currencies/supplier GRNs, overhead/waste, non-sale/sample/credit/return cost, supplier-return original-cost correction and unknown non-opening warehouse provenance remain unimplemented. Historical source-price/ownership and previous **manual** GL still require independent actual client evidence; no entered price or rate should be treated as automatically verified. **No migrations, lint, Laravel feature tests, SQL transaction checks, browser/UAT, backup rehearsal, or deployment performed, per explicit user instruction.**
 
+## D01–D09 coordinated November 10 financial and quality source controls
+
+Seven active development domains were strengthened on 2026-11-10: append-only D03 rejected/withdrawn historical source amendment lineage and independently reviewed (DOCUMENTARY ONLY, zero GL) source reversal assessments; D04 source invoice original payable/inventory GL evidence for supplier short-credits; D05 one original-period lock for manufacturing capitalization; D06 immediate propagation of major/critical unresolved incoming-material or finished-sample NCR to material-use, QC and final dispatch gates; D07 original bank statement exact posted unreversed bank GL debit/credit match and final revalidation; D08 independently signed full-month payroll accrual, open original payment period and separately authorized employee payouts; and D09 original-currency unreversed fixed asset depreciation and separate financial disposal approval. Existing D01 mixed QC saleable/scrap cost allocation and D02 source-protected original FIFO account recovery were reviewed without asserting production acceptance.
+
+New \`finance_historical_source_amendments\` and \`finance_historical_source_reversal_requests\` tables preserve prior case, replacement case and distinct original vs post-execution source hashes. A documentary reversal review is intentionally NOT a GL reversal, and true complete original source reverse/repost remains pending D03. All D01–D09 tasks retain their existing unverified or partial labels except D03 moved from Pending to Partial. See [D01–D09 coordinated audit and open source gaps](d01-d09-coordinated-development-audit-2026-11-10.md).
+
+**Verification:** PHP lint, Blade cache compilation and Laravel route registration passed on the authorized development MacBook. Migrations, automated feature/regression tests, real SQL posting/UAT and deployment were not executed. None of D01–D09 may be declared fully delivered solely on these syntax/source checks.
+
 ## Acceptance and release gates
 
 1. Passing SQLite feature suite and isolated regression suite on the latest commit.

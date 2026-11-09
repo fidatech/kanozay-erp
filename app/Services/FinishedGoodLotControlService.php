@@ -40,6 +40,7 @@ class FinishedGoodLotControlService
  public function assertDispatchAllowed(ProductionBatch $batch,string $date):void
  {
   $this->assertSourceLotsClear($batch);
+  app(FinishedBatchQualityGate::class)->assertApproved($batch);
   $control=DB::table('finished_good_lot_controls')->where('production_batch_id',$batch->id)->first();
   if(!$control)return; // Legacy batches remain subject to existing release/QC safeguards.
   if($control->status!=='active')

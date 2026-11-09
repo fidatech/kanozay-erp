@@ -131,14 +131,17 @@ final class HistoricalSourceAmendmentService
                 $this->fail('This historical source already has a unique signed full-reversal request.');
             $original=app(HistoricalFinanceCorrectionService::class)
                 ->source($case->case_type,(int)$case->source_id);
-            if(!hash_equals((string)$case->source_fingerprint,
-                (string)$original['fingerprint']))
-                $this->fail('Original historical source fingerprint changed after correction. Full audit of all source financial journals is needed before a reversal request can be made.');
+            // Executed historical original-cost corrections may themselves
+            // change the mutable valuation/status attributes of their source
+            // document. Preserve BOTH fingerprints and freeze the current
+            // post-execution snapshot; do not assume it equals the pre-post
+            // approval fingerprint. This is only a documentary assessment.
             $id=DB::table('finance_historical_source_reversal_requests')
                 ->insertGetId([
                     'finance_historical_correction_case_id'=>$caseId,
                     'status'=>'submitted',
                     'source_fingerprint'=>$case->source_fingerprint,
+                    'current_source_fingerprint'=>$original['fingerprint'],
                     'original_source_reference'=>$case->source_reference,
                     'original_accounting_effects'=>trim($data['original_accounting_effects']),
                     'requested_replacement_treatment'=>
@@ -175,9 +178,12 @@ final class HistoricalSourceAmendmentService
                 $this->fail('A different authorized finance reviewer must independently assess the full original source accounting impact and cannot be an earlier source or settlement actor.');
             $source=app(HistoricalFinanceCorrectionService::class)
                 ->source($case->case_type,(int)$case->source_id);
-            if(!hash_equals((string)$source['fingerprint'],
-                (string)$request->source_fingerprint))
-                $this->fail('Source documents or monetary context changed after the signed reversal analysis. Reject and use a separately authorized source change process.');
+            if(!$request->current_source_fingerprint ||
+                !hash_equals((string)$source['fingerprint'],
+                    (string)$request->current_source_fingerprint) ||
+                !hash_equals((string)$case->source_fingerprint,
+                    (string)$request->source_fingerprint))
+                $this->fail('Source documents or monetary context changed since the signed reversal assessment. Do not approve a stale source; reassess the entire original and current account-chain evidence.');
             DB::table('finance_historical_source_reversal_requests')
                 ->where('id',$requestId)->update([
                     'status'=>$data['decision']==='approve'?'approved':'rejected',

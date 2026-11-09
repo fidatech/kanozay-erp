@@ -15,6 +15,18 @@ use Illuminate\Validation\ValidationException;
 class QualityMaterialHoldService {
  public function isLayerHeld(InventoryCostLayer $layer):bool {
   if($layer->source_type!=='goods_receipt_line')return false;
+  // A documented unresolved MAJOR/CRITICAL nonconformance is an
+  // immediate issue/dispatch block even if the latest sample had passed.
+  // This avoids depending on staff to remember a second manual hold.
+  if(DB::table('quality_nonconformances as ncr')
+    ->leftJoin('quality_samples as sample',
+      'sample.id','=','ncr.quality_sample_id')
+    ->whereIn('ncr.severity',['major','critical'])
+    ->whereIn('ncr.status',['open','investigating'])
+    ->where(function($q)use($layer){
+      $q->where('ncr.inventory_cost_layer_id',$layer->id)
+        ->orWhere('sample.goods_receipt_line_id',$layer->source_id);
+    })->exists())return true;
   // An explicit safety hold has priority over prior passing samples.
   if(DB::table('quality_material_lot_holds')
     ->where('inventory_cost_layer_id',$layer->id)->where('status','held')->exists())return true;

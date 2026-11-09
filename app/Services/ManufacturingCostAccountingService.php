@@ -315,6 +315,9 @@ class ManufacturingCostAccountingService
         ?int $historicalCaseId=null):object
     {
         return DB::transaction(function()use($batchId,$data,$actorId,$historicalCaseId){
+            $gate=app(FinancePeriodClosingService::class);
+            $gate->holdPostingGate();
+            $gate->assertOpenDate((string)$data['accounting_date']);
             $batch=ProductionBatch::whereKey($batchId)->lockForUpdate()->firstOrFail();
             $existing=DB::table('production_batch_cost_postings')
                 ->where('production_batch_id',$batchId)->first();
