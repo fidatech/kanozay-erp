@@ -271,6 +271,13 @@ final class HistoricalBatchCapitalizationService
             ->snapshot((int)$batch->id,$lines,$saleCosts,$currencyId,$date);
         $scraps=app(HistoricalBatchScrapSourceService::class)
             ->snapshot((int)$batch->id,$lines,$saleCosts,$returns,$currencyId,$date);
+        // A single original invoice may have both saleable QC restocks and
+        // independently scrapped quantities. Freeze ONE chronological
+        // invoice-level COGS budget and ONE final remainder across both.
+        $joint=app(HistoricalBatchMixedQcAllocationService::class)
+            ->allocate($lines,$saleCosts,$returns,$scraps);
+        $returns=$joint['returns'];
+        $scraps=$joint['scraps'];
         $period=app(FinancePeriodClosingService::class);
         $period->assertOpenDate($date);
         foreach($returns as $returned)
