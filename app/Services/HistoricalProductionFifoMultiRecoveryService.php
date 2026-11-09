@@ -45,7 +45,7 @@ final class HistoricalProductionFifoMultiRecoveryService
         return (string)$value;
     }
 
-    private function approvalProof(array $reviewIds,int $equityLedgerId):array
+    private function approvalProof(array $reviewIds,int $equityLedgerId,?int $currentCaseId=null):array
     {
         $ids=array_map('intval',$reviewIds);
         $ids=array_values(array_unique($ids));
@@ -115,7 +115,10 @@ final class HistoricalProductionFifoMultiRecoveryService
             if(DB::table('finance_historical_fifo_production_recoveries')
                     ->where('inventory_cost_layer_id',$wip->inventory_cost_layer_id)->exists() ||
                 DB::table('finance_historical_fifo_multi_recovery_lots')
-                    ->where('inventory_cost_layer_id',$wip->inventory_cost_layer_id)->exists())
+                    ->where('inventory_cost_layer_id',$wip->inventory_cost_layer_id)
+                    ->when($currentCaseId!==null,fn($q)=>
+                        $q->where('finance_historical_fifo_multi_recovery_id','!=',
+                            $currentCaseId))->exists())
                 $this->fail('An original FIFO opening lot already belongs to a signed historical production recovery. Duplicate original opening assets or WIP expenses are prohibited.');
             $openingTotal=$openingTotal->plus($state['original_cost']);
             $materialTotal=$materialTotal->plus($state['consumed_cost']);
@@ -186,11 +189,13 @@ final class HistoricalProductionFifoMultiRecoveryService
             ->where('reference_type','production_order_material')
             ->whereIn('reference_id',$lines->pluck('id')->all())
             ->where('direction','out')->get();
+        $includedMovementIds=array_keys($allMovements);
+        sort($includedMovementIds,SORT_NUMERIC);
+        $realMovementIds=$outbound->pluck('id')
+            ->map(fn($id)=>(int)$id)->sort()->values()->all();
         if($outbound->isEmpty() ||
             count($allMovements)!==$outbound->count() ||
-            array_keys($allMovements)!==array_values(array_unique(
-                $outbound->pluck('id')->map(fn($id)=>(int)$id)->sort()->all()
-            )))
+            $includedMovementIds!==$realMovementIds)
             $this->fail('Original physical production material movements include source lots or material issue dates outside this complete coordinated FIFO recovery.');
         foreach($lines as $materialLine){
             $expected=BigDecimal::of((string)($materialLine->issued_quantity??'0'));
@@ -239,7 +244,9 @@ final class HistoricalProductionFifoMultiRecoveryService
             DB::table('finance_historical_fifo_production_recoveries')
                 ->where('production_batch_id',$batchId)->exists() ||
             DB::table('finance_historical_fifo_multi_recoveries')
-                ->where('production_batch_id',$batchId)->exists() ||
+                ->where('production_batch_id',$batchId)
+                ->when($currentCaseId!==null,fn($q)=>
+                    $q->where('id','!=',$currentCaseId))->exists() ||
             DB::table('finance_historical_batch_capitalizations')
                 ->where('production_batch_id',$batchId)->exists() ||
             DB::table('finance_historical_correction_cases')
@@ -464,7 +471,8 @@ final class HistoricalProductionFifoMultiRecoveryService
             ->orderBy('finance_historical_fifo_production_cost_review_id')
             ->pluck('finance_historical_fifo_production_cost_review_id')
             ->map(fn($id)=>(int)$id)->all();
-        $source=$this->approvalProof($ids,(int)$case->opening_equity_ledger_id);
+        $source=$this->approvalProof($ids,
+            (int)$case->opening_equity_ledger_id,(int)$case->id);
         $this->frozen($case,$source);
         return $source;
     }
