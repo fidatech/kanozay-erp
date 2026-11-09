@@ -359,6 +359,32 @@ final class HistoricalProductionFifoSourceCostReviewService
     }
 
     /**
+     * Strict pre-post access for a separately signed original-source WIP
+     * recovery. Does not post or alter any immutable production snapshot.
+     */
+    public function verifiedApproved(int $planId):array
+    {
+        $plan=DB::table('finance_historical_fifo_production_cost_reviews')
+            ->where('id',$planId)->first();
+        if(!$plan || $plan->status!=='approved' ||
+            !$plan->submitted_by || !$plan->approved_by ||
+            (int)$plan->submitted_by===(int)$plan->approved_by ||
+            !$plan->original_cost_evidence_reference ||
+            !$plan->original_cost_evidence_notes ||
+            !$plan->approval_reference || !$plan->approval_notes)
+            $this->fail('Original source production FIFO WIP needs a complete signed independently approved proposal before any downstream capitalized stock or COGS reconstruction.');
+        $state=$this->unchanged($plan);
+        $actors=$state['proof']['source_actors'];
+        if(in_array((int)$plan->submitted_by,$actors,true) ||
+            in_array((int)$plan->approved_by,$actors,true))
+            $this->fail('Original opening and production source actors cannot approve their own financial WIP valuation.');
+        return ['plan'=>$plan,'state'=>$state,
+            'actors'=>array_values(array_unique(array_filter(
+                array_merge($actors,[(int)$plan->submitted_by,(int)$plan->approved_by])
+            )))];
+    }
+
+    /**
      * Finance-close/read-only verification. A source-reviewed plan is NOT
      * GL posting: it must remain a blocker until the combined raw/WIP/FG/
      * COGS historical executor is separately implemented and verified.
