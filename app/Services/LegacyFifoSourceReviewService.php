@@ -98,9 +98,20 @@ final class LegacyFifoSourceReviewService
         if(!$original->isPositive() || $remaining->isNegative() ||
             !$original->isEqualTo($remaining->plus($used)))
             $this->fail('Original opening FIFO quantity does not reconcile to its remaining and genuinely consumed physical quantities.');
-        if(DB::table('finance_opening_fifo_valuations')
-            ->where('inventory_cost_layer_id',$lot->id)->exists())
-            $this->fail('This opening lot already has a source-linked financial valuation.');
+        $financial=DB::table('finance_opening_fifo_valuations')
+            ->where('inventory_cost_layer_id',$lot->id)->first();
+        if($financial){
+            $journal=DB::table('journal_entries')
+                ->where('id',$financial->journal_entry_id)->first();
+            if(!$valued || !$journal || $journal->status!=='posted' ||
+                $journal->reversal_of_id ||
+                (int)$financial->currency_id!==(int)$lot->currency_id ||
+                (int)$journal->currency_id!==(int)$lot->currency_id ||
+                !BigDecimal::of((string)$financial->original_cost)
+                    ->isEqualTo((string)$lot->original_cost) ||
+                DB::table('journal_entries')->where('reversal_of_id',$journal->id)->exists())
+                $this->fail('The previously approved original FIFO valuation GL is inconsistent or reversed. Location-only evidence cannot silently change its original source cost.');
+        }
 
         $positions=DB::table('inventory_cost_layer_locations')
             ->where('inventory_cost_layer_id',$lot->id)
