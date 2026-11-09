@@ -15,6 +15,7 @@
 </style>
 <div class="heading"><div><h1>Warehouse stock allocation & transfers</h1><p>Raw materials / Warehouse FIFO lot provenance and transfers without duplicate inventory postings.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap">
 <a class="btn btn-light" href="{{ route('inventory.warehouse-valuation.index') }}">FIFO valuation by location</a>
+<a class="btn btn-light" href="{{ route('inventory.legacy-fifo-reviews.index') }}">Independent FIFO source reviews</a>
 <a class="btn btn-light" href="{{ route('admin.company.edit') }}">Manage warehouses</a>
 </div></div>
 @if(session('success'))<p class="notice">{{ session('success') }}</p>@endif
@@ -33,7 +34,7 @@
 </tbody></table></div></section>
 @canany(['inventory.update','administration.update'])
 <section class="wh-panel"><h2>Allocate or transfer raw material</h2>
-<p class="wh-warning">Initial allocation and transfer now preserve the exact FIFO lots and their costs. Unverified historical lots, QC-held materials and globally reserved materials cannot be transferred until the relevant controls are cleared. Use the reconciliation form below for documented historical lot attribution.</p>
+<p class="wh-warning">Initial allocation and transfer now preserve the exact FIFO lots and their costs. Unverified historical lots, QC-held materials and globally reserved materials cannot be transferred until the relevant controls are cleared. Submit evidence below for independent finance review before location attribution. The source opening receipt, original FIFO issues and actual existing warehouse count must match. Consumed opening FIFO provenance can be documented in the new independent review register.</p>
 <form class="wh-form" method="POST" action="{{ route('inventory.warehouse-stock.store') }}">@csrf
 <input type="hidden" name="idempotency_key" value="{{ old('idempotency_key',(string)\Illuminate\Support\Str::uuid()) }}">
 <label>Operation<select name="type" required><option value="initial_allocation" @selected(old('type')==='initial_allocation')>Allocate existing stock</option><option value="transfer" @selected(old('type')==='transfer')>Transfer between warehouses</option></select></label>
@@ -69,13 +70,13 @@
 @csrf
 <input type="hidden" name="inventory_cost_layer_id" value="{{ $layer->id }}">
 <select name="company_warehouse_id" aria-label="Verified warehouse" style="min-width:145px;padding:8px;border:1px solid #dce6f1;border-radius:8px">
-<option value="">Unassigned stock pool</option>
+<option value="">Choose a physically counted warehouse</option>
 @foreach($warehouses as $warehouse)<option value="{{ $warehouse->id }}">{{ $warehouse->code }} · {{ $warehouse->name }}</option>@endforeach
 </select>
 <input type="text" inputmode="decimal" name="quantity" required placeholder="Quantity" aria-label="Attribution quantity" style="width:105px;padding:8px;border:1px solid #dce6f1;border-radius:8px">
-<input type="text" name="reference" required minlength="3" maxlength="160" placeholder="Count / receipt reference" aria-label="Evidence reference" style="width:175px;padding:8px;border:1px solid #dce6f1;border-radius:8px">
-<input type="text" name="reason" required minlength="15" maxlength="2000" placeholder="Document why this lot belongs here" aria-label="Evidence explanation" style="min-width:170px;flex:1;padding:8px;border:1px solid #dce6f1;border-radius:8px">
-<button type="submit" class="btn" onclick="return confirm('Confirm this lot physically belongs to the selected location? The attribution will be audited.')">Attribute lot</button>
+<input type="text" name="reference" required minlength="4" maxlength="160" placeholder="Signed warehouse stock count / receipt reference" aria-label="Evidence reference" style="width:175px;padding:8px;border:1px solid #dce6f1;border-radius:8px">
+<input type="text" name="reason" required minlength="60" maxlength="2000" placeholder="Original receipt, physical count, issued material history and source evidence" aria-label="Evidence explanation" style="min-width:170px;flex:1;padding:8px;border:1px solid #dce6f1;border-radius:8px">
+<button type="submit" class="btn" onclick="return confirm('Submit existing original FIFO stock location evidence for independent finance approval? No quantity will be attributed immediately.')">Submit for review</button>
 </form>
 </td></tr>
 @empty<tr><td colspan="5">No open FIFO cost layers need legacy attribution in the loaded batch.</td></tr>
