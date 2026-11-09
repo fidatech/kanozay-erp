@@ -182,6 +182,10 @@ final class LegacyFifoSourceReviewController extends Controller
                 'wip.number as wip_journal_number',
                 'fg.number as finished_journal_number')
             ->orderByDesc('recovery.id')->limit(60)->get();
+        $multiRecoveryCandidates=$multiRecoveryCandidates
+            ->filter(fn($group)=>!$multiRecoveryCases
+                ->contains('production_batch_id',$group['batch_id']))
+            ->values();
         $multiRecoveryLots=DB::table('finance_historical_fifo_multi_recovery_lots as lot')
             ->leftJoin('journal_entries as opening',
                 'opening.id','=','lot.opening_journal_id')
