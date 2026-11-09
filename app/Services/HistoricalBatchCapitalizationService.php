@@ -810,6 +810,132 @@ final class HistoricalBatchCapitalizationService
         return $journal;
     }
 
+    /**
+     * A genuine customer scrap was never returned to saleable stock.
+     * Reclassify PREVIOUSLY POSTED original invoice COGS (Dr verified loss,
+     * Cr original COGS), without changing original sale revenue or FG asset.
+     * Caller holds the financial period gate in the SAME DB transaction as
+     * the exact original manufacturing and invoice COGS journals.
+     */
+    private function postScrap(array $scrap,object $allocation,array $source,
+        object $plan,object $manufacturing,int $actorId): \App\Models\JournalEntry
+    {
+        if((int)$allocation->sales_return_quarantine_id!==$scrap['qc_id'] ||
+            (int)$allocation->sales_invoice_line_id!==$scrap['sales_invoice_line_id'] ||
+            (int)$allocation->sales_credit_note_line_id!==$scrap['credit_line_id'])
+            $this->fail('Approved QC scrap allocation does not match a real original sale and customer credit.');
+        $policy=app(ManufacturingLedgerPolicyService::class)
+            ->approved((int)$manufacturing->currency_id);
+        if((int)$policy->id!==(int)$manufacturing->manufacturing_cost_ledger_policy_id)
+            $this->fail('Original approved source manufacturing COGS policy changed before QC scrap reclassification.');
+        $this->expenseLedger((int)$allocation->loss_expense_ledger_id,$source);
+
+        $sale=SalesInvoiceLine::findOrFail($scrap['sales_invoice_line_id']);
+        $cogs=DB::table('production_invoice_cogs_postings')
+            ->where('sales_invoice_line_id',$sale->id)->first();
+        if(!$cogs ||
+            (int)$cogs->production_batch_cost_posting_id!==(int)$manufacturing->id ||
+            (int)$cogs->quantity_packages!==(int)$sale->quantity_packages ||
+            !BigDecimal::of((string)$cogs->amount)
+                ->isEqualTo((string)$scrap['original_sale_cost']) ||
+            !BigDecimal::of((string)$cogs->amount)
+                ->isEqualTo((string)$allocation->original_invoice_cogs_amount))
+            $this->fail('Original customer invoice COGS must have been posted from the same approved batch, in the exact original-currency amount, before signed QC scrap loss reclassification.');
+
+        $cogsJournal=DB::table('journal_entries')
+            ->where('id',$cogs->journal_entry_id)->first();
+        if(!$cogsJournal || $cogsJournal->status!=='posted' ||
+            $cogsJournal->reversal_of_id ||
+            (int)$cogsJournal->currency_id!==(int)$manufacturing->currency_id ||
+            (string)$cogsJournal->entry_date>$scrap['date'] ||
+            DB::table('journal_entries')
+                ->where('reversal_of_id',$cogsJournal->id)->exists())
+            $this->fail('Original invoiced COGS journal is not posted, already reversed, after the source QC scrap date or in another currency.');
+        $netCogs=BigDecimal::zero();$netFinished=BigDecimal::zero();
+        foreach(DB::table('journal_lines')
+            ->where('journal_entry_id',$cogsJournal->id)->get() as $line){
+            $net=BigDecimal::of((string)$line->debit)
+                ->minus((string)$line->credit);
+            if((int)$line->ledger_account_id===(int)$policy->cogs_ledger_id)
+                $netCogs=$netCogs->plus($net);
+            elseif((int)$line->ledger_account_id===(int)$policy->finished_inventory_ledger_id)
+                $netFinished=$netFinished->plus($net);
+            else $this->fail('Original customer invoice COGS contains an unrelated expense or asset journal line.');
+        }
+        if(DB::table('journal_lines')
+                ->where('journal_entry_id',$cogsJournal->id)->count()!==2 ||
+            !$netCogs->isEqualTo((string)$cogs->amount) ||
+            !$netFinished->isEqualTo(BigDecimal::of((string)$cogs->amount)->negated()))
+            $this->fail('Authentic source COGS must debit original sales COGS and credit the approved finished-inventory account by the exact manufacturing cost.');
+
+        $qc=DB::table('sales_return_quarantines')
+            ->where('id',$scrap['qc_id'])->first();
+        if(!$qc || $qc->status!=='scrapped' ||
+            !$qc->decided_by || !$qc->quality_reference || !$qc->decision_notes ||
+            (int)$qc->registered_by===(int)$qc->decided_by ||
+            (int)$qc->quantity_packages!==$scrap['quantity'] ||
+            (string)$qc->decided_on!==$scrap['date'] ||
+            $qc->released_warehouse_id!==null ||
+            DB::table('finished_good_warehouse_movements')
+                ->where('production_batch_id',$qc->production_batch_id)
+                ->where('type','customer_return')
+                ->where('reference','Quarantined customer return QC '.$qc->id)->exists() ||
+            DB::table('production_return_cost_postings')
+                ->where('sales_return_quarantine_id',$qc->id)->exists())
+            $this->fail('Signed original QC scrap was changed or saleable stock was already restored. An original source-loss reclassification cannot touch finished inventory.');
+        if(DB::table('finance_historical_customer_return_disposition_reviews')
+                ->where('sales_return_quarantine_id',$qc->id)
+                ->whereNotIn('status',['held','rejected'])->exists() ||
+            DB::table('finance_historical_batch_scrap_allocations')
+                ->where('sales_return_quarantine_id',$qc->id)
+                ->where('id','!=',$allocation->id)->exists())
+            $this->fail('This scrapped customer-credit source has another financial proposal or recorded source-cost loss reclassification.');
+        if((int)$allocation->quantity_packages!==$scrap['quantity'] ||
+            (string)$allocation->original_qc_scrap_date!==$scrap['date'] ||
+            (int)$allocation->currency_id!==(int)$manufacturing->currency_id ||
+            !$scrap['amount'] ||
+            !BigDecimal::of((string)$allocation->scrap_reclass_amount)
+                ->isEqualTo($scrap['amount']))
+            $this->fail('Original customer QC scrap quantity, source cost or finance approval changed before posting.');
+
+        $amount=(string)BigDecimal::of($scrap['amount'])->toScale(4,RoundingMode::HalfUp);
+        \App\Models\DocumentSequence::firstOrCreate([
+            'document_type'=>'historical_batch_scrap_loss',
+        ],[
+            'prefix'=>'HBS-','next_number'=>1,'padding'=>7,'is_active'=>true,
+        ]);
+        $journal=\App\Models\JournalEntry::create([
+            'number'=>\App\Models\DocumentSequence::issue('historical_batch_scrap_loss'),
+            'entry_date'=>$scrap['date'],
+            'reference'=>'QC-SCRAP-'.$qc->id,
+            'description'=>'Source-evidenced original customer return scrapped: factory COGS reclassified to approved loss with no inventory movement',
+            'currency_id'=>$manufacturing->currency_id,
+            'status'=>'draft','created_by'=>$actorId,
+        ]);
+        $journal->lines()->createMany([
+            [
+                'ledger_account_id'=>$allocation->loss_expense_ledger_id,
+                'debit'=>$amount,'credit'=>'0',
+                'memo'=>'Independent source QC scrap '.$qc->quality_reference.
+                    ' / actual customer credit #'.$scrap['credit_line_id'],
+            ],
+            [
+                'ledger_account_id'=>$policy->cogs_ledger_id,
+                'debit'=>'0','credit'=>$amount,
+                'memo'=>'Reclassification of existing authentic original invoice COGS line #'.
+                    $scrap['sales_invoice_line_id'],
+            ],
+        ]);
+        app(\App\Services\Accounting\JournalPostingService::class)
+            ->post($journal,$actorId);
+        $verified=DB::table('journal_entries')->where('id',$journal->id)->first();
+        if(!$verified || $verified->status!=='posted' ||
+            (int)$verified->currency_id!==(int)$manufacturing->currency_id ||
+            (string)$verified->entry_date!==$scrap['date'])
+            $this->fail('Source-priced signed historical QC scrap journal did not post in the correct original factory currency and date.');
+        return $journal;
+    }
+
     public function post(int $caseId,int $actorId): object
     {
         return DB::transaction(function()use($caseId,$actorId){
