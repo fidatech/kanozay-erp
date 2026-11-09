@@ -787,7 +787,15 @@ final class HistoricalProductionFifoMultiRecoveryService
                 (int)$r->inventory_cost_layer_id!==(int)$lot->id ||
                 (int)$review->currency_id!==(int)$c->currency_id ||
                 (int)$lot->currency_id!==(int)$c->currency_id ||
+                (string)$lot->currency_code!==(string)DB::table('currencies')
+                    ->where('id',$c->currency_id)->value('code') ||
                 $opening->type!=='opening' || $opening->direction!=='in' ||
+                (int)$opening->inventory_material_id!==
+                    (int)$lot->inventory_material_id ||
+                !BigDecimal::of((string)$opening->quantity)
+                    ->isEqualTo((string)$lot->original_quantity) ||
+                !BigDecimal::of((string)$provenance->opening_quantity)
+                    ->isEqualTo((string)$lot->original_quantity) ||
                 (string)$opening->occurred_on!==(string)$r->original_opening_date ||
                 $lot->source_type!=='inventory_stock_movement' ||
                 (int)$lot->source_id!==(int)$opening->id ||
