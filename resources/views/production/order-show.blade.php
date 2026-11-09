@@ -5,7 +5,9 @@
  <h2>Production plan {{ $order->number }}</h2>
  @if(session('success'))<p role="status" style="color:#08734b">{{ session('success') }}</p>@endif
  @if($errors->any())<p role="alert" style="color:#b42318">{{ $errors->first() }}</p>@endif
- @php($plannedOutput = $order->planned_package_weight_kg === null ? null : (string) \Brick\Math\BigDecimal::of((string) $order->planned_package_weight_kg)->multipliedBy((string) $order->package_count)->toScale(4))
+ @php
+    $plannedOutput = $order->planned_package_weight_kg === null ? null : (string) \Brick\Math\BigDecimal::of((string) $order->planned_package_weight_kg)->multipliedBy((string) $order->package_count)->toScale(4);
+@endphp
  <p>Recipe: <a href="{{ route('production.recipes.show', $order->recipe) }}">{{ $order->planned_recipe_name }}</a> · {{ $order->package_count }} packages · {{ $plannedOutput ?? 'Not captured' }} kg planned output</p>
  @if($order->package_weight_kg_snapshot === null)
  <p class="muted" role="status">Legacy plan: recipe package specifications were not captured when this order was created. Confirm the original recipe before submitting a finished-goods batch.</p>
@@ -49,7 +51,9 @@
    @endcan
   </td>
   <td>{{ $material['on_hand'] ?? '—' }}</td><td>{{ $material['available'] ?? '—' }}</td><td>{{ $material['reserved'] }}</td><td>{{ $material['issued'] }}</td>
-  @php($usageDiff=\Brick\Math\BigDecimal::of((string)$material['issued'])->minus((string)$material['quantity']))
+  @php
+    $usageDiff=\Brick\Math\BigDecimal::of((string)$material['issued'])->minus((string)$material['quantity']);
+@endphp
   <td>
   @if(in_array($order->status,['issued','pending_qc','qc_approved','qc_rejected','completed'],true))
   <span style="color:{{ $usageDiff->isPositive()?'#9d5814':($usageDiff->isNegative()?'#2168a3':'#277748') }}">
@@ -88,7 +92,9 @@
  <div class="table-wrap"><table><thead><tr><th>Material</th><th>Rejected quantity</th><th>Unit</th><th>Reason</th><th>Recorded at</th><th>Financial treatment</th></tr></thead><tbody>
  @foreach($order->materials as $line)
   @foreach($line->wastes as $waste)
-  @php($financialReview=$wasteReviewSummary['reviews']->get($waste->id))
+  @php
+    $financialReview=$wasteReviewSummary['reviews']->get($waste->id);
+@endphp
   <tr>
   <td>{{ $line->material_name }}</td><td>{{ $waste->quantity }}</td>
   <td>{{ $line->unit }}</td><td>{{ $waste->reason }}</td>
@@ -105,7 +111,9 @@
    </strong>
    <div class="muted">Evidence: {{ $financialReview->approval_reference }}</div>
    @if($financialReview->treatment==='abnormal_loss')
-    @php($abnormalCost=$abnormalCostReviews->get($waste->id))
+    @php
+    $abnormalCost=$abnormalCostReviews->get($waste->id);
+@endphp
     @if($abnormalCost)
      <div style="color:#176e48;font-weight:650;margin:7px 0">Exact FIFO source cost approved:
      {{ \App\Support\ReportingLabels::decimal($abnormalCost->source_cost_amount) }}
@@ -234,7 +242,9 @@
   @endcan
   @can('inventory.view')<p><a href="{{ route('production.finished-goods.index') }}">Manage finished goods catalog</a></p>@endcan
  @elseif($order->batch)
-  @php($batch = $order->batch)
+  @php
+    $batch = $order->batch;
+@endphp
   <p><strong>Batch:</strong> {{ $batch->batch_number }} · <strong>Product:</strong> {{ $batch->finishedGood?->sku }} · <strong>Status:</strong> {{ str_replace('_', ' ', ucfirst($batch->status)) }}</p>
   <p><a class="btn btn-light" href="{{ route('manufacturing.traceability.batch',$batch) }}">Batch source lots, packaging and delivery trace</a></p>
   <div class="table-wrap"><table><thead><tr><th>Produced</th><th>Accepted</th><th>Rejected</th><th>Lab decision</th><th>Stock release</th></tr></thead><tbody>
