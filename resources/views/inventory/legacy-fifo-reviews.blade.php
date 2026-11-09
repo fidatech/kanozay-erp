@@ -385,6 +385,16 @@ Original issue #{{ $line->inventory_stock_movement_id }} · {{ $line->original_m
 · batch #{{ $line->production_batch_id }} ({{ $line->batch_number }})
 · qty {{ $line->quantity }}
 · proposed original WIP <strong>{{ $line->proposed_original_wip_cost }} {{ $plan->currency_code }}</strong>
+@php($dependency=$productionBatchDependencies->get($line->production_batch_id))
+@if($dependency)
+<div class="lfr-muted">
+Existing immutable batch material cost: {{ $dependency['frozen_material_cost']??'Unknown' }} {{ $dependency['currency_code']??'' }} ·
+Still-unvalued batch material quantity: {{ $dependency['unvalued_quantity']??'Unknown' }} ·
+Historical dispatch lines: {{ $dependency['dispatched_lines'] }} ·
+Genuine customer invoice lines: {{ $dependency['invoiced_lines'] }} ·
+Prior manufacturing capitalization: {{ $dependency['manufacturing_gl_id']?'POSTED / SOURCE BLOCKED':'NOT POSTED — downstream atomic reconstruction needed' }}
+</div>
+@endif
 </div>
 @endforeach
 </details>
