@@ -79,11 +79,13 @@ final class HistoricalProductionFifoSourceCostReviewService
                 ->where('id',$row->reference_id)->first();
             $order=$material?DB::table('production_orders')
                 ->where('id',$material->production_order_id)->first():null;
-            $batch=$order?DB::table('production_batches')
-                ->where('production_order_id',$order->id)->first():null;
-            $receipt=$batch?DB::table('finished_good_movements')
+            $batches=$order?DB::table('production_batches')
+                ->where('production_order_id',$order->id)->get():collect();
+            $batch=$batches->count()===1?$batches->first():null;
+            $receipts=$batch?DB::table('finished_good_movements')
                 ->where('production_batch_id',$batch->id)
-                ->where('type','production_receipt')->first():null;
+                ->where('type','production_receipt')->get():collect();
+            $receipt=$receipts->count()===1?$receipts->first():null;
             if(!$material || !$order || !$batch || !$receipt ||
                 !$batch->released_at ||
                 (string)$receipt->occurred_on<
@@ -133,6 +135,17 @@ final class HistoricalProductionFifoSourceCostReviewService
                     ->where('production_batch_id',$batchId)->get();
                 $invoices=DB::table('sales_invoice_lines')
                     ->where('production_batch_id',$batchId)->get();
+                $overheads=DB::table('production_overhead_allocations')
+                    ->where('production_batch_id',$batchId)->orderBy('id')->get();
+                $wastes=DB::table('production_material_wastes as waste')
+                    ->join('production_order_materials as material',
+                        'material.id','=','waste.production_order_material_id')
+                    ->where('material.production_order_id',$order->id)
+                    ->select('waste.*')->orderBy('waste.id')->get();
+                $credited=DB::table('sales_credit_note_lines')
+                    ->where('production_batch_id',$batchId)->orderBy('id')->get();
+                $qualityReturns=DB::table('sales_return_quarantines')
+                    ->where('production_batch_id',$batchId)->orderBy('id')->get();
                 $snapshotBatches[$batchId]=[
                     'batch'=>[$batch->id,$batch->batch_number,$batch->status,
                         $batch->production_order_id,$batch->accepted_packages,
@@ -145,6 +158,10 @@ final class HistoricalProductionFifoSourceCostReviewService
                     'immutable_cost'=>$costSnapshot->toArray(),
                     'already_physical_dispatched'=>$dispatches->toArray(),
                     'genuine_customer_sale_lines'=>$invoices->toArray(),
+                    'original_production_overhead'=>$overheads->toArray(),
+                    'original_material_waste'=>$wastes->toArray(),
+                    'actual_customer_credits'=>$credited->toArray(),
+                    'signed_customer_QC_returns'=>$qualityReturns->toArray(),
                 ];
             }
             $sourceActors[]=(int)$row->created_by;
@@ -166,6 +183,20 @@ final class HistoricalProductionFifoSourceCostReviewService
         }
         if(!$issues || count($snapshotBatches)>25)
             $this->fail('The genuine original opening FIFO source is empty or spans too many production batches for a single independent historic-cost review.');
+
+        $sourceQtyByBatch=[];
+        foreach($issues as $issue){
+            $batchId=$issue['production_batch_id'];
+            $sourceQtyByBatch[$batchId]=
+                ($sourceQtyByBatch[$batchId]??BigDecimal::zero())
+                    ->plus($issue['quantity']);
+        }
+        foreach($sourceQtyByBatch as $batchId=>$quantity){
+            $snapshot=$snapshotBatches[$batchId]['immutable_cost'][0]??null;
+            if(!$snapshot ||
+                $quantity->isGreaterThan((string)$snapshot->unvalued_quantity))
+                $this->fail('Source-reviewed opening FIFO production quantities exceed the actual permanently frozen unvalued material quantity for a released batch; the proposed WIP cannot be double-counted.');
+        }
 
         foreach(array_keys($lineMovements) as $materialLineId){
             $sourceMoves=DB::table('inventory_stock_movements')
