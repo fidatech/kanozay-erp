@@ -155,6 +155,27 @@ final class LegacyFifoSourceReviewController extends Controller
                 ]]
             );
         }
+        $productionRecoveries=DB::table('finance_historical_fifo_production_recoveries as recovery')
+            ->join('finance_historical_fifo_production_cost_reviews as source',
+                'source.id','=','recovery.finance_historical_fifo_production_cost_review_id')
+            ->leftJoin('production_batches as batch',
+                'batch.id','=','recovery.production_batch_id')
+            ->leftJoin('currencies as currency',
+                'currency.id','=','recovery.currency_id')
+            ->leftJoin('journal_entries as original',
+                'original.id','=','recovery.opening_journal_id')
+            ->leftJoin('journal_entries as wip',
+                'wip.id','=','recovery.wip_journal_id')
+            ->leftJoin('journal_entries as finished',
+                'finished.id','=','recovery.finished_journal_id')
+            ->select('recovery.*','batch.batch_number',
+                'currency.code as currency_code',
+                'original.number as opening_journal_number',
+                'wip.number as wip_journal_number',
+                'finished.number as finished_journal_number')
+            ->orderByDesc('recovery.id')->limit(60)->get();
+        $recoveredWipSourceIds=$productionRecoveries
+            ->pluck('finance_historical_fifo_production_cost_review_id');
         $currencies=DB::table('currencies')
             ->where('is_active',true)->orderBy('code')->get(['id','code']);
         $equityLedgers=DB::table('ledger_accounts')
@@ -170,12 +191,77 @@ final class LegacyFifoSourceReviewController extends Controller
             'productionPlans'=>$productionPlans,
             'productionAllocations'=>$productionAllocations,
             'productionBatchDependencies'=>$productionBatchDependencies,
+            'productionRecoveries'=>$productionRecoveries,
+            'recoveredWipSourceIds'=>$recoveredWipSourceIds,
             'historicCostPlans'=>$historicCostPlans,
             'historicIssueCosts'=>$historicIssueCosts,
             'currencies'=>$currencies,
             'equityLedgers'=>$equityLedgers,
             'expenseLedgers'=>$expenseLedgers,
         ]);
+    }
+
+    public function submitProductionRecovery(Request $request,
+        \App\Services\HistoricalProductionFifoRecoveryService $service)
+    {
+        $this->authorizeAccess($request,true);
+        abort_unless($request->user()->can('finance.update') ||
+            $request->user()->can('administration.update'),403);
+        $data=$request->validate([
+            'source_cost_review_id'=>[
+                'required','integer',
+                'exists:finance_historical_fifo_production_cost_reviews,id',
+            ],
+            'opening_equity_ledger_id'=>[
+                'required','integer','exists:ledger_accounts,id',
+            ],
+            'approval_reference'=>['required','string','min:4','max:180'],
+            'reconciliation_notes'=>['required','string','min:120','max:5000'],
+            'confirm_original_documents'=>['accepted'],
+            'confirm_no_other_raw_materials'=>['accepted'],
+            'confirm_historical_finance_periods'=>['accepted'],
+        ]);
+        $service->submit((int)$data['source_cost_review_id'],$data,
+            (int)$request->user()->id);
+        return redirect()->route('inventory.legacy-fifo-reviews.index')
+            ->with('success','Source-fingerprinted original opening/WIP/finished goods and real invoice-COGS plan submitted for separate independent authorization. No GL or physical document changed.');
+    }
+
+    public function reviewProductionRecovery(Request $request,int $recovery,
+        \App\Services\HistoricalProductionFifoRecoveryService $service)
+    {
+        $this->authorizeAccess($request,true);
+        abort_unless($request->user()->can('finance.update') ||
+            $request->user()->can('administration.update'),403);
+        $data=$request->validate([
+            'decision'=>['required',Rule::in(['approve','reject'])],
+            'review_reference'=>['required','string','min:4','max:180'],
+            'review_notes'=>['required','string','min:120','max:5000'],
+            'confirm_independent_full_chain'=>['accepted'],
+        ]);
+        $result=$service->approve($recovery,$data,(int)$request->user()->id);
+        return redirect()->route('inventory.legacy-fifo-reviews.index')->with(
+            'success',$result->status==='approved'
+            ?'Independent finance review approved original opening, genuine WIP, released finished stock and actual customer COGS source chronology; separate executor must perform final GL.'
+            :'Unsupported historical production FIFO accounting plan rejected. No stock or GL changed.'
+        );
+    }
+
+    public function postProductionRecovery(Request $request,int $recovery,
+        \App\Services\HistoricalProductionFifoRecoveryService $service)
+    {
+        $this->authorizeAccess($request,true);
+        abort_unless($request->user()->can('finance.update') ||
+            $request->user()->can('administration.update'),403);
+        $request->validate([
+            'confirm_open_source_periods'=>['accepted'],
+            'confirm_no_prior_gl'=>['accepted'],
+            'confirm_atomic_accounting'=>['accepted'],
+        ]);
+        $result=$service->post($recovery,(int)$request->user()->id);
+        return redirect()->route('inventory.legacy-fifo-reviews.index')->with(
+            'success','Source-backed original opening FIFO, production WIP, QC finished asset and genuine invoiced COGS posted atomically, with no physical inventory or original customer document mutation. Manufacturing GL #'.$result->production_batch_cost_posting_id
+        );
     }
 
     public function submitProductionCost(Request $request,
