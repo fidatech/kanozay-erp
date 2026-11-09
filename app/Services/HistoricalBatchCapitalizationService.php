@@ -965,6 +965,8 @@ final class HistoricalBatchCapitalizationService
                 $period->assertOpenDate((string)$date);
             foreach($s['returns'] as $returned)
                 $period->assertOpenDate($returned['date']);
+            foreach($s['scraps'] as $scrap)
+                $period->assertOpenDate($scrap['date']);
 
             // The manufacturing override is permitted ONLY during this
             // same transaction's atomic executor. On ANY failure this
@@ -985,9 +987,10 @@ final class HistoricalBatchCapitalizationService
                 (int)$cost->accepted_packages!==(int)$s['batch']->accepted_packages)
                 $this->fail('Actual source-backed manufacturing GL costs differ from independently approved original-currency batch value.');
 
-            $costedSales=0;$costedNonSale=0;$costedReturns=0;
+            $costedSales=0;$costedNonSale=0;$costedReturns=0;$costedScraps=0;
             $approvedLines=$this->allocationRecords($record,$s);
             $approvedReturns=$this->returnRecords($record,$s);
+            $approvedScraps=$this->scrapRecords($record,$s);
             // Rebuild the immutable original-date accounting sequence:
             // physical sales and independently signed non-sale dispatches
             // before already QC-released customer returns on the same day.
@@ -1006,12 +1009,42 @@ final class HistoricalBatchCapitalizationService
                     'id'=>$returned['qc_id'],'source'=>$returned,
                 ];
             }
+            foreach($s['scraps'] as $scrap){
+                $events[]=[
+                    'type'=>'scrap','date'=>$scrap['date'],
+                    'id'=>$scrap['qc_id'],'source'=>$scrap,
+                ];
+            }
+            $priority=['dispatch'=>0,'return'=>1,'scrap'=>2];
             usort($events,fn($x,$y)=>[
-                $x['date'],$x['type']==='dispatch'?0:1,$x['id'],
+                $x['date'],$priority[$x['type']],$x['id'],
             ] <=> [
-                $y['date'],$y['type']==='dispatch'?0:1,$y['id'],
+                $y['date'],$priority[$y['type']],$y['id'],
             ]);
             foreach($events as $event){
+                if($event['type']==='scrap'){
+                    $scrap=$event['source'];
+                    $signed=$approvedScraps[$scrap['qc_id']]??null;
+                    if(!$signed)
+                        $this->fail('An original scrapped customer return lacks its independently approved frozen source COGS fraction and expense account.');
+                    $journal=$this->postScrap($scrap,$signed,$s,$record,$cost,$actorId);
+                    $cogs=DB::table('production_invoice_cogs_postings')
+                        ->where('sales_invoice_line_id',$scrap['sales_invoice_line_id'])
+                        ->first();
+                    if(!$cogs ||
+                        (int)$cogs->production_batch_cost_posting_id!==(int)$cost->id ||
+                        !BigDecimal::of((string)$cogs->amount)
+                            ->isEqualTo($scrap['original_sale_cost']))
+                        $this->fail('The signed scrap-loss journal no longer traces to the exact original batch/invoice COGS.');
+                    DB::table('finance_historical_batch_scrap_allocations')
+                        ->where('id',$signed->id)->update([
+                            'source_cogs_posting_id'=>$cogs->id,
+                            'journal_entry_id'=>$journal->id,
+                            'updated_at'=>now(),
+                        ]);
+                    $costedScraps++;
+                    continue;
+                }
                 if($event['type']==='return'){
                     $returned=$event['source'];
                     $approved=$approvedReturns[$returned['qc_id']]??null;
@@ -1081,13 +1114,15 @@ final class HistoricalBatchCapitalizationService
             }
             if($costedSales!==$s['sale_count'] ||
                 $costedNonSale!==count($s['non_sale']) ||
-                $costedReturns!==count($s['returns']))
-                $this->fail('The posting count differs from the independently approved physical dispatch, invoice and QC-return sources.');
+                $costedReturns!==count($s['returns']) ||
+                $costedScraps!==count($s['scraps']))
+                $this->fail('The posting count differs from independently approved manufacturing dispatch, genuine sales, physically QC-released and independently QC-scrapped sources.');
             DB::table('finance_historical_batch_capitalizations')->where('id',$record->id)->update([
                 'status'=>'posted','production_batch_cost_posting_id'=>$cost->id,
                 'posted_invoice_cogs_lines'=>$costedSales,
                 'posted_non_sale_lines'=>$costedNonSale,
                 'posted_return_lines'=>$costedReturns,
+                'posted_scrap_lines'=>$costedScraps,
                 'executed_by'=>$actorId,'executed_at'=>now(),'updated_at'=>now(),
             ]);
             DB::table('finance_historical_correction_cases')->where('id',$caseId)->update([
@@ -1097,7 +1132,8 @@ final class HistoricalBatchCapitalizationService
                 'resolution_notes'=>'Original production capitalization and '.$costedSales.
                     ' invoice COGS lines + '.$costedNonSale.
                     ' independently authorized non-sale dispatch expenses and '.
-                    $costedReturns.' previously QC-released customer-return inventory recoveries posted in their open original periods. '.
+                    $costedReturns.' previously QC-released customer-return inventory recoveries and '.
+                    $costedScraps.' independently QC-scrapped customer-loss original COGS reclassifications posted in open original periods. '.
                     $record->source_reconciliation_notes,
                 'posted_cogs_lines'=>$costedSales,
                 'executed_by'=>$actorId,'executed_at'=>now(),'updated_at'=>now(),
@@ -1112,18 +1148,20 @@ final class HistoricalBatchCapitalizationService
                     $s['amount'].' (currency #'.$s['currency_id'].') on '.$s['date'].
                     '; '.$costedSales.' original invoice COGS lines and '.$costedNonSale.
                     ' signed historical non-sale expense lines and '.
-                    $costedReturns.' original QC-return asset/COGS restorations posted. '.
+                    $costedReturns.' original QC-return asset/COGS restorations and '.
+                    $costedScraps.' signed customer scrap-loss COGS reclassifications posted. '.
                     'Original physical movements and sales revenue unchanged. '.
                     $record->source_authorization_reference,
                 'actor_id'=>$actorId,'created_at'=>now(),'updated_at'=>now(),
             ]);
             ActivityLog::record('finance.historical_batch_capitalization.posted',
                 'finance_historical_batch_capitalization',$record->id,
-                'Frozen batch source cost, original invoice COGS, signed non-sale expense and independently QC-released return-cost restorations posted atomically.',
+                'Frozen manufacturing cost, original sales COGS, authorized non-sale expenses, QC-released inventory restoration and source-priced scrapped-customer COGS loss reclassifications posted atomically.',
                 ['batch_id'=>$s['batch']->id,'capitalization_id'=>$cost->id,
                     'currency_id'=>$s['currency_id'],'cogs_lines'=>$costedSales,
                     'non_sale_lines'=>$costedNonSale,
-                    'returned_lines'=>$costedReturns]);
+                    'returned_lines'=>$costedReturns,
+                    'scrapped_lines'=>$costedScraps]);
             return DB::table('finance_historical_batch_capitalizations')
                 ->where('id',$record->id)->first();
         });
