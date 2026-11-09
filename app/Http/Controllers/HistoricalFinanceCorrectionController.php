@@ -213,6 +213,8 @@ class HistoricalFinanceCorrectionController extends Controller
         $historicalBatchAllocations=collect();
         $historicalBatchReturns=collect();
         $historicalBatchReturnAllocations=collect();
+        $historicalBatchScraps=collect();
+        $historicalBatchScrapAllocations=collect();
         $historicalBatchExpenseLedgers=collect();
         $historicalBatchReadiness=null;
         if($row->case_type==='batch_uncapitalized'){
@@ -224,6 +226,22 @@ class HistoricalFinanceCorrectionController extends Controller
                 ->select('plan.*','cost.issue_journal_id','cost.capitalization_journal_id',
                     'currency.code as currency_code')->first();
             if($historicalBatchPosting){
+                $historicalBatchScrapAllocations=DB::table('finance_historical_batch_scrap_allocations as source')
+                    ->leftJoin('journal_entries as journal',
+                        'journal.id','=','source.journal_entry_id')
+                    ->leftJoin('currencies as currency',
+                        'currency.id','=','source.currency_id')
+                    ->leftJoin('ledger_accounts as expense',
+                        'expense.id','=','source.loss_expense_ledger_id')
+                    ->where('source.finance_historical_batch_capitalization_id',
+                        $historicalBatchPosting->id)
+                    ->select('source.*','journal.number as journal_number',
+                        'journal.status as journal_status',
+                        'currency.code as currency_code',
+                        'expense.code as loss_code',
+                        'expense.name as loss_name')
+                    ->orderBy('source.original_qc_scrap_date')
+                    ->orderBy('source.sales_return_quarantine_id')->get();
                 $historicalBatchReturnAllocations=DB::table('finance_historical_batch_return_allocations as reserved')
                     ->leftJoin('journal_entries as journal',
                         'journal.id','=','reserved.journal_entry_id')
@@ -284,6 +302,7 @@ class HistoricalFinanceCorrectionController extends Controller
                 ->leftJoin('production_return_cost_postings as cost',
                     'cost.sales_return_quarantine_id','=','qc.id')
                 ->where('qc.production_batch_id',$row->source_id)
+                ->where('qc.status','released')
                 ->select('qc.id as qc_id','qc.status as qc_status',
                     'qc.quantity_packages','qc.decided_on',
                     'qc.quality_reference','qc.registered_by','qc.decided_by',
@@ -292,6 +311,24 @@ class HistoricalFinanceCorrectionController extends Controller
                     'sale.id as sales_invoice_line_id',
                     'note.number as credit_number','note.credit_date',
                     'cost.amount as recorded_asset_recovery')
+                ->orderBy('qc.decided_on')->orderBy('qc.id')->get();
+            $historicalBatchScraps=DB::table('sales_return_quarantines as qc')
+                ->join('sales_credit_note_lines as credit',
+                    'credit.id','=','qc.sales_credit_note_line_id')
+                ->join('sales_credit_notes as note',
+                    'note.id','=','credit.sales_credit_note_id')
+                ->join('sales_invoice_lines as sale',
+                    'sale.id','=','credit.sales_invoice_line_id')
+                ->where('qc.production_batch_id',$row->source_id)
+                ->where('qc.status','scrapped')
+                ->select('qc.id as qc_id','qc.status',
+                    'qc.quantity_packages','qc.decided_on',
+                    'qc.quality_reference','qc.decision_notes',
+                    'qc.registered_by','qc.decided_by','qc.released_warehouse_id',
+                    'credit.id as credit_line_id',
+                    'sale.id as sales_invoice_line_id',
+                    'note.number as credit_number','note.credit_date',
+                    'note.created_by as credit_author_id')
                 ->orderBy('qc.decided_on')->orderBy('qc.id')->get();
             $batch=\App\Models\ProductionBatch::with(['costs','finishedGood'])
                 ->find($row->source_id);
@@ -430,6 +467,8 @@ class HistoricalFinanceCorrectionController extends Controller
             'historicalBatchAllocations'=>$historicalBatchAllocations,
             'historicalBatchReturns'=>$historicalBatchReturns,
             'historicalBatchReturnAllocations'=>$historicalBatchReturnAllocations,
+            'historicalBatchScraps'=>$historicalBatchScraps,
+            'historicalBatchScrapAllocations'=>$historicalBatchScrapAllocations,
             'historicalBatchExpenseLedgers'=>$historicalBatchExpenseLedgers,
             'openingEquityLedgers'=>$openingEquityLedgers,
             'currencies'=>$currencies,'openingPosting'=>$openingPosting,
@@ -585,10 +624,12 @@ class HistoricalFinanceCorrectionController extends Controller
             'source_reconciliation_notes'=>['required','string','min:60','max:5000'],
             'expense_ledgers'=>['nullable','array','max:100'],
             'expense_ledgers.*'=>['required','integer','exists:ledger_accounts,id'],
+            'scrap_loss_ledgers'=>['nullable','array','max:100'],
+            'scrap_loss_ledgers.*'=>['required','integer','exists:ledger_accounts,id'],
             'confirm_all_original_sources'=>['accepted'],
         ]);
         $service->submit($case,$data,(int)$request->user()->id);
-        return back()->with('success','Source-fingerprinted historical manufacturing, genuine invoice COGS and signed non-sale expenses submitted for separate approval. No journals or physical movements created.');
+        return back()->with('success','Source-fingerprinted historical manufacturing, genuine invoice COGS, independently signed non-sale expenses, QC-released asset restorations and QC-scrapped COGS reclassifications submitted for separate approval. No journals or physical movements created.');
     }
 
     public function reviewHistoricalBatch(Request $request,int $case,
@@ -602,7 +643,7 @@ class HistoricalFinanceCorrectionController extends Controller
             'confirm_historical_cost_review'=>['accepted'],
         ]);
         $service->approve($case,$data,(int)$request->user()->id);
-        return back()->with('success','Independent historical original-currency manufacturing, sales and signed non-sale expense review recorded. No journals posted.');
+        return back()->with('success','Independent original-currency manufacturing, genuine customer COGS, signed non-sale, QC release and QC scrap-loss review recorded. No journals posted.');
     }
 
     public function postHistoricalBatch(Request $request,int $case,
@@ -615,7 +656,8 @@ class HistoricalFinanceCorrectionController extends Controller
             'Source-backed manufacturing WIP, finished inventory, '.
             $posting->posted_invoice_cogs_lines.' genuine sale COGS, '.
             $posting->posted_non_sale_lines.' signed non-sale expense and '.
-            $posting->posted_return_lines.' already released QC-return cost journal(s) posted in original date order. No physical stock, customer credit or sales revenue changed.');
+            $posting->posted_return_lines.' already released QC-return cost journal(s), and '.
+            $posting->posted_scrap_lines.' signed QC scrapped-return COGS-to-loss reclassification(s) posted in original date order. No physical stock, customer credit or sales revenue changed.');
     }
 
     public function submitDispatchCost(Request $request,int $case,
