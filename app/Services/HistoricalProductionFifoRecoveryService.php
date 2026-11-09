@@ -50,6 +50,12 @@ final class HistoricalProductionFifoRecoveryService
             !DB::table('entity_ledger_accounts')->where('ledger_account_id',$id)->exists());
     }
 
+    /** Shared original posted customer-revenue proof for restricted one- and multi-lot recovery. */
+    public function verifiedCustomerInvoiceSource(object $physical,object $sale,object $invoice):array
+    {
+        return $this->invoiceSource($physical,$sale,$invoice);
+    }
+
     private function invoiceSource(object $physical,object $sale,object $invoice):array
     {
         $date=(string)$physical->dispatch_date;
