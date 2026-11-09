@@ -31,10 +31,14 @@ final class LegacyFifoSourceReviewService
     {
         $lot=InventoryCostLayer::whereKey($layerId)->firstOrFail();
         $material=InventoryMaterial::whereKey($lot->inventory_material_id)->firstOrFail();
-        if($lot->source_type!=='inventory_stock_movement' ||
-            $lot->original_cost!==null || $lot->currency_id!==null ||
-            $lot->currency_code!==null)
-            $this->fail('Only a genuinely unvalued physical opening FIFO layer may enter historical source review. Existing valued lots retain their earlier finance source.');
+        if($lot->source_type!=='inventory_stock_movement')
+            $this->fail('Only genuine original physical opening FIFO layers may enter the source provenance register.');
+        $valued=$lot->original_cost!==null &&
+            $lot->currency_id!==null && $lot->currency_code!==null;
+        $unvalued=$lot->original_cost===null &&
+            $lot->currency_id===null && $lot->currency_code===null;
+        if(!$valued && !$unvalued)
+            $this->fail('Partial original FIFO cost and currency attribution is inconsistent. Reconcile that source document before reviewing physical warehouse location.');
         $opening=DB::table('inventory_stock_movements')->where('id',$lot->source_id)->first();
         if(!$opening || $opening->type!=='opening' || $opening->direction!=='in' ||
             (int)$opening->inventory_material_id!==(int)$lot->inventory_material_id ||
@@ -61,8 +65,13 @@ final class LegacyFifoSourceReviewService
             if(!$quantity->isPositive() || $cost->direction!=='out' ||
                 (int)$cost->inventory_material_id!==(int)$material->id ||
                 (string)$cost->occurred_on<$lot->received_on->toDateString() ||
-                $cost->amount!==null || $cost->is_valued ||
-                $cost->currency_id!==null || $cost->currency_code!==null ||
+                ($unvalued &&
+                    ($cost->amount!==null || $cost->is_valued ||
+                     $cost->currency_id!==null || $cost->currency_code!==null)) ||
+                ($valued &&
+                    (!$cost->is_valued || $cost->amount===null ||
+                     (int)$cost->currency_id!==(int)$lot->currency_id ||
+                     (string)$cost->currency_code!==(string)$lot->currency_code)) ||
                 !in_array($cost->reference_type,[
                     'production_order_material','purchase_return_line',
                     'stock_adjustment','inventory_adjustment',
@@ -161,6 +170,8 @@ final class LegacyFifoSourceReviewService
                 $this->fail('Unsupported opening stock provenance review type.');
             $warehouseId=null;$qty=null;
             if($type==='consumed_provenance'){
+                if($source['layer']->original_cost!==null)
+                    $this->fail('Only originally unvalued consumed FIFO packages need documentary source-cost provenance. Existing valued issues already have their immutable source costs.');
                 if(!$source['consumed']->isPositive())
                     $this->fail('This FIFO layer has no documented historical consumption to review.');
                 if(!empty($data['quantity']) || !empty($data['company_warehouse_id']))
