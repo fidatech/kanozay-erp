@@ -27,7 +27,7 @@ class ProductionWasteFinancialReportController extends Controller
             ->join('production_orders as plan',
                 'plan.id','=','item.production_order_id')
             ->leftJoin('production_batches as batch',
-                'batch.production_order_id','=','order.id')
+                'batch.production_order_id','=','plan.id')
             ->leftJoin('production_waste_financial_reviews as review',
                 'review.production_material_waste_id','=','waste.id')
             ->leftJoin('production_abnormal_waste_cost_reviews as abnormal',
