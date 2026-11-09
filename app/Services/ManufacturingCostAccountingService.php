@@ -210,6 +210,18 @@ class ManufacturingCostAccountingService
     private function assertApprovedOpeningSource(object $layer,object $policy,
         string $capitalizationDate,string $materialIssueDate):void
     {
+        $backfill=DB::table('finance_historical_fifo_production_recoveries')
+            ->where('inventory_cost_layer_id',$layer->id)
+            ->where('status','posted')->first();
+        if($backfill){
+            if((int)$backfill->currency_id!==(int)$policy->currency_id ||
+                $backfill->original_opening_date>$materialIssueDate ||
+                $backfill->original_opening_date>$capitalizationDate ||
+                !app(HistoricalProductionFifoRecoveryService::class)
+                    ->auditPosted((int)$backfill->id))
+                $this->reject('The original opening FIFO material inventory/equity was historically recognized through a complete source-linked raw/WIP/FG/COGS chain, but that original source or posted journal is invalid, later dated or currency mismatched.');
+            return;
+        }
         $proof=DB::table('finance_opening_fifo_valuations as source')
             ->join('finance_historical_correction_cases as review',
                 'review.id','=','source.finance_historical_correction_case_id')
