@@ -40,7 +40,8 @@ final class LegacyFifoSourceReviewService
         if(!$valued && !$unvalued)
             $this->fail('Partial original FIFO cost and currency attribution is inconsistent. Reconcile that source document before reviewing physical warehouse location.');
         $opening=DB::table('inventory_stock_movements')->where('id',$lot->source_id)->first();
-        if(!$opening || $opening->type!=='opening' || $opening->direction!=='in' ||
+        if(!$opening || !$opening->created_by ||
+            $opening->type!=='opening' || $opening->direction!=='in' ||
             (int)$opening->inventory_material_id!==(int)$lot->inventory_material_id ||
             (string)$opening->occurred_on!==$lot->received_on->toDateString() ||
             !BigDecimal::of((string)$opening->quantity)
@@ -181,6 +182,12 @@ final class LegacyFifoSourceReviewService
                 $this->fail('Unsupported opening stock provenance review type.');
             $warehouseId=null;$qty=null;
             if($type==='consumed_provenance'){
+                if(DB::table('finance_legacy_fifo_source_reviews')
+                    ->where('inventory_cost_layer_id',$layerId)
+                    ->where('review_type','consumed_provenance')
+                    ->where('status','approved')
+                    ->where('source_fingerprint',$source['fingerprint'])->exists())
+                    $this->fail('This unchanged original FIFO consumed-movement source has already received independent provenance approval. Do not duplicate documentary evidence.');
                 if($source['layer']->original_cost!==null)
                     $this->fail('Only originally unvalued consumed FIFO packages need documentary source-cost provenance. Existing valued issues already have their immutable source costs.');
                 if(!$source['consumed']->isPositive())
@@ -193,8 +200,16 @@ final class LegacyFifoSourceReviewService
                     ->where('id',$warehouseId)->where('is_active',true)->exists())
                     $this->fail('Select an active physically counted warehouse. Unassigned is not proof of an original stock location.');
                 $qty=$this->qty((string)($data['quantity']??'0'));
-                if($qty->isGreaterThan($source['remaining']))
-                    $this->fail('Historical location assignment exceeds the genuine remaining opening FIFO quantity.');
+                if($qty->isGreaterThan($source['remaining']) ||
+                    $qty->isGreaterThan(
+                        $source['unpositioned']->plus(
+                            (string)($source['positions']->firstWhere('location_key','unassigned')->quantity??'0')
+                        )
+                    ))
+                    $this->fail('Requested location attribution exceeds remaining original opening FIFO stock whose warehouse is genuinely unknown.');
+                if($source['opening']->company_warehouse_id!==null &&
+                    (int)$source['opening']->company_warehouse_id!==$warehouseId)
+                    $this->fail('Original opening receipt names a different warehouse. A signed inter-warehouse transfer is needed; this procedure cannot invent one.');
             }
             $id=DB::table('finance_legacy_fifo_source_reviews')->insertGetId([
                 'inventory_cost_layer_id'=>$layerId,
@@ -224,6 +239,11 @@ final class LegacyFifoSourceReviewService
         $material=$source['material'];
         $warehouseId=(int)$review->company_warehouse_id;
         $quantity=$this->qty((string)$review->quantity);
+        if(!DB::table('company_warehouses')->where('id',$warehouseId)
+            ->where('is_active',true)->exists() ||
+            ($source['opening']->company_warehouse_id!==null &&
+                (int)$source['opening']->company_warehouse_id!==$warehouseId))
+            $this->fail('Independent attribution needs an active physical warehouse consistent with the original opening receipt; undocumented historical transfers cannot be assumed.');
         if(!$source['remaining']->isPositive())
             $this->fail('A completely consumed opening FIFO lot has no existing quantity to attribute to a warehouse.');
         $balance=$source['balances']->firstWhere('company_warehouse_id',$warehouseId);
@@ -295,8 +315,9 @@ final class LegacyFifoSourceReviewService
                 ->lockForUpdate()->firstOrFail();
             $review=DB::table('finance_legacy_fifo_source_reviews')
                 ->where('id',$reviewId)->lockForUpdate()->first();
-            if($review->status!=='submitted')
-                $this->fail('Only a pending original FIFO provenance/warehouse review can receive an independent decision.');
+            if($review->status!=='submitted' ||
+                !in_array($review->review_type,['consumed_provenance','locate_remaining'],true))
+                $this->fail('Only a pending recognized original FIFO provenance/warehouse review can receive an independent decision.');
             $source=$this->snapshot((int)$review->inventory_cost_layer_id);
             if(!hash_equals((string)$review->source_fingerprint,$source['fingerprint']) ||
                 !BigDecimal::of((string)$review->opening_quantity)->isEqualTo($source['original']) ||
