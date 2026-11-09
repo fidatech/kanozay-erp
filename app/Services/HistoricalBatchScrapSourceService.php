@@ -176,13 +176,11 @@ final class HistoricalBatchScrapSourceService
             if($soldQuantities[(int)$sale->id]>(int)$sale->quantity_packages)
                 $this->fail('Previously QC-scrapped package count exceeds its original genuine invoice.');
 
-            // A single customer invoice line cannot mix independently
-            // released-to-stock and scrapped returns under this recovery.
-            // The existing release engine allocates full-return remainders
-            // independently and would otherwise value both fractions twice.
-            if(collect($releasedReturns)->contains(fn($released)=>
-                $released['sales_invoice_line_id']===(int)$sale->id))
-                $this->fail('One original invoice line mixes saleable QC recoveries and scrapped portions. A dedicated combined invoice-level cost restoration is required; do not double-value the original COGS.');
+            // Both authentic outcomes may now occur on one invoice line.
+            // Their source records are independently verified here and by
+            // HistoricalBatchReturnSourceService, then all original-currency
+            // cost fractions and rounding are reconciled together by
+            // HistoricalBatchMixedQcAllocationService before approval.
             $rows[]=[
                 'qc_id'=>(int)$qc->id,
                 'credit_line_id'=>(int)$credit->id,
