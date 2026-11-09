@@ -78,6 +78,11 @@ class JournalPostingService {
    if(DB::table('supplier_advance_applications')->where('journal_entry_id',$original->id)->exists()
    || DB::table('customer_advance_applications')->where('journal_entry_id',$original->id)->exists())
     throw ValidationException::withMessages(['status'=>'Applied customer or supplier advances require a dedicated document-level correction workflow.']);
+   if(DB::table('finance_historical_batch_scrap_allocations')
+        ->where('journal_entry_id',$original->id)->exists())
+     throw ValidationException::withMessages([
+       'status'=>'Original approved historical batch scrapped-customer COGS-to-loss reclassification must be corrected together with its signed QC return, source customer credit and manufacturing batch. A standalone GL reversal is prohibited.',
+     ]);
    if(DB::table('finance_historical_customer_return_disposition_reviews')
         ->where('journal_entry_id',$original->id)->exists())
      throw ValidationException::withMessages([
