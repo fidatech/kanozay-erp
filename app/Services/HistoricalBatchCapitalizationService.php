@@ -270,7 +270,7 @@ final class HistoricalBatchCapitalizationService
         $returns=app(HistoricalBatchReturnSourceService::class)
             ->snapshot((int)$batch->id,$lines,$saleCosts,$currencyId,$date);
         $scraps=app(HistoricalBatchScrapSourceService::class)
-            ->snapshot((int)$batch->id,$lines,$saleCosts,$returns,$currencyId,$date);
+            ->snapshot((int)$batch->id,$lines,$saleCosts,$currencyId,$date);
         // A single original invoice may have both saleable QC restocks and
         // independently scrapped quantities. Freeze ONE chronological
         // invoice-level COGS budget and ONE final remainder across both.
