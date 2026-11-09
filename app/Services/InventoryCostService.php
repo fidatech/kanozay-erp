@@ -420,6 +420,45 @@ class InventoryCostService
                 ]);
             $used=$used->plus((string)$prior->amount);
         }
+        // Historical production FIFO inputs may have been recognized
+        // atomically through original opening-equity, WIP, finished-goods
+        // and actual invoice COGS. Old physical consumption rows remain
+        // immutable, so subtract the separately posted source WIP costs.
+        $produced=DB::table('finance_historical_fifo_production_cost_lines as source')
+            ->join('finance_historical_fifo_production_cost_reviews as signed',
+                'signed.id','=','source.finance_historical_fifo_production_cost_review_id')
+            ->join('finance_historical_fifo_production_recoveries as executed',
+                'executed.finance_historical_fifo_production_cost_review_id','=','signed.id')
+            ->leftJoin('journal_entries as journal',
+                'journal.id','=','source.historical_wip_journal_id')
+            ->where('signed.inventory_cost_layer_id',$layer->id)
+            ->where('signed.status','posted')
+            ->where('executed.status','posted')
+            ->get(['source.proposed_original_wip_cost',
+                'source.original_material_issue_date',
+                'source.historical_wip_journal_id',
+                'executed.wip_journal_id',
+                'signed.currency_id',
+                'journal.status as journal_status',
+                'journal.reversal_of_id',
+                'journal.entry_date',
+                'journal.currency_id as journal_currency_id']);
+        foreach($produced as $original){
+            if(!$original->historical_wip_journal_id ||
+                (int)$original->historical_wip_journal_id!==
+                    (int)$original->wip_journal_id ||
+                $original->journal_status!=='posted' ||
+                $original->reversal_of_id ||
+                (int)$original->currency_id!==(int)$layer->currency_id ||
+                (int)$original->journal_currency_id!==(int)$layer->currency_id ||
+                (string)$original->entry_date!==$original->original_material_issue_date ||
+                DB::table('journal_entries')
+                    ->where('reversal_of_id',$original->wip_journal_id)->exists())
+                throw ValidationException::withMessages([
+                    'quantity'=>'A historical production FIFO WIP issue has no valid source-linked, posted original-date and original-currency journal. Current remaining raw-material cost cannot be assumed.',
+                ]);
+            $used=$used->plus((string)$original->proposed_original_wip_cost);
+        }
         $remaining=$totalCost->minus($used);
         if($remaining->isNegative())
             throw ValidationException::withMessages([
