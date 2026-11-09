@@ -1056,6 +1056,57 @@ class FinanceCloseReadinessService
             $blockers[]=$invalidOpenings.
                 ' source-linked opening FIFO valuation(s) for this month have reversed/unposted journals or mismatched asset cost and currency.';
         }
+        // Documentary evidence about an old FIFO consumption is not
+        // permission to invent its source price, update an immutable
+        // consumption amount or expense an unrelated batch. Missing
+        // original-cost issues must remain a finance closing exception.
+        $unvaluedOpeningIssues=DB::table('inventory_cost_consumptions as consumed')
+            ->join('inventory_cost_layers as lot',
+                'lot.id','=','consumed.inventory_cost_layer_id')
+            ->join('inventory_stock_movements as issue',
+                'issue.id','=','consumed.inventory_stock_movement_id')
+            ->join('inventory_stock_movements as opening',
+                'opening.id','=','lot.source_id')
+            ->where('lot.source_type','inventory_stock_movement')
+            ->where('opening.type','opening')
+            ->where('opening.direction','in')
+            ->whereBetween('issue.occurred_on',[$begin,$end])
+            ->where(function($query){
+                $query->whereNull('lot.original_cost')
+                    ->orWhereNull('consumed.amount')
+                    ->orWhere('consumed.is_valued',false);
+            })->distinct()->count('consumed.id');
+        if($unvaluedOpeningIssues)
+            $blockers[]=$unvaluedOpeningIssues.
+                ' original physical opening FIFO issue(s) remain missing verified source-currency cost in this month. Independent warehouse/consumption provenance is documentary only and cannot substitute for a separately approved original-cost GL correction.';
+
+        $reviewedLocations=DB::table('finance_legacy_fifo_source_reviews as review')
+            ->leftJoin('inventory_legacy_lot_assignments as location',
+                'location.id','=','review.inventory_legacy_lot_assignment_id')
+            ->where('review.review_type','locate_remaining')
+            ->where('review.status','approved')
+            ->whereDate('review.reviewed_at','>=',$begin)
+            ->whereDate('review.reviewed_at','<=',$end)
+            ->select('review.*',
+                'location.inventory_cost_layer_id as assigned_layer_id',
+                'location.company_warehouse_id as assigned_warehouse_id',
+                'location.quantity as assigned_quantity',
+                'location.assigned_by as location_actor_id')->get();
+        $invalidLegacyLocations=0;
+        foreach($reviewedLocations as $review){
+            $valid=$review->inventory_legacy_lot_assignment_id &&
+                $review->assigned_layer_id &&
+                (int)$review->assigned_layer_id===(int)$review->inventory_cost_layer_id &&
+                (int)$review->assigned_warehouse_id===(int)$review->company_warehouse_id &&
+                (int)$review->reviewed_by===(int)$review->location_actor_id &&
+                (int)$review->requested_by!==(int)$review->reviewed_by &&
+                \Brick\Math\BigDecimal::of((string)($review->assigned_quantity??'0'))
+                    ->isEqualTo((string)$review->quantity);
+            if(!$valid)$invalidLegacyLocations++;
+        }
+        if($invalidLegacyLocations)
+            $blockers[]=$invalidLegacyLocations.
+                ' signed historical FIFO location assignment(s) lack a matching independently approved source record, reviewer or original quantity.';
         $openHistorical=DB::table('finance_historical_correction_cases')
             ->whereBetween('source_date',[$begin,$end])
             ->whereIn('status',['submitted','approved'])->count();
