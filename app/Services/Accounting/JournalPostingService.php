@@ -78,6 +78,13 @@ class JournalPostingService {
    if(DB::table('supplier_advance_applications')->where('journal_entry_id',$original->id)->exists()
    || DB::table('customer_advance_applications')->where('journal_entry_id',$original->id)->exists())
     throw ValidationException::withMessages(['status'=>'Applied customer or supplier advances require a dedicated document-level correction workflow.']);
+   if(DB::table('finance_historical_fifo_adjustment_valuations')
+        ->where('opening_journal_entry_id',$original->id)->exists() ||
+       DB::table('finance_historical_fifo_adjustment_cost_lines')
+        ->where('journal_entry_id',$original->id)->exists())
+     throw ValidationException::withMessages([
+       'status'=>'Source-linked independently approved original opening FIFO inventory/equity and adjustment write-off journals are one historical correction. Standalone reversal would corrupt the remaining original FIFO cost or duplicate an old source expense. Use a separately approved source-level correction.',
+     ]);
    if(DB::table('finance_historical_batch_scrap_allocations')
         ->where('journal_entry_id',$original->id)->exists())
      throw ValidationException::withMessages([
