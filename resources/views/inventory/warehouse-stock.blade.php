@@ -56,20 +56,21 @@
 @if(auth()->user()->can('administration.update') || (auth()->user()->can('inventory.update') && auth()->user()->can('finance.update')))
 <section class="wh-panel">
 <h2>Reconcile historical FIFO lot positions</h2>
-<p class="wh-warning">Only assign lots after verifying physical counts, original GRN/adjustment records and warehouse history. This changes location attribution only; it cannot increase global stock, create purchase costs or override QC holds. At most 400 oldest open layers are reviewed in this register.</p>
+<p class="wh-warning">Submit independent source review for original physical opening FIFO layers with unpositioned or legacy unassigned remaining stock. The finance reviewer independently checks the original receipt, all recorded issues, and a real warehouse count before attribution. No inventory movement, valuation or GL is created. Up to 400 opening lots are shown; unsupported GRN/adjustment locations require their own original receipt review.</p>
 <div class="wh-table"><table>
-<thead><tr><th>Lot / Material</th><th>Source</th><th>Cost currency</th><th>Available for attribution</th><th>Verified location attribution</th></tr></thead><tbody>
+<thead><tr><th>Lot / Material</th><th>Source</th><th>Cost currency</th><th>Unknown original location</th><th>Verified location attribution</th></tr></thead><tbody>
 @forelse($legacyLots as $layer)
 <tr>
 <td><strong>{{ $layer->material?->sku }}</strong><div>{{ $layer->material?->name }}</div><small>Lot #{{ $layer->id }} · {{ $layer->received_on?->toDateString() }}</small></td>
 <td>{{ str_replace('_',' ',$layer->source_type) }} #{{ $layer->source_id }}</td>
 <td>{{ $layer->currency_code ?: 'Unvalued' }}</td>
-<td>{{ $layer->unpositioned_quantity }} {{ $layer->material?->unit }}</td>
+<td><strong>{{ $layer->unpositioned_quantity }}</strong> unpositioned<br>
+{{ $layer->unassigned_legacy_quantity }} in legacy unassigned pool · {{ $layer->material?->unit }}</td>
 <td>
 <form action="{{ route('inventory.warehouse-stock.legacy.assign') }}" method="POST" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
 @csrf
 <input type="hidden" name="inventory_cost_layer_id" value="{{ $layer->id }}">
-<select name="company_warehouse_id" aria-label="Verified warehouse" style="min-width:145px;padding:8px;border:1px solid #dce6f1;border-radius:8px">
+<select name="company_warehouse_id" aria-label="Verified warehouse" required style="min-width:145px;padding:8px;border:1px solid #dce6f1;border-radius:8px">
 <option value="">Choose a physically counted warehouse</option>
 @foreach($warehouses as $warehouse)<option value="{{ $warehouse->id }}">{{ $warehouse->code }} · {{ $warehouse->name }}</option>@endforeach
 </select>
