@@ -42,7 +42,7 @@ final class HistoricalBatchScrapSourceService
     }
 
     public function snapshot(int $batchId,Collection $dispatches,array $saleCosts,
-        array $releasedReturns,int $factoryCurrencyId,string $capitalizationDate): array
+        int $factoryCurrencyId,string $capitalizationDate): array
     {
         $qcs=DB::table('sales_return_quarantines')
             ->where('production_batch_id',$batchId)
