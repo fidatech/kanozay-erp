@@ -269,10 +269,14 @@ final class HistoricalBatchCapitalizationService
         }
         $returns=app(HistoricalBatchReturnSourceService::class)
             ->snapshot((int)$batch->id,$lines,$saleCosts,$currencyId,$date);
+        $scraps=app(HistoricalBatchScrapSourceService::class)
+            ->snapshot((int)$batch->id,$lines,$saleCosts,$returns,$currencyId,$date);
         $period=app(FinancePeriodClosingService::class);
         $period->assertOpenDate($date);
         foreach($returns as $returned)
             $period->assertOpenDate($returned['date']);
+        foreach($scraps as $scrap)
+            $period->assertOpenDate($scrap['date']);
         foreach($lines->pluck('dispatch_date')->unique() as $dispatchDate)
             $period->assertOpenDate((string)$dispatchDate);
         if($date>now()->toDateString() ||
@@ -313,6 +317,7 @@ final class HistoricalBatchCapitalizationService
         // mixed-source plans also bind all independently signed dispositions.
         if($nonSale)$signatureSources['signed_non_sale']=$nonSale;
         if($returns)$signatureSources['released_credit_returns']=$returns;
+        if($scraps)$signatureSources['independently_qc_scrapped_credits']=$scraps;
         $signature=hash('sha256',json_encode(
             $signatureSources,JSON_UNESCAPED_UNICODE|JSON_PRESERVE_ZERO_FRACTION));
         return [
@@ -320,7 +325,7 @@ final class HistoricalBatchCapitalizationService
             'lines'=>$lines,'date'=>$date,'currency_id'=>$currencyId,
             'amount'=>(string)$amount,'packages'=>$count,
             'sale_count'=>$saleCount,'non_sale'=>$nonSale,
-            'returns'=>$returns,
+            'returns'=>$returns,'scraps'=>$scraps,
             'allocations'=>$allocations,'signature'=>$signature,
         ];
     }
@@ -377,6 +382,52 @@ final class HistoricalBatchCapitalizationService
             $matched[$returned['qc_id']]=$entry;
         }
         return $matched;
+    }
+
+    private function independentFromScrap(array $source,int $actorId): void
+    {
+        foreach($source['scraps'] as $scrap){
+            if(in_array($actorId,$scrap['actors'],true))
+                $this->fail('Historic manufacturing finance proposer, reviewer and executor must differ from the genuine customer credit author, original QC registrar and independent scrap inspector.');
+        }
+    }
+
+    /** Immutable independently priced QC scrap/expense allocation. */
+    private function scrapRecords(object $plan,array $source): array
+    {
+        $rows=DB::table('finance_historical_batch_scrap_allocations')
+            ->where('finance_historical_batch_capitalization_id',$plan->id)
+            ->orderBy('sales_return_quarantine_id')->get()
+            ->keyBy('sales_return_quarantine_id');
+        if($plan->scrap_line_count===null &&
+            !$source['scraps'] && $rows->isEmpty())
+            return []; // Already signed pre-scrap plans remain source-compatible.
+        if((int)$plan->scrap_line_count!==count($source['scraps']) ||
+            $rows->count()!==count($source['scraps']))
+            $this->fail('The historical batch review has missing or unexpected independently QC-scrapped original customer credit lines.');
+        $matches=[];
+        foreach($source['scraps'] as $scrap){
+            $record=$rows->get($scrap['qc_id']);
+            if(!$record ||
+                (int)$record->sales_credit_note_line_id!==$scrap['credit_line_id'] ||
+                (int)$record->sales_invoice_line_id!==$scrap['sales_invoice_line_id'] ||
+                (int)$record->currency_id!==$source['currency_id'] ||
+                (int)$record->quantity_packages!==$scrap['quantity'] ||
+                (string)$record->original_qc_scrap_date!==$scrap['date'] ||
+                !$record->loss_expense_ledger_id ||
+                !BigDecimal::of((string)$record->original_invoice_cogs_amount)
+                    ->isEqualTo($scrap['original_sale_cost']) ||
+                !BigDecimal::of((string)$record->scrap_reclass_amount)
+                    ->isEqualTo($scrap['amount']) ||
+                !hash_equals((string)$record->source_fingerprint,
+                    (string)$scrap['fingerprint']) ||
+                $record->journal_entry_id!==null ||
+                $record->source_cogs_posting_id!==null)
+                $this->fail('The original signed QC scrap, genuine credited customer invoice, source-currency cost, approved loss expense ledger or original date changed since independent approval.');
+            $this->expenseLedger((int)$record->loss_expense_ledger_id,$source);
+            $matches[$scrap['qc_id']]=$record;
+        }
+        return $matches;
     }
 
     private function expenseLedger(int $ledgerId,array $source): void
@@ -448,6 +499,7 @@ final class HistoricalBatchCapitalizationService
             $this->fail('The reviewed historical batch value, source invoices, dispatches or GL evidence have changed since the original proposal.');
         $this->allocationRecords($record,$s);
         $this->returnRecords($record,$s);
+        $this->scrapRecords($record,$s);
     }
 
     public function submit(int $caseId,array $data,int $actorId): object
@@ -459,6 +511,7 @@ final class HistoricalBatchCapitalizationService
                 $this->fail('A different finance proposer is required after the independent historical case review.');
             $this->independentFromNonSale($s,$actorId);
             $this->independentFromReturns($s,$actorId);
+            $this->independentFromScrap($s,$actorId);
             $accounts=$data['expense_ledgers']??[];
             $expected=collect(array_keys($s['non_sale']))
                 ->map(fn($id)=>(string)$id)->sort()->values()->all();
@@ -467,6 +520,15 @@ final class HistoricalBatchCapitalizationService
             if($expected!==$submitted)
                 $this->fail('Assign a purpose-appropriate expense account to EVERY signed non-sale source line and never assign one to an invoiced sale.');
             foreach($accounts as $id=>$ledgerId)
+                $this->expenseLedger((int)$ledgerId,$s);
+            $scrapAccounts=$data['scrap_loss_ledgers']??[];
+            $expectedScrap=collect($s['scraps'])->pluck('qc_id')
+                ->map(fn($id)=>(string)$id)->sort()->values()->all();
+            $submittedScrap=collect(array_keys($scrapAccounts))
+                ->map(fn($id)=>(string)(int)$id)->sort()->values()->all();
+            if($expectedScrap!==$submittedScrap)
+                $this->fail('Select a specific independently reviewed scrapped-returns loss expense ledger for EVERY original signed QC scrap, and never for a saleable recovered return.');
+            foreach($scrapAccounts as $id=>$ledgerId)
                 $this->expenseLedger((int)$ledgerId,$s);
             if(DB::table('finance_historical_batch_capitalizations')
                 ->where('production_batch_id',$s['batch']->id)->exists())
@@ -483,6 +545,7 @@ final class HistoricalBatchCapitalizationService
                 'dispatch_line_count'=>$s['lines']->count(),
                 'non_sale_line_count'=>count($s['non_sale']),
                 'return_line_count'=>count($s['returns']),
+                'scrap_line_count'=>count($s['scraps']),
                 'source_fingerprint'=>$s['signature'],
                 'source_authorization_reference'=>trim($data['source_authorization_reference']),
                 'source_reconciliation_notes'=>trim($data['source_reconciliation_notes']),
@@ -520,6 +583,22 @@ final class HistoricalBatchCapitalizationService
                     'created_at'=>now(),'updated_at'=>now(),
                 ]);
             }
+            foreach($s['scraps'] as $scrap){
+                DB::table('finance_historical_batch_scrap_allocations')->insert([
+                    'finance_historical_batch_capitalization_id'=>$id,
+                    'sales_return_quarantine_id'=>$scrap['qc_id'],
+                    'sales_credit_note_line_id'=>$scrap['credit_line_id'],
+                    'sales_invoice_line_id'=>$scrap['sales_invoice_line_id'],
+                    'currency_id'=>$scrap['currency_id'],
+                    'loss_expense_ledger_id'=>(int)$scrapAccounts[$scrap['qc_id']],
+                    'original_qc_scrap_date'=>$scrap['date'],
+                    'quantity_packages'=>$scrap['quantity'],
+                    'original_invoice_cogs_amount'=>$scrap['original_sale_cost'],
+                    'scrap_reclass_amount'=>$scrap['amount'],
+                    'source_fingerprint'=>$scrap['fingerprint'],
+                    'created_at'=>now(),'updated_at'=>now(),
+                ]);
+            }
             ActivityLog::record('finance.historical_batch_capitalization.submitted',
                 'finance_historical_batch_capitalization',$id,
                 'Source-fingerprinted original manufacturing and invoice COGS recovery awaiting independent approval; no GL postings.');
@@ -542,6 +621,7 @@ final class HistoricalBatchCapitalizationService
                 $this->fail('A separate finance reviewer must approve original manufacturing and invoice cost recovery.');
             $this->independentFromNonSale($s,$actorId);
             $this->independentFromReturns($s,$actorId);
+            $this->independentFromScrap($s,$actorId);
             $this->matches($record,$s);
             $approved=$data['decision']==='approve';
             DB::table('finance_historical_batch_capitalizations')->where('id',$record->id)->update([
@@ -747,6 +827,7 @@ final class HistoricalBatchCapitalizationService
                 $this->fail('A different finance executor must post the original source manufacturing and invoice journals.');
             $this->independentFromNonSale($s,$actorId);
             $this->independentFromReturns($s,$actorId);
+            $this->independentFromScrap($s,$actorId);
             $this->matches($record,$s);
 
             // Serialize every cost and COGS journal with the financial-period
