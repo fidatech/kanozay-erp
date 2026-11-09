@@ -164,7 +164,7 @@ final class LegacyFifoSourceReviewService
         $balances=DB::table('inventory_warehouse_balances')
             ->where('inventory_material_id',$material->id)
             ->orderBy('company_warehouse_id')->get();
-        $fingerprint=hash('sha256',json_encode([
+        $fingerprintSource=[
             'original_opening'=>[$opening->id,$opening->inventory_material_id,
                 $opening->type,$opening->direction,$opening->quantity,
                 $opening->occurred_on,$opening->created_by,$opening->company_warehouse_id],
@@ -174,11 +174,14 @@ final class LegacyFifoSourceReviewService
                 $lot->currency_id,$lot->currency_code],
             'physical_material'=>[$material->id,$material->on_hand_quantity],
             'source_issues'=>$consumptions->toArray(),
-            'separately_posted_immutable_source_cost'=>$historicalRecognitions
-                ->values()->toArray(),
             'locations'=>$positions->toArray(),
             'physical_warehouse_balances'=>$balances->toArray(),
-        ],JSON_UNESCAPED_UNICODE|JSON_PRESERVE_ZERO_FRACTION));
+        ];
+        if($historicalRecognitions->isNotEmpty())
+            $fingerprintSource['separately_posted_immutable_source_cost']=
+                $historicalRecognitions->values()->toArray();
+        $fingerprint=hash('sha256',json_encode($fingerprintSource,
+            JSON_UNESCAPED_UNICODE|JSON_PRESERVE_ZERO_FRACTION));
         return [
             'layer'=>$lot,'material'=>$material,'opening'=>$opening,
             'consumptions'=>$consumptions,'positions'=>$positions,
