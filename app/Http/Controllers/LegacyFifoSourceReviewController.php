@@ -98,6 +98,34 @@ final class LegacyFifoSourceReviewController extends Controller
             ->orderBy('cost.original_issue_date')
             ->orderBy('cost.inventory_cost_consumption_id')->get()
             ->groupBy('finance_historical_fifo_adjustment_valuation_id');
+        $productionSourceReviews=DB::table('finance_legacy_fifo_source_reviews as review')
+            ->join('inventory_cost_layers as lot','lot.id','=','review.inventory_cost_layer_id')
+            ->join('inventory_materials as material','material.id','=','review.inventory_material_id')
+            ->leftJoin('finance_historical_fifo_production_cost_reviews as booked',
+                'booked.inventory_cost_layer_id','=','review.inventory_cost_layer_id')
+            ->leftJoin('finance_historical_fifo_adjustment_valuations as adjustment',
+                'adjustment.inventory_cost_layer_id','=','review.inventory_cost_layer_id')
+            ->where('review.review_type','consumed_provenance')
+            ->where('review.status','approved')
+            ->whereNull('lot.original_cost')
+            ->whereNull('booked.id')->whereNull('adjustment.id')
+            ->select('review.*','material.sku')
+            ->orderByDesc('review.id')->limit(60)->get();
+        $productionPlans=DB::table('finance_historical_fifo_production_cost_reviews as review')
+            ->join('inventory_cost_layers as lot','lot.id','=','review.inventory_cost_layer_id')
+            ->join('inventory_materials as material','material.id','=','lot.inventory_material_id')
+            ->leftJoin('currencies as c','c.id','=','review.currency_id')
+            ->select('review.*','material.sku','c.code as currency_code')
+            ->orderByDesc('review.id')->limit(60)->get();
+        $productionAllocations=DB::table('finance_historical_fifo_production_cost_lines as allocation')
+            ->leftJoin('production_batches as batch',
+                'batch.id','=','allocation.production_batch_id')
+            ->whereIn('allocation.finance_historical_fifo_production_cost_review_id',
+                $productionPlans->pluck('id'))
+            ->select('allocation.*','batch.batch_number')
+            ->orderBy('allocation.original_material_issue_date')
+            ->orderBy('allocation.inventory_cost_consumption_id')->get()
+            ->groupBy('finance_historical_fifo_production_cost_review_id');
         $currencies=DB::table('currencies')
             ->where('is_active',true)->orderBy('code')->get(['id','code']);
         $equityLedgers=DB::table('ledger_accounts')
@@ -109,12 +137,61 @@ final class LegacyFifoSourceReviewController extends Controller
         return view('inventory.legacy-fifo-reviews',[
             'layers'=>$layers,'reviews'=>$reviews,'warehouses'=>$warehouses,
             'sourceCostReviews'=>$sourceCostReviews,
+            'productionSourceReviews'=>$productionSourceReviews,
+            'productionPlans'=>$productionPlans,
+            'productionAllocations'=>$productionAllocations,
             'historicCostPlans'=>$historicCostPlans,
             'historicIssueCosts'=>$historicIssueCosts,
             'currencies'=>$currencies,
             'equityLedgers'=>$equityLedgers,
             'expenseLedgers'=>$expenseLedgers,
         ]);
+    }
+
+    public function submitProductionCost(Request $request,
+        \App\Services\HistoricalProductionFifoSourceCostReviewService $service)
+    {
+        $this->authorizeAccess($request,true);
+        abort_unless($request->user()->can('finance.update') ||
+            $request->user()->can('administration.update'),403);
+        $data=$request->validate([
+            'finance_legacy_fifo_source_review_id'=>[
+                'required','integer','exists:finance_legacy_fifo_source_reviews,id',
+            ],
+            'currency_id'=>['required','integer','exists:currencies,id'],
+            'original_lot_cost'=>[
+                'required','string',
+                'regex:/^(?:0|[1-9][0-9]{0,15})(?:\.[0-9]{1,4})?$/',
+            ],
+            'original_cost_evidence_reference'=>['required','string','min:4','max:180'],
+            'original_cost_evidence_notes'=>['required','string','min:80','max:5000'],
+            'confirm_original_purchase_source'=>['accepted'],
+            'confirm_no_financial_posting'=>['accepted'],
+        ]);
+        $service->submit((int)$data['finance_legacy_fifo_source_review_id'],
+            $data,(int)$request->user()->id);
+        return redirect()->route('inventory.legacy-fifo-reviews.index')->with(
+            'success','Documented opening FIFO production-source WIP cost proposal created. NO GL, original issue, production cost snapshot, physical inventory or COGS was changed.'
+        );
+    }
+
+    public function reviewProductionCost(Request $request,int $plan,
+        \App\Services\HistoricalProductionFifoSourceCostReviewService $service)
+    {
+        $this->authorizeAccess($request,true);
+        abort_unless($request->user()->can('finance.update') ||
+            $request->user()->can('administration.update'),403);
+        $data=$request->validate([
+            'decision'=>['required',Rule::in(['approve','reject'])],
+            'approval_reference'=>['required','string','min:4','max:180'],
+            'approval_notes'=>['required','string','min:80','max:5000'],
+            'confirm_source_and_downstream_dependencies'=>['accepted'],
+        ]);
+        $result=$service->approve($plan,$data,(int)$request->user()->id);
+        return redirect()->route('inventory.legacy-fifo-reviews.index')
+            ->with('success',$result->status==='approved'
+                ?'Original FIFO production WIP source allocations independently reviewed. DOCUMENTARY APPROVAL ONLY: historical WIP/finished-goods/sale COGS GL has NOT been posted.'
+                :'Unsupported production FIFO source cost rejected. No journals or original FIFO issues were changed.');
     }
 
     public function submitCost(Request $request,
