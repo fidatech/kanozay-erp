@@ -34,9 +34,6 @@ final class LegacyFifoSourceReviewController extends Controller
             ->where('lot.source_type','inventory_stock_movement')
             ->where('origin.type','opening')
             ->where('origin.direction','in')
-            ->whereNull('lot.original_cost')
-            ->whereNull('lot.currency_id')
-            ->whereNull('lot.currency_code')
             ->select('lot.*','material.sku','material.name as material_name',
                 'origin.created_by as opening_registrar_id')
             ->orderByDesc('lot.id')->limit(150)->get();
