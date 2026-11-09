@@ -81,14 +81,24 @@ final class HistoricalProductionFifoSourceCostReviewService
                 ->where('id',$material->production_order_id)->first():null;
             $batch=$order?DB::table('production_batches')
                 ->where('production_order_id',$order->id)->first():null;
-            if(!$material || !$order || !$batch ||
+            $receipt=$batch?DB::table('finished_good_movements')
+                ->where('production_batch_id',$batch->id)
+                ->where('type','production_receipt')->first():null;
+            if(!$material || !$order || !$batch || !$receipt ||
+                !$batch->released_at ||
+                (string)$receipt->occurred_on<
+                    substr((string)$row->occurred_on,0,10) ||
+                (string)$receipt->occurred_on>
+                    substr((string)$batch->released_at,0,10) ||
+                (int)$receipt->quantity_packages!==(int)$batch->accepted_packages ||
                 (int)$material->inventory_material_id!==(int)$original['material']->id ||
                 (int)$row->inventory_material_id!==(int)$original['material']->id ||
                 !$material->issued_quantity ||
                 $order->status==='cancelled' ||
                 $batch->status!=='released' ||
                 (int)$batch->accepted_packages<1 ||
-                (string)$row->occurred_on>(string)$batch->released_at ||
+                substr((string)$row->occurred_on,0,10)>
+                    substr((string)$batch->released_at,0,10) ||
                 (string)$row->occurred_on<$original['layer']->received_on->toDateString())
                 $this->fail('Every historic unvalued production issue must identify the same original material, actual issued production-order line and a later independently QC-released production batch.');
 
@@ -127,6 +137,10 @@ final class HistoricalProductionFifoSourceCostReviewService
                     'batch'=>[$batch->id,$batch->batch_number,$batch->status,
                         $batch->production_order_id,$batch->accepted_packages,
                         $batch->released_at,$batch->finished_good_id],
+                    'actual_finished_receipt'=>[
+                        $receipt->id,$receipt->occurred_on,
+                        $receipt->quantity_packages,$receipt->created_by,
+                    ],
                     'order'=>[$order->id,$order->number,$order->status],
                     'immutable_cost'=>$costSnapshot->toArray(),
                     'already_physical_dispatched'=>$dispatches->toArray(),
@@ -311,6 +325,32 @@ final class HistoricalProductionFifoSourceCostReviewService
                 $this->fail('Original material issue, production batch or exact proposed historical WIP amount no longer matches separately reviewed source evidence.');
         }
         return $state;
+    }
+
+    /**
+     * Finance-close/read-only verification. A source-reviewed plan is NOT
+     * GL posting: it must remain a blocker until the combined raw/WIP/FG/
+     * COGS historical executor is separately implemented and verified.
+     */
+    public function audit(int $planId):bool
+    {
+        $plan=DB::table('finance_historical_fifo_production_cost_reviews')
+            ->where('id',$planId)->first();
+        if(!$plan || !in_array($plan->status,['submitted','approved','rejected'],true))
+            return false;
+        try{
+            $state=$this->unchanged($plan);
+        }catch(ValidationException $e){
+            return false;
+        }
+        if($plan->status==='approved'){
+            if(!$plan->approved_by ||
+                (int)$plan->submitted_by===(int)$plan->approved_by ||
+                !$plan->approval_reference || !$plan->approval_notes ||
+                in_array((int)$plan->approved_by,$state['proof']['source_actors'],true))
+                return false;
+        }
+        return true;
     }
 
     public function submit(int $provenanceId,array $data,int $userId):object
