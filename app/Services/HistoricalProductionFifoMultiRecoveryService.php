@@ -716,7 +716,28 @@ final class HistoricalProductionFifoMultiRecoveryService
             ->where('id',$posting->manufacturing_cost_ledger_policy_id)->first():null;
         $equity=DB::table('ledger_accounts')
             ->where('id',$c->opening_equity_ledger_id)->first();
+        $physicalFinishedReceipt=DB::table('finished_good_movements')
+            ->where('production_batch_id',$c->production_batch_id)
+            ->where('type','production_receipt')->get();
+        $originalProductionSnapshot=DB::table('production_batch_costs')
+            ->where('production_batch_id',$c->production_batch_id)->get();
         if(!$batch || $batch->status!=='released' || !$posting ||
+            $physicalFinishedReceipt->count()!==1 ||
+            (int)$physicalFinishedReceipt->first()->quantity_packages!==
+                (int)$batch->accepted_packages ||
+            (string)$physicalFinishedReceipt->first()->occurred_on>
+                (string)$c->original_finished_date ||
+            $originalProductionSnapshot->count()!==1 ||
+            $originalProductionSnapshot->first()->currency_id!==null ||
+            ($originalProductionSnapshot->first()->material_cost!==null &&
+                !BigDecimal::of((string)$originalProductionSnapshot->first()
+                    ->material_cost)->isZero()) ||
+            DB::table('production_overhead_allocations')
+                ->where('production_batch_id',$c->production_batch_id)->exists() ||
+            DB::table('production_material_wastes as waste')
+                ->join('production_order_materials as material',
+                    'material.id','=','waste.production_order_material_id')
+                ->where('material.production_order_id',$batch->production_order_id)->exists() ||
             !$policy || !$equity || !$equity->is_active || $equity->is_group ||
             $equity->type!=='equity' ||
             (int)$posting->production_batch_id!==(int)$batch->id ||
@@ -747,6 +768,7 @@ final class HistoricalProductionFifoMultiRecoveryService
 
         $openingSum=BigDecimal::zero();$wipSum=BigDecimal::zero();
         $remainingSum=BigDecimal::zero();$sourceActors=[];
+        $sourceIssueQuantity=BigDecimal::zero();
         $issueIds=[];$physicalMovements=[];
         foreach($lots as $r){
             $lot=DB::table('inventory_cost_layers')
@@ -818,6 +840,8 @@ final class HistoricalProductionFifoMultiRecoveryService
                     ($physicalMovements[(int)$physical->id]??BigDecimal::zero())
                         ->plus((string)$issue->quantity);
                 $wipSum=$wipSum->plus((string)$issue->proposed_original_wip_cost);
+                $sourceIssueQuantity=$sourceIssueQuantity
+                    ->plus((string)$issue->quantity);
                 $sourceActors[]=(int)$physical->created_by;
             }
             $openingSum=$openingSum->plus((string)$r->original_source_total);
@@ -830,7 +854,9 @@ final class HistoricalProductionFifoMultiRecoveryService
             ->where('reference_type','production_order_material')
             ->whereIn('reference_id',$sourceMaterialLines)
             ->where('direction','out')->get();
-        if($currentPhysicalIssues->count()!==count($physicalMovements))
+        if($currentPhysicalIssues->count()!==count($physicalMovements) ||
+            !BigDecimal::of((string)$originalProductionSnapshot->first()
+                ->unvalued_quantity)->isEqualTo($sourceIssueQuantity))
             return false;
         foreach($currentPhysicalIssues as $movement){
             if(!isset($physicalMovements[(int)$movement->id]) ||
@@ -853,8 +879,14 @@ final class HistoricalProductionFifoMultiRecoveryService
             !$openingSum->isEqualTo($wipSum->plus($remainingSum)))
             return false;
 
-        $sales=DB::table('sales_invoice_lines')
-            ->where('production_batch_id',$c->production_batch_id)->get();
+        $sales=DB::table('sales_invoice_lines as sold')
+            ->join('finished_good_dispatch_lines as physical',
+                'physical.finished_good_dispatch_id','=','sold.dispatch_id')
+            ->join('finished_good_dispatches as head',
+                'head.id','=','sold.dispatch_id')
+            ->where('sold.production_batch_id',$c->production_batch_id)
+            ->orderBy('head.dispatch_date')->orderBy('physical.id')
+            ->select('sold.*')->get();
         $postedCOGS=DB::table('production_invoice_cogs_postings as cost')
             ->join('sales_invoice_lines as line',
                 'line.id','=','cost.sales_invoice_line_id')
@@ -869,7 +901,7 @@ final class HistoricalProductionFifoMultiRecoveryService
             DB::table('sales_return_quarantines')
                 ->where('production_batch_id',$batch->id)->exists())
             return false;
-        $costTotal=BigDecimal::zero();$packages=0;
+        $costTotal=BigDecimal::zero();$packages=0;$realDispatches=[];
         foreach($sales as $sale){
             $costed=$postedCOGS->firstWhere('sales_invoice_line_id',$sale->id);
             $invoice=DB::table('sales_invoices')
@@ -879,7 +911,19 @@ final class HistoricalProductionFifoMultiRecoveryService
                     'dispatch.id','=','physical.finished_good_dispatch_id')
                 ->where('physical.finished_good_dispatch_id',$sale->dispatch_id)
                 ->select('physical.*','dispatch.dispatch_date')->first();
+            $nextQty=$packages+(int)$sale->quantity_packages;
+            $expectedCost=$nextQty===(int)$batch->accepted_packages
+                ?BigDecimal::of((string)$c->source_material_total)
+                    ->minus($costTotal)
+                :BigDecimal::of((string)$c->source_material_total)
+                    ->multipliedBy((string)$sale->quantity_packages)
+                    ->dividedBy((string)$batch->accepted_packages,4,
+                        RoundingMode::HalfUp);
             if(!$costed || !$invoice || !$physical ||
+                isset($realDispatches[(int)$sale->dispatch_id]) ||
+                !$expectedCost->isPositive() ||
+                !BigDecimal::of((string)$costed->amount)
+                    ->isEqualTo($expectedCost) ||
                 (int)$costed->production_batch_cost_posting_id!==(int)$posting->id ||
                 (int)$costed->quantity_packages!==(int)$sale->quantity_packages ||
                 !$this->journalMatches((int)$costed->journal_entry_id,
@@ -892,6 +936,7 @@ final class HistoricalProductionFifoMultiRecoveryService
                 app(HistoricalProductionFifoRecoveryService::class)
                     ->verifiedCustomerInvoiceSource($physical,$sale,$invoice);
             }catch(ValidationException $e){return false;}
+            $realDispatches[(int)$sale->dispatch_id]=true;
             $costTotal=$costTotal->plus((string)$costed->amount);
             $packages+=(int)$sale->quantity_packages;
         }
