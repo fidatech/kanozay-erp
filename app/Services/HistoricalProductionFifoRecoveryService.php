@@ -485,6 +485,212 @@ final class HistoricalProductionFifoRecoveryService
         return $entry;
     }
 
+    /** Exact, two-line, independently posted original-currency journal. */
+    private function journalValid(?int $id,int $debit,int $credit,
+        string $amount,string $date,int $currencyId):bool
+    {
+        if(!$id || $debit===$credit)return false;
+        $entry=DB::table('journal_entries')->where('id',$id)->first();
+        if(!$entry || $entry->status!=='posted' || $entry->reversal_of_id ||
+            (string)$entry->entry_date!==$date ||
+            (int)$entry->currency_id!==$currencyId ||
+            DB::table('journal_entries')->where('reversal_of_id',$id)->exists())
+            return false;
+        $lines=DB::table('journal_lines')->where('journal_entry_id',$id)->get();
+        if($lines->count()!==2)return false;
+        $dr=BigDecimal::zero();$cr=BigDecimal::zero();
+        foreach($lines as $line){
+            if((int)$line->ledger_account_id===$debit)
+                $dr=$dr->plus((string)$line->debit)
+                    ->minus((string)$line->credit);
+            elseif((int)$line->ledger_account_id===$credit)
+                $cr=$cr->plus((string)$line->credit)
+                    ->minus((string)$line->debit);
+            else return false;
+        }
+        return $dr->isEqualTo($amount) && $cr->isEqualTo($amount);
+    }
+
+    /**
+     * Read-only finance close verification AFTER source production rows
+     * became cost-valued through a separately posted accounting chain.
+     * Never call verifiedApproved/source() after posting: those correctly
+     * reject changed immutable opening-cost state.
+     */
+    public function auditPosted(int $recoveryId):bool
+    {
+        $p=DB::table('finance_historical_fifo_production_recoveries')
+            ->where('id',$recoveryId)->first();
+        if(!$p || $p->status!=='posted' || !$p->executed_by ||
+            !$p->submitted_by || !$p->approved_by ||
+            !$p->opening_journal_id || !$p->wip_journal_id ||
+            !$p->finished_journal_id || !$p->production_batch_cost_posting_id)
+            return false;
+        $review=DB::table('finance_historical_fifo_production_cost_reviews')
+            ->where('id',$p->finance_historical_fifo_production_cost_review_id)->first();
+        $provenance=$review?DB::table('finance_legacy_fifo_source_reviews')
+            ->where('id',$review->finance_legacy_fifo_source_review_id)->first():null;
+        $layer=DB::table('inventory_cost_layers')
+            ->where('id',$p->inventory_cost_layer_id)->first();
+        $opening=$layer?DB::table('inventory_stock_movements')
+            ->where('id',$layer->source_id)->first():null;
+        $batch=DB::table('production_batches')
+            ->where('id',$p->production_batch_id)->first();
+        $receipt=$batch?DB::table('finished_good_movements')
+            ->where('production_batch_id',$batch->id)
+            ->where('type','production_receipt')->get():collect();
+        $posted=DB::table('production_batch_cost_postings')
+            ->where('id',$p->production_batch_cost_posting_id)->first();
+        $policy=DB::table('manufacturing_cost_ledger_policies')
+            ->where('id',$posted?->manufacturing_cost_ledger_policy_id)->first();
+        $currency=DB::table('currencies')->where('id',$p->currency_id)->first();
+        $equity=DB::table('ledger_accounts')
+            ->where('id',$p->opening_equity_ledger_id)->first();
+        if(!$review || !$provenance || !$layer || !$opening || !$batch ||
+            $receipt->count()!==1 || !$posted || !$policy || !$currency ||
+            !$equity || !$equity->is_active || $equity->is_group ||
+            $equity->type!=='equity' ||
+            $review->status!=='posted' ||
+            $provenance->status!=='approved' ||
+            $provenance->review_type!=='consumed_provenance' ||
+            $batch->status!=='released' ||
+            $opening->type!=='opening' || $opening->direction!=='in' ||
+            $layer->source_type!=='inventory_stock_movement' ||
+            (int)$layer->source_id!==(int)$opening->id ||
+            (int)$p->inventory_cost_layer_id!==(int)$review->inventory_cost_layer_id ||
+            (int)$p->production_batch_id!==(int)$posted->production_batch_id ||
+            (int)$posted->manufacturing_cost_ledger_policy_id!==(int)$policy->id ||
+            (int)$p->currency_id!==(int)$posted->currency_id ||
+            (int)$p->currency_id!==(int)$policy->currency_id ||
+            (int)$p->currency_id!==(int)$review->currency_id ||
+            (int)$review->source_inventory_ledger_id!==
+                (int)$policy->material_inventory_ledger_id ||
+            (int)$review->target_wip_ledger_id!==
+                (int)$policy->work_in_progress_ledger_id ||
+            (int)$receipt->first()->quantity_packages!==(int)$batch->accepted_packages ||
+            (int)$posted->accepted_packages!==(int)$batch->accepted_packages ||
+            (string)$opening->occurred_on!==(string)$p->original_opening_date ||
+            (string)$layer->received_on!==(string)$p->original_opening_date ||
+            (string)$posted->accounting_date!==(string)$p->original_finished_date ||
+            (string)$batch->released_at!==($p->original_finished_date.' 00:00:00') &&
+                substr((string)$batch->released_at,0,10)!==(string)$p->original_finished_date ||
+            (string)$layer->currency_code!==(string)$currency->code ||
+            (int)$layer->currency_id!==(int)$p->currency_id ||
+            !BigDecimal::of((string)$layer->original_cost)
+                ->isEqualTo((string)$p->original_lot_cost) ||
+            !BigDecimal::of((string)$review->original_lot_cost)
+                ->isEqualTo((string)$p->original_lot_cost) ||
+            !BigDecimal::of((string)$review->remaining_inventory_cost)
+                ->isEqualTo((string)$p->original_remaining_raw_cost) ||
+            !BigDecimal::of((string)$review->consumed_production_cost)
+                ->isEqualTo((string)$p->original_material_cost) ||
+            !BigDecimal::of((string)$p->original_lot_cost)
+                ->isEqualTo(BigDecimal::of((string)$p->original_material_cost)
+                    ->plus((string)$p->original_remaining_raw_cost)) ||
+            !BigDecimal::of((string)$posted->material_amount)
+                ->isEqualTo((string)$p->original_material_cost) ||
+            !BigDecimal::of((string)$posted->total_amount)
+                ->isEqualTo((string)$p->original_material_cost) ||
+            !BigDecimal::of((string)$posted->overhead_amount)->isZero() ||
+            !BigDecimal::of((string)$posted->abnormal_waste_amount)->isZero() ||
+            count(array_unique([
+                (int)$p->submitted_by,(int)$p->approved_by,(int)$p->executed_by,
+                (int)$review->submitted_by,(int)$review->approved_by,
+                (int)$provenance->requested_by,(int)$provenance->reviewed_by,
+                (int)$opening->created_by
+            ]))!==8)
+            return false;
+
+        if(!$this->journalValid((int)$p->opening_journal_id,
+            (int)$policy->material_inventory_ledger_id,
+            (int)$p->opening_equity_ledger_id,(string)$p->original_lot_cost,
+            (string)$p->original_opening_date,(int)$p->currency_id) ||
+            !$this->journalValid((int)$p->wip_journal_id,
+                (int)$policy->work_in_progress_ledger_id,
+                (int)$policy->material_inventory_ledger_id,
+                (string)$p->original_material_cost,
+                (string)$p->original_issue_date,(int)$p->currency_id) ||
+            !$this->journalValid((int)$p->finished_journal_id,
+                (int)$policy->finished_inventory_ledger_id,
+                (int)$policy->work_in_progress_ledger_id,
+                (string)$p->original_material_cost,
+                (string)$p->original_finished_date,(int)$p->currency_id) ||
+            (int)$posted->issue_journal_id!==(int)$p->wip_journal_id ||
+            (int)$posted->capitalization_journal_id!==(int)$p->finished_journal_id)
+            return false;
+
+        $issued=DB::table('finance_historical_fifo_production_cost_lines')
+            ->where('finance_historical_fifo_production_cost_review_id',$review->id)->get();
+        if($issued->count()!==(int)$p->source_issue_lines)return false;
+        $amount=BigDecimal::zero();$physicalQty=BigDecimal::zero();
+        foreach($issued as $line){
+            $cost=DB::table('inventory_cost_consumptions')
+                ->where('id',$line->inventory_cost_consumption_id)->first();
+            $stock=$cost?DB::table('inventory_stock_movements')
+                ->where('id',$cost->inventory_stock_movement_id)->first():null;
+            if(!$cost || !$stock ||
+                (int)$line->production_batch_id!==(int)$batch->id ||
+                (int)$cost->inventory_cost_layer_id!==(int)$layer->id ||
+                (int)$line->inventory_stock_movement_id!==(int)$stock->id ||
+                (int)$stock->reference_id!==(int)$line->production_order_material_id ||
+                $stock->reference_type!=='production_order_material' ||
+                $stock->type!=='issue' || $stock->direction!=='out' ||
+                (string)$stock->occurred_on!==(string)$p->original_issue_date ||
+                (string)$line->original_material_issue_date!==(string)$p->original_issue_date ||
+                (int)$line->historical_wip_journal_id!==(int)$p->wip_journal_id ||
+                $cost->is_valued || $cost->amount!==null ||
+                !BigDecimal::of((string)$cost->quantity)
+                    ->isEqualTo((string)$line->quantity))
+                return false;
+            $physicalQty=$physicalQty->plus((string)$line->quantity);
+            $amount=$amount->plus((string)$line->proposed_original_wip_cost);
+        }
+        if(!$amount->isEqualTo((string)$p->original_material_cost) ||
+            !BigDecimal::of((string)$provenance->consumed_quantity)
+                ->isEqualTo($physicalQty) ||
+            !BigDecimal::of((string)$layer->original_quantity)
+                ->isEqualTo($physicalQty->plus((string)$layer->remaining_quantity)))
+            return false;
+
+        $sales=DB::table('sales_invoice_lines')
+            ->where('production_batch_id',$batch->id)->get();
+        $costed=DB::table('production_invoice_cogs_postings as cost')
+            ->join('sales_invoice_lines as sale',
+                'sale.id','=','cost.sales_invoice_line_id')
+            ->where('sale.production_batch_id',$batch->id)
+            ->get(['cost.*']);
+        if($sales->count()!==(int)$p->source_invoice_lines ||
+            $costed->count()!==$sales->count())return false;
+        $totalCost=BigDecimal::zero();$units=0;
+        foreach($sales as $sale){
+            $entry=$costed->firstWhere('sales_invoice_line_id',$sale->id);
+            $invoice=DB::table('sales_invoices')
+                ->where('id',$sale->sales_invoice_id)->first();
+            $physical=DB::table('finished_good_dispatch_lines as dispatch')
+                ->join('finished_good_dispatches as head',
+                    'head.id','=','dispatch.finished_good_dispatch_id')
+                ->where('dispatch.finished_good_dispatch_id',$sale->dispatch_id)
+                ->select('dispatch.*','head.dispatch_date')->first();
+            if(!$entry || !$invoice || !$physical ||
+                (int)$entry->production_batch_cost_posting_id!==(int)$posted->id ||
+                (int)$entry->quantity_packages!==(int)$sale->quantity_packages ||
+                (int)$physical->production_batch_id!==(int)$batch->id ||
+                (int)$physical->quantity_packages!==(int)$sale->quantity_packages ||
+                !$this->journalValid((int)$entry->journal_entry_id,
+                    (int)$policy->cogs_ledger_id,
+                    (int)$policy->finished_inventory_ledger_id,
+                    (string)$entry->amount,(string)$invoice->invoice_date,
+                    (int)$p->currency_id))
+                return false;
+            try{$this->invoiceSource($physical,$sale,$invoice);}
+            catch(ValidationException $e){return false;}
+            $totalCost=$totalCost->plus((string)$entry->amount);
+            $units+=(int)$sale->quantity_packages;
+        }
+        return $units<=(int)$batch->accepted_packages &&
+            $totalCost->isLessThanOrEqualTo((string)$p->original_material_cost);
+    }
+
     public function post(int $id,int $actorId):object
     {
         return DB::transaction(function()use($id,$actorId){
