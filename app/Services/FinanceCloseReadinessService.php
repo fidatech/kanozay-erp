@@ -198,6 +198,94 @@ class FinanceCloseReadinessService
     }
 
     /**
+     * Cross-subledger proof that mixed saleable QC returns and condemned
+     * customer scraps cannot claim the same original invoice COGS remainder.
+     * Inspect the complete historical batch, including QC events in other
+     * months, whenever its source period or a QC month is being closed.
+     */
+    private function historicalMixedQcInvoiceCostIsValid(object $batch): bool
+    {
+        $released=DB::table('finance_historical_batch_return_allocations')
+            ->where('finance_historical_batch_capitalization_id',$batch->id)
+            ->get();
+        $scrapped=DB::table('finance_historical_batch_scrap_allocations')
+            ->where('finance_historical_batch_capitalization_id',$batch->id)
+            ->get();
+        $bySale=[];
+        foreach($released as $row){
+            $bySale[(int)$row->sales_invoice_line_id][]=[
+                'type'=>'return','date'=>(string)$row->original_qc_date,
+                'qc_id'=>(int)$row->sales_return_quarantine_id,
+                'credit_id'=>(int)$row->sales_credit_note_line_id,
+                'qty'=>(int)$row->quantity_packages,
+                'original'=>(string)$row->original_invoiced_cogs_amount,
+                'amount'=>(string)$row->original_return_cost_amount,
+                'currency_id'=>(int)$row->currency_id,
+            ];
+        }
+        foreach($scrapped as $row){
+            $bySale[(int)$row->sales_invoice_line_id][]=[
+                'type'=>'scrap','date'=>(string)$row->original_qc_scrap_date,
+                'qc_id'=>(int)$row->sales_return_quarantine_id,
+                'credit_id'=>(int)$row->sales_credit_note_line_id,
+                'qty'=>(int)$row->quantity_packages,
+                'original'=>(string)$row->original_invoice_cogs_amount,
+                'amount'=>(string)$row->scrap_reclass_amount,
+                'currency_id'=>(int)$row->currency_id,
+            ];
+        }
+        foreach($bySale as $saleId=>$events){
+            $releasedCount=count(array_filter($events,
+                fn($event)=>$event['type']==='return'));
+            if(!$releasedCount || $releasedCount===count($events))continue;
+            $sale=DB::table('sales_invoice_lines')->where('id',$saleId)->first();
+            $cogs=DB::table('production_invoice_cogs_postings')
+                ->where('sales_invoice_line_id',$saleId)->first();
+            if(!$sale || !$cogs || (int)$sale->quantity_packages<1 ||
+                (int)$cogs->quantity_packages!==(int)$sale->quantity_packages ||
+                (int)$sale->production_batch_id!==(int)$batch->production_batch_id ||
+                (int)$cogs->production_batch_cost_posting_id!==
+                    (int)$batch->production_batch_cost_posting_id)
+                return false;
+
+            $total=BigDecimal::of((string)$cogs->amount);
+            if(!$total->isPositive())return false;
+            $seenQC=[];$seenCredit=[];$allQty=0;
+            foreach($events as $event){
+                if($event['qty']<1 ||
+                    $event['currency_id']!==(int)$batch->currency_id ||
+                    !BigDecimal::of($event['original'])->isEqualTo($total) ||
+                    isset($seenQC[$event['qc_id']]) ||
+                    isset($seenCredit[$event['credit_id']]))return false;
+                $seenQC[$event['qc_id']]=true;
+                $seenCredit[$event['credit_id']]=true;
+                $allQty+=$event['qty'];
+            }
+            if($allQty>(int)$sale->quantity_packages)return false;
+            usort($events,fn($x,$y)=>[
+                $x['date'],$x['type']==='return'?0:1,$x['qc_id'],
+            ]<=>[
+                $y['date'],$y['type']==='return'?0:1,$y['qc_id'],
+            ]);
+            $usedQty=0;$usedCost=BigDecimal::zero();
+            foreach($events as $event){
+                $usedQty+=$event['qty'];
+                $expected=$usedQty===(int)$sale->quantity_packages
+                    ?$total->minus($usedCost)
+                    :$total->multipliedBy((string)$event['qty'])
+                        ->dividedBy((string)$sale->quantity_packages,4,
+                            \Brick\Math\RoundingMode::HalfUp);
+                if(!$expected->isPositive() ||
+                    $expected->isGreaterThan($total->minus($usedCost)) ||
+                    !$expected->isEqualTo($event['amount']))
+                    return false;
+                $usedCost=$usedCost->plus($expected);
+            }
+        }
+        return true;
+    }
+
+    /**
      * Original production-batch QC return allocations form one immutable
      * cost-recovery subledger. This read-only audit is also used for the QC
      * journal's own month, even if manufacturing was capitalized earlier.
@@ -493,6 +581,27 @@ class FinanceCloseReadinessService
         if($invalidBatchScraps)
             $blockers[]=$invalidBatchScraps.
                 ' original batch QC-scrapped customer return(s) have missing or mismatched original-currency approved COGS-to-expense journals or source evidence.';
+
+        // Both outcome records may have original QC journal dates in
+        // different accounting months. Recheck their entire shared invoice
+        // COGS budget in EACH affected original QC period.
+        $mixedIds=$historicBatchQCReturns
+            ->pluck('finance_historical_batch_capitalization_id')
+            ->merge($historicBatchScraps
+                ->pluck('finance_historical_batch_capitalization_id'))
+            ->unique()->values();
+        $invalidMixedQC=0;
+        foreach($mixedIds as $id){
+            $review=DB::table('finance_historical_batch_capitalizations')
+                ->where('id',$id)->first();
+            if($review && (int)($review->return_line_count??0)>0 &&
+                (int)($review->scrap_line_count??0)>0 &&
+                !$this->historicalMixedQcInvoiceCostIsValid($review))
+                $invalidMixedQC++;
+        }
+        if($invalidMixedQC)
+            $blockers[]=$invalidMixedQC.
+                ' historic customer invoice(s) mix saleable QC returns and scrapped losses whose shared original-currency cost or package rounding no longer reconciles to the original COGS.';
         // The authorized accounting for quarantined goods is a SOURCE
         // HOLD, not an inventory asset or automatic new expense. A later
         // independent QC scrap decision may have a source COGS loss
@@ -750,6 +859,9 @@ class FinanceCloseReadinessService
                     }
                 }
             }
+            if($valid && (int)($recovery->return_line_count??0)>0 &&
+                (int)($recovery->scrap_line_count??0)>0)
+                $valid=$this->historicalMixedQcInvoiceCostIsValid($recovery);
             if(!$valid)$invalidRecovery++;
         }
         if($invalidRecovery)
