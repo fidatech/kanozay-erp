@@ -905,6 +905,62 @@ final class HistoricalBatchCapitalizationService
                 ->isEqualTo($scrap['amount']))
             $this->fail('Original customer QC scrap quantity, source cost or finance approval changed before posting.');
 
+        // Both independent QC outcomes consume one common source invoice
+        // COGS budget. The original return recovery writes to the standard
+        // production_return_cost_postings table; signed scrap writes here.
+        // Reconcile ALL already posted fractions in the same chronological
+        // transaction so two parallel source paths cannot claim the final
+        // 4-decimal remainder.
+        $usedQty=0;$usedCost=BigDecimal::zero();
+        $priorRestocks=DB::table('production_return_cost_postings')
+            ->where('production_invoice_cogs_posting_id',$cogs->id)->get();
+        foreach($priorRestocks as $restock){
+            $originalQc=DB::table('sales_return_quarantines')
+                ->where('id',$restock->sales_return_quarantine_id)->first();
+            $gl=DB::table('journal_entries')
+                ->where('id',$restock->journal_entry_id)->first();
+            if(!$originalQc || $originalQc->status!=='released' ||
+                !$gl || $gl->status!=='posted' || $gl->reversal_of_id ||
+                (int)$gl->currency_id!==(int)$manufacturing->currency_id ||
+                (string)$gl->entry_date>(string)$scrap['date'] ||
+                DB::table('journal_entries')->where('reversal_of_id',$gl->id)->exists()){
+                $this->fail('A prior saleable-QC return is not financially posted, has a reversed original asset recovery or is later than this QC scrap.');
+            }
+            $usedQty+=(int)$restock->quantity_packages;
+            $usedCost=$usedCost->plus((string)$restock->amount);
+        }
+        $priorScraps=DB::table('finance_historical_batch_scrap_allocations')
+            ->where('finance_historical_batch_capitalization_id',$plan->id)
+            ->where('sales_invoice_line_id',$sale->id)
+            ->whereNotNull('journal_entry_id')->get();
+        foreach($priorScraps as $prior){
+            $gl=DB::table('journal_entries')
+                ->where('id',$prior->journal_entry_id)->first();
+            if(!$gl || $gl->status!=='posted' || $gl->reversal_of_id ||
+                (int)$gl->currency_id!==(int)$manufacturing->currency_id ||
+                (int)$prior->source_cogs_posting_id!==(int)$cogs->id ||
+                (string)$gl->entry_date!==(string)$prior->original_qc_scrap_date ||
+                (string)$gl->entry_date>(string)$scrap['date'] ||
+                DB::table('journal_entries')->where('reversal_of_id',$gl->id)->exists())
+                $this->fail('An earlier approved QC scrap expense is missing, reversed, outside this original invoice or later than this QC decision.');
+            $usedQty+=(int)$prior->quantity_packages;
+            $usedCost=$usedCost->plus((string)$prior->scrap_reclass_amount);
+        }
+        $originalCost=BigDecimal::of((string)$cogs->amount);
+        $newQty=(int)$scrap['quantity'];
+        if($newQty<1 || $usedQty+$newQty>(int)$cogs->quantity_packages ||
+            $usedCost->isNegative() || $usedCost->isGreaterThanOrEqualTo($originalCost))
+            $this->fail('The combined already-released and scrapped original customer package/cost allocations exhaust or exceed the original invoice COGS.');
+        $expected=$usedQty+$newQty===(int)$cogs->quantity_packages
+            ?$originalCost->minus($usedCost)
+            :$originalCost->multipliedBy((string)$newQty)
+                ->dividedBy((string)$cogs->quantity_packages,4,RoundingMode::HalfUp);
+        if(!$expected->isPositive() ||
+            $expected->isGreaterThan($originalCost->minus($usedCost)) ||
+            !$expected->isEqualTo((string)$allocation->scrap_reclass_amount) ||
+            !$expected->isEqualTo($scrap['amount']))
+            $this->fail('Joint original-currency COGS rounding for this QC scrap differs from the approved shared invoice-level return/scrap allocation.');
+
         $amount=(string)BigDecimal::of($scrap['amount'])->toScale(4,RoundingMode::HalfUp);
         \App\Models\DocumentSequence::firstOrCreate([
             'document_type'=>'historical_batch_scrap_loss',
