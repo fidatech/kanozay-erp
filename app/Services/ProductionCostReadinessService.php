@@ -22,6 +22,12 @@ class ProductionCostReadinessService {
   $capitalized=DB::table('production_batch_cost_postings')
    ->whereIn('production_batch_id',$ids)
    ->get()->keyBy('production_batch_id');
+  $historicRecoveries=DB::table('finance_historical_fifo_production_recoveries as recovery')
+   ->join('currencies as currency','currency.id','=','recovery.currency_id')
+   ->whereIn('recovery.production_batch_id',$ids)
+   ->where('recovery.status','posted')
+   ->select('recovery.*','currency.code as historical_currency_code')
+   ->get()->keyBy('production_batch_id');
   $wastes=DB::table('production_material_wastes as waste')
    ->join('production_order_materials as item',
       'item.id','=','waste.production_order_material_id')
@@ -42,6 +48,7 @@ class ProductionCostReadinessService {
    $costs=$batch->costs;
    $overheadRows=$overhead->get($batch->id,collect());
    $sourcePosting=$capitalized->get($batch->id);
+   $historicSource=$historicRecoveries->get($batch->id);
    $pending=$overheadRows->where('status','submitted')->count();
    $wasteRows=$wastes->get($batch->production_order_id,collect());
    $unreviewedWaste=$wasteRows->filter(fn($item)=>$item->treatment===null)->count();
@@ -55,6 +62,7 @@ class ProductionCostReadinessService {
    $currencyCodes=$costs->pluck('currency_code')->filter()
     ->merge($overheadRows->where('status','approved')->pluck('currency_code'))
     ->merge($wasteRows->pluck('source_currency_code')->filter())
+    ->merge($historicSource?collect([$historicSource->historical_currency_code]):collect())
     ->unique()->values();
    if($currencyCodes->isEmpty())$currencyCodes=collect([null]);
    $mixedCurrency=$currencyCodes->count()>1;
@@ -75,6 +83,12 @@ class ProductionCostReadinessService {
        $hasMaterialCurrency=true;
      }
     }
+    if($historicSource && $sourcePosting &&
+       $historicSource->historical_currency_code===$code &&
+       !$hasMaterialCurrency){
+      $material=$material->plus((string)$historicSource->original_material_cost);
+      $hasMaterialCurrency=true;
+    }
     foreach($overheadRows as $allocation){
      if($allocation->status==='approved'&&$allocation->currency_code===$code)
       $overheadTotal=$overheadTotal->plus((string)$allocation->amount);
@@ -90,6 +104,8 @@ class ProductionCostReadinessService {
     $warning=match(true){
       $unreviewedWaste>0=>'Recorded material waste requires independent finance classification',
       $unresolvedWaste>0=>'Abnormal production waste without exact FIFO approval, or unresolved rework',
+      $historicSource!==null && $sourcePosting!==null=>
+       'Historical original FIFO source-backed raw/WIP/finished/COGS financial recovery posted; original unvalued material snapshot preserved for audit',
       $sourcePosting!==null=>'Posted to original-currency WIP and finished goods GL; review source evidence',
       $hasUnvalued=>'Missing or unvalued material source costs',
       $mixedCurrency=>'Multiple source currencies; no combined cost',
@@ -114,6 +130,8 @@ class ProductionCostReadinessService {
      'mixed_currency'=>$mixedCurrency,'ready'=>$complete,
      'cost_per_package'=>$costPerPackage,
      'gl_posted'=>$sourcePosting!==null,
+     'historical_production_fifo_recovery_id'=>$historicSource?->id,
+     'historical_original_cost_recovery'=>$historicSource!==null,
      'gl_currency_id'=>$sourcePosting?->currency_id,
      'gl_accounted_cost'=>$sourcePosting?->total_amount,
      'warning'=>$warning,
