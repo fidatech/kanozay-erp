@@ -314,6 +314,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/finance/profit-and-loss', [\App\Http\Controllers\ProfitAndLossController::class,'index'])->name('finance.profit-and-loss.index');
     Route::get('/finance/balance-sheet', [\App\Http\Controllers\BalanceSheetController::class,'index'])->name('finance.balance-sheet.index');
     Route::get('/finance/cash-movements', [\App\Http\Controllers\CashMovementReportController::class,'index'])->name('finance.cash-movements.index');
+    Route::get('/finance/payroll-tax-remittances', [\App\Http\Controllers\PayrollTaxRemittanceController::class,'index'])->name('finance.payroll-tax-remittances.index');
+    Route::post('/finance/payroll-tax-remittances', [\App\Http\Controllers\PayrollTaxRemittanceController::class,'store'])->name('finance.payroll-tax-remittances.store');
+    Route::post('/finance/payroll-tax-remittances/{remittance}/review', [\App\Http\Controllers\PayrollTaxRemittanceController::class,'review'])->whereNumber('remittance')->name('finance.payroll-tax-remittances.review');
+    Route::post('/finance/payroll-tax-remittances/{remittance}/post', [\App\Http\Controllers\PayrollTaxRemittanceController::class,'post'])->whereNumber('remittance')->name('finance.payroll-tax-remittances.post');
     Route::get('/finance/bank-reconciliations', [\App\Http\Controllers\BankReconciliationController::class,'index'])->name('finance.bank-reconciliations.index');
     Route::post('/finance/bank-reconciliations', [\App\Http\Controllers\BankReconciliationController::class,'create'])->name('finance.bank-reconciliations.store');
     Route::get('/finance/bank-reconciliations/{period}', [\App\Http\Controllers\BankReconciliationController::class,'show'])->whereNumber('period')->name('finance.bank-reconciliations.show');
