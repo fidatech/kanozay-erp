@@ -107,6 +107,20 @@ class HistoricalFinanceCorrectionController extends Controller
         $this->gate($request);
         $row=DB::table('finance_historical_correction_cases')->where('id',$case)->first();
         abort_unless($row,404);
+        $amendmentReplacement=DB::table('finance_historical_source_amendments as amendment')
+            ->join('finance_historical_correction_cases as replacement',
+                'replacement.id','=','amendment.replacement_case_id')
+            ->where('amendment.original_case_id',$row->id)
+            ->select('amendment.*','replacement.case_number as replacement_number')
+            ->first();
+        $priorAmendment=DB::table('finance_historical_source_amendments as amendment')
+            ->join('finance_historical_correction_cases as original',
+                'original.id','=','amendment.original_case_id')
+            ->where('amendment.replacement_case_id',$row->id)
+            ->select('amendment.*','original.case_number as original_number')
+            ->first();
+        $reversalRequest=DB::table('finance_historical_source_reversal_requests')
+            ->where('finance_historical_correction_case_id',$row->id)->first();
         $historicalDispositionPlan=null;
         $historicalDispositionQc=null;
         $historicalDispositionCredit=null;
@@ -483,7 +497,55 @@ class HistoricalFinanceCorrectionController extends Controller
             'shortCreditSettlement'=>$shortCreditSettlement,
             'shortCreditPayables'=>$shortCreditPayables,
             'shortCreditDifferenceLedgers'=>$shortCreditDifferenceLedgers,
+            'amendmentReplacement'=>$amendmentReplacement,
+            'priorAmendment'=>$priorAmendment,
+            'reversalRequest'=>$reversalRequest,
         ]);
+    }
+
+    public function resubmit(Request $request,int $case,
+        \App\Services\HistoricalSourceAmendmentService $service)
+    {
+        $this->gate($request,true);
+        $data=$request->validate([
+            'identified_discrepancy'=>['required','string','min:20','max:4000'],
+            'source_evidence'=>['required','string','min:20','max:5000'],
+            'amendment_reason'=>['required','string','min:60','max:5000'],
+            'confirm_fresh_evidence'=>['accepted'],
+        ]);
+        $replacement=$service->resubmit($case,$data,(int)$request->user()->id);
+        return redirect()->route('finance.historical-corrections.show',$replacement->id)
+            ->with('success','A new original-source correction case was filed with permanent parent-case evidence. The original rejected/withdrawn case remains immutable; a different reviewer must independently approve this request. No GL or stock changed.');
+    }
+
+    public function requestReversal(Request $request,int $case,
+        \App\Services\HistoricalSourceAmendmentService $service)
+    {
+        $this->gate($request,true);
+        $data=$request->validate([
+            'original_accounting_effects'=>['required','string','min:80','max:5000'],
+            'requested_replacement_treatment'=>['required','string','min:80','max:5000'],
+            'evidence_reference'=>['required','string','min:4','max:180'],
+            'confirm_no_automatic_reversal'=>['accepted'],
+        ]);
+        $service->requestReversal($case,$data,(int)$request->user()->id);
+        return back()->with('success','Signed full historical source-reversal ASSESSMENT recorded. No journal was reversed or posted. The source-specific atomic accounting reversal remains a separate required control.');
+    }
+
+    public function reviewReversal(Request $request,int $case,
+        \App\Services\HistoricalSourceAmendmentService $service)
+    {
+        $this->gate($request,true);
+        $data=$request->validate([
+            'decision'=>['required',Rule::in(['approve','reject'])],
+            'review_reference'=>['required','string','min:4','max:180'],
+            'review_notes'=>['required','string','min:80','max:5000'],
+            'confirm_source_reversal_is_documentary'=>['accepted'],
+        ]);
+        $prior=DB::table('finance_historical_source_reversal_requests')
+            ->where('finance_historical_correction_case_id',$case)->firstOrFail();
+        $service->reviewReversal((int)$prior->id,$data,(int)$request->user()->id);
+        return back()->with('success','Independent source-level reversal impact review recorded, without changing GL, fixed assets, source WIP, historical stock or customer COGS.');
     }
 
     public function review(Request $request,int $case,HistoricalFinanceCorrectionService $service)

@@ -11,6 +11,42 @@ use Illuminate\Validation\ValidationException;
 
 class BankReconciliationService
 {
+ /**
+  * Exactly match a bank statement line to the actual original-currency
+  * bank GL posting. The money-transaction existence alone is insufficient.
+  */
+ private function assertBankJournal(MoneyTransaction $money,object $period,
+  string $direction):void
+ {
+  $journal=DB::table('journal_entries')
+   ->where('id',$money->journal_entry_id)->first();
+  if(!$journal || $journal->status!=='posted' || $journal->reversal_of_id ||
+   DB::table('journal_entries')->where('reversal_of_id',$journal->id)->exists() ||
+   (int)$journal->currency_id!==(int)$period->currency_id ||
+   (string)$journal->entry_date!==(string)$money->transaction_date)
+   throw ValidationException::withMessages(['money_transaction_id'=>
+    'Matched bank transaction must have a genuine posted, unreversed, exact-date General Ledger entry in its original bank currency.']);
+
+  $bankLedger=DB::table('entity_ledger_accounts')->where([
+   'entity_type'=>'bank','entity_id'=>$period->financial_account_id,
+   'currency_id'=>$period->currency_id,'purpose'=>'cash',
+  ])->value('ledger_account_id');
+  if(!$bankLedger)
+   throw ValidationException::withMessages(['money_transaction_id'=>
+    'This bank account has no authenticated source-currency cash ledger mapping.']);
+
+  $signed=BigDecimal::zero();
+  foreach(DB::table('journal_lines')
+    ->where('journal_entry_id',$journal->id)
+    ->where('ledger_account_id',$bankLedger)->get(['debit','credit']) as $line)
+   $signed=$signed->plus((string)$line->debit)->minus((string)$line->credit);
+  $expected=BigDecimal::of((string)$money->amount);
+  if($direction==='withdrawal')$expected=$expected->negated();
+  if(!$signed->isEqualTo($expected))
+   throw ValidationException::withMessages(['money_transaction_id'=>
+    'The bank account debit/credit in the posted original journal must equal the exact matched statement deposit or withdrawal, including direction.']);
+ }
+
  public function create(array $data,int $actorId):object
  {
   return DB::transaction(function()use($data,$actorId){
@@ -50,6 +86,12 @@ class BankReconciliationService
    $period=DB::table('bank_reconciliation_periods')->where('id',$periodId)->lockForUpdate()->first();
    abort_unless($period,404);
    if($period->status!=='draft')throw ValidationException::withMessages(['statement'=>'Approved statements are immutable.']);
+   if(!in_array($data['direction'],['deposit','withdrawal'],true) ||
+      !BigDecimal::of((string)$data['amount'])->isPositive() ||
+      BigDecimal::of((string)$data['amount'])->isGreaterThan('9999999999999999.9999') ||
+      BigDecimal::of((string)$data['amount'])->getScale()>4)
+    throw ValidationException::withMessages(['amount'=>
+      'Real bank statement lines require a positive original-currency amount, four-decimal precision and a genuine deposit/withdrawal direction.']);
    if($data['posted_on']<$period->period_start || $data['posted_on']>$period->period_end)
     throw ValidationException::withMessages(['posted_on'=>'Bank statement line must fall within the reconciliation period.']);
    $previous=DB::table('bank_statement_entries')->where('submission_token',$data['submission_token'])->first();
@@ -100,6 +142,7 @@ class BankReconciliationService
     throw ValidationException::withMessages(['money_transaction_id'=>'Bank transaction currency differs from the statement account.']);
    if($this->direction($transaction,(int)$period->financial_account_id)!==$entry->direction)
     throw ValidationException::withMessages(['money_transaction_id'=>'Deposit/withdrawal direction does not match this financial account.']);
+   $this->assertBankJournal($transaction,$period,$entry->direction);
    if(!BigDecimal::of((string)$entry->amount)->isEqualTo((string)$transaction->amount))
     throw ValidationException::withMessages(['money_transaction_id'=>'Statement amount and posted transaction amount differ.']);
    if(DB::table('bank_statement_matches')->where('bank_statement_entry_id',$statementId)->exists() ||
@@ -134,6 +177,22 @@ class BankReconciliationService
      throw ValidationException::withMessages(['status'=>'Every bank statement line must be matched to a posted finance transaction.']);
     if($row->direction==='deposit')$incoming=$incoming->plus((string)$row->amount);
     else $outgoing=$outgoing->plus((string)$row->amount);
+   }
+   // Reverify each previously matched GL source immediately before signing
+   // the statement. A valid journal at matching time may have been reversed.
+   foreach($entries as $entry){
+    $matched=DB::table('bank_statement_matches')
+      ->where('bank_statement_entry_id',$entry->id)->first();
+    $money=$matched?MoneyTransaction::whereKey($matched->money_transaction_id)->first():null;
+    if(!$matched || !$money ||
+      (int)$matched->financial_account_id!==(int)$period->financial_account_id ||
+      (int)$money->currency_id!==(int)$period->currency_id ||
+      (string)$entry->posted_on!==(string)$money->transaction_date ||
+      $this->direction($money,(int)$period->financial_account_id)!==$entry->direction ||
+      !BigDecimal::of((string)$entry->amount)->isEqualTo((string)$money->amount))
+     throw ValidationException::withMessages(['status'=>
+      'An original bank statement match is missing, reversed or no longer agrees with its source money transaction. Reconcile before approval.']);
+    $this->assertBankJournal($money,$period,$entry->direction);
    }
    $closing=BigDecimal::of((string)$period->statement_opening)->plus($incoming)->minus($outgoing);
    if(!$closing->isEqualTo((string)$period->statement_closing))

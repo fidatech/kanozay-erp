@@ -18,6 +18,11 @@ class FixedAssetDisposalPostingService {
   return DB::transaction(function()use($disposalId,$data,$actorId){
    $disposal=DB::table('fixed_asset_disposals')->where('id',$disposalId)->lockForUpdate()->first();
    abort_unless($disposal,404);
+   if((int)$disposal->recorded_by===$actorId)
+    throw ValidationException::withMessages(['disposal'=>
+     'The person recording physical disposal cannot independently authorize the final source-linked asset retirement and gain/loss journal.']);
+   app(FinancePeriodClosingService::class)->holdPostingGate();
+   app(FinancePeriodClosingService::class)->assertOpenDate((string)$disposal->disposed_on);
    if($disposal->financial_status!=='pending_reconciliation'||
       DB::table('fixed_asset_disposal_postings')->where('fixed_asset_disposal_id',$disposalId)->exists())
     throw ValidationException::withMessages(['disposal'=>'Asset disposal accounting has already been posted.']);
@@ -69,9 +74,14 @@ class FixedAssetDisposalPostingService {
    foreach($depreciation as $line){
     if($line->period_month>$disposal->disposed_on)
       throw ValidationException::withMessages(['disposal'=>'Depreciation extends beyond disposal date.']);
-    $journalStatus=JournalEntry::whereKey($line->journal_entry_id)->value('status');
-    if($journalStatus!=='posted')
-      throw ValidationException::withMessages(['disposal'=>'A depreciation journal is not posted.']);
+    $journal=JournalEntry::whereKey($line->journal_entry_id)->first();
+    if(!$journal || $journal->status!=='posted' ||
+       $journal->reversal_of_id ||
+       JournalEntry::where('reversal_of_id',$journal->id)->exists() ||
+       (int)$journal->currency_id!==(int)$asset->currency_id ||
+       $journal->entry_date->toDateString()>$disposal->disposed_on)
+      throw ValidationException::withMessages(['disposal'=>
+        'Historical depreciation source GL is missing, reversed, wrong currency or posted after physical asset disposal; depreciation amount cannot fund retirement.']);
     $postedTotal=$postedTotal->plus((string)$line->amount);
    }
    if(!$postedTotal->isEqualTo($accum))
@@ -80,6 +90,9 @@ class FixedAssetDisposalPostingService {
    if($accum->isPositive() && !$policy)
     throw ValidationException::withMessages(['disposal'=>'An approved depreciation policy is required for accumulated depreciation.']);
    $proceeds=BigDecimal::of((string)$disposal->proceeds)->toScale(4);
+   if($proceeds->isNegative())
+    throw ValidationException::withMessages(['disposal'=>
+      'Original disposal proceeds cannot be negative or inferred from a guessed salvage loss.']);
    $difference=$proceeds->minus($book)->toScale(4);
    $loss=$difference->isNegative()?$difference->negated():BigDecimal::zero();
    $gain=$difference->isPositive()?$difference:BigDecimal::zero();

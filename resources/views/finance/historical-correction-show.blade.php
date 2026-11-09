@@ -996,6 +996,100 @@ I understand that withdrawal cannot reverse a journal and only affects this unex
 </section>
 @endif
 <section class="hfcs-card">
+<h2>Historical source amendments and full-source reversal assessments</h2>
+@if($priorAmendment)
+<p class="hfcs-alert">This case is a new append-only correction originally refiled from
+<a href="{{ route('finance.historical-corrections.show',$priorAmendment->original_case_id) }}">
+{{ $priorAmendment->original_number }}</a>.
+Original reason: {{ $priorAmendment->amendment_reason }}.
+The original evidence, source fingerprint and finance review remain intact.</p>
+@endif
+@if($amendmentReplacement)
+<p class="hfcs-alert">A replacement case was independently filed:
+<a href="{{ route('finance.historical-corrections.show',$amendmentReplacement->replacement_case_id) }}">
+{{ $amendmentReplacement->replacement_number }}</a>.
+Reason: {{ $amendmentReplacement->amendment_reason }}.
+This original case was never rewritten or used to bypass original account controls.</p>
+@endif
+@if(in_array($case->status,['rejected','withdrawn'],true) &&
+ !$amendmentReplacement &&
+ (auth()->user()->can('finance.update') || auth()->user()->can('administration.update')))
+<p class="muted">Rejected or withdrawn evidence cannot be edited in place. File a new source-fingerprinted case with a fresh independent reviewer, keeping the original decision, event history and cost evidence permanent. This does not reverse source accounting.</p>
+<form method="POST" action="{{ route('finance.historical-corrections.resubmit',$case->id) }}" class="hfcs-form">
+@csrf
+<label>Revised original discrepancy
+<textarea name="identified_discrepancy" minlength="20" maxlength="4000" rows="3" required>{{ old('identified_discrepancy',$case->identified_discrepancy) }}</textarea></label>
+<label>New documented original-source evidence
+<textarea name="source_evidence" minlength="20" maxlength="5000" rows="4" required>{{ old('source_evidence') }}</textarea></label>
+<label>Substantive reason for replacement (60+ characters)
+<textarea name="amendment_reason" minlength="60" maxlength="5000" rows="4" required></textarea></label>
+<label style="display:flex;align-items:center;gap:8px">
+<input name="confirm_fresh_evidence" type="checkbox" required value="1" style="width:auto">
+I acknowledge the original rejected/withdrawn evidence is immutable. This is a NEW correction case, not authorization to post or reverse any GL journal.
+</label>
+<button class="btn" type="submit">Create amended original-source case for new independent approval</button>
+</form>
+@endif
+
+@if($reversalRequest)
+<p class="hfcs-alert"><strong>Source-level reversal assessment #{{ $reversalRequest->id }}:
+{{ strtoupper($reversalRequest->status) }}</strong>.
+A documentary approval does NOT reverse a journal, inventory movement, QC status, supplier payable, historical COGS or fixed-asset source.
+Only a separately implemented original-date, full-source financial executor may post reversing entries after a new independent accounting approval.</p>
+<div><strong>Original GL impacts and related source:</strong>
+{{ $reversalRequest->original_accounting_effects }}</div>
+<div><strong>Proposed correction and replacement:</strong>
+{{ $reversalRequest->requested_replacement_treatment }}</div>
+<div class="muted">Independent evidence: {{ $reversalRequest->evidence_reference }}</div>
+@if($reversalRequest->review_reference)
+<div><strong>Reviewer reference:</strong> {{ $reversalRequest->review_reference }}.
+{{ $reversalRequest->review_notes }}</div>
+@endif
+@if($reversalRequest->status==='submitted' &&
+(auth()->user()->can('finance.update') || auth()->user()->can('administration.update')) &&
+(int)$reversalRequest->requested_by!==auth()->id() &&
+(int)$case->requested_by!==auth()->id() &&
+(int)$case->reviewed_by!==auth()->id() &&
+(int)$case->executed_by!==auth()->id())
+<form method="POST" action="{{ route('finance.historical-corrections.reversal-review',$case->id) }}" class="hfcs-form">
+@csrf
+<label>Independent documentary conclusion
+<select name="decision" required><option value="">Choose</option>
+<option value="approve">Source reversal impact and proposed whole-chain treatment reviewed</option>
+<option value="reject">Source proof, accounting impact or revised treatment unsupported</option></select></label>
+<label>Independent finance review reference
+<input name="review_reference" minlength="4" maxlength="180" required></label>
+<label>Full review of original posted debit/credit accounts, VAT/returns, physical inventory, customer/supplier balance, original currency and periods
+<textarea name="review_notes" minlength="80" maxlength="5000" rows="5" required></textarea></label>
+<label style="display:flex;align-items:center;gap:8px">
+<input name="confirm_source_reversal_is_documentary" type="checkbox" required value="1" style="width:auto">
+I understand this is only a signed impact review; it CANNOT create or reverse an accounting journal.</label>
+<button class="btn" type="submit">Record independent full-source reversal assessment</button>
+</form>
+@endif
+@elseif($case->status==='resolved' &&
+(auth()->user()->can('finance.update') || auth()->user()->can('administration.update')) &&
+(int)$case->requested_by!==auth()->id() &&
+(int)$case->reviewed_by!==auth()->id() &&
+(int)$case->executed_by!==auth()->id())
+<p class="muted">A settled historical source may require a whole-chain correction, including original GL, physical stock, WIP, finished goods, customer COGS and credits. Record and independently review its exact accounting impact before any separate source-specific reversal executor can be considered. No action in this form affects GL.</p>
+<form method="POST" action="{{ route('finance.historical-corrections.reversal-assessment',$case->id) }}" class="hfcs-form">
+@csrf
+<label>Original posted journals, amounts, accounts, dates and related operational effects
+<textarea name="original_accounting_effects" minlength="80" maxlength="5000" rows="5" required></textarea></label>
+<label>Proposed full-source replacement, linked GL and physical/financial treatment
+<textarea name="requested_replacement_treatment" minlength="80" maxlength="5000" rows="5" required></textarea></label>
+<label>Original evidence and signed discrepancy reference
+<input name="evidence_reference" minlength="4" maxlength="180" required></label>
+<label style="display:flex;align-items:center;gap:8px">
+<input name="confirm_no_automatic_reversal" type="checkbox" required value="1" style="width:auto">
+I understand this records a documentary request only. No ledger, inventory, sale, supplier liability or historical cost will be reversed or modified.</label>
+<button class="btn" type="submit">Submit source-linked reversal impact assessment</button>
+</form>
+@endif
+</section>
+
+<section class="hfcs-card">
 <h2>Permanent case event history</h2>
 @forelse($events as $event)
 <div class="hfcs-event">

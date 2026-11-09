@@ -86,9 +86,20 @@ class PayrollPeriodService
         return DB::transaction(function () use ($period, $expenseId, $payableId, $actorId) {
             $locked = PayrollPeriod::whereKey($period->id)->lockForUpdate()->firstOrFail();
             if ($locked->status !== 'draft') $this->reject('Only a draft payroll period can be approved.');
+            if ((int)$locked->created_by===$actorId)
+                $this->reject('The payroll draft creator cannot independently approve and post their own salary expense/accrual journal.');
+            $periodEnd=$locked->period_start->copy()->endOfMonth()->toDateString();
+            if($periodEnd>today()->toDateString())
+                $this->reject('Final payroll expense cannot be recognized before its original salary period ends. Use the separately controlled salary advance workflow.');
+            app(FinancePeriodClosingService::class)->holdPostingGate();
+            app(FinancePeriodClosingService::class)->assertOpenDate($periodEnd);
             $expense = LedgerAccount::whereKey($expenseId)->where('is_active', true)->where('is_group', false)->where('type', 'expense')->first();
             $payable = LedgerAccount::whereKey($payableId)->where('is_active', true)->where('is_group', false)->where('type', 'liability')->first();
             if (! $expense || ! $payable) $this->reject('Select active posting accounts for salary expense and salary payable.');
+            if(DB::table('entity_ledger_accounts')->whereIn('ledger_account_id',[
+                $expense->id,$payable->id
+            ])->exists())
+                $this->reject('Payroll expense and accrued payroll payable require unmapped enterprise GL accounts, never a customer, supplier, shareholder or employee-linked entity account.');
 
             $total = BigDecimal::zero();
             $lines = $locked->lines()->lockForUpdate()->get();
@@ -152,7 +163,6 @@ class PayrollPeriodService
             DocumentSequence::firstOrCreate(['document_type' => 'payroll'], ['prefix' => 'PAYR-', 'next_number' => 1, 'padding' => 6, 'is_active' => true]);
             $number = DocumentSequence::issue('payroll');
             $journalDate = $locked->period_start->copy()->endOfMonth();
-            if ($journalDate->isFuture()) $journalDate = now();
             $journal = JournalEntry::create([
                 'number' => $number, 'entry_date' => $journalDate->toDateString(),
                 'reference' => $number, 'description' => 'Approved payroll '.$locked->period_start->format('Y-m'),
@@ -189,6 +199,17 @@ class PayrollPeriodService
                 $this->reject('This employee line has already been paid.');
             }
             if ($locked->status !== 'approved') $this->reject('Approve the payroll period before paying employees.');
+            if((int)$locked->approved_by===$actorId ||
+                (int)$locked->created_by===$actorId)
+                $this->reject('The original payroll creator or expense approver may not also serve as the final bank/cash payroll executor.');
+            $approvedJournal=$locked->approvalJournal;
+            if(!$approvedJournal || $approvedJournal->status!=='posted' ||
+                $approvedJournal->reversal_of_id ||
+                JournalEntry::where('reversal_of_id',$approvedJournal->id)->exists() ||
+                (int)$approvedJournal->currency_id!==(int)$locked->currency_id)
+                $this->reject('Source payroll expense and liability accrual must remain posted, unreversed and in the same authentic salary currency before cash or bank payment.');
+            app(FinancePeriodClosingService::class)->holdPostingGate();
+            app(FinancePeriodClosingService::class)->assertOpenDate($date);
             if($locked->approvalJournal && $date<$locked->approvalJournal->entry_date->toDateString()) {
                 $this->reject('Payroll payment cannot be dated before the posted salary accrual journal.');
             }
@@ -201,6 +222,10 @@ class PayrollPeriodService
             ])->value('ledger_account_id');
             if (! $cashLedger) $this->reject('The payment account needs a linked cash, bank or sarafi ledger.');
             if (BigDecimal::of((string) $item->payable_amount)->compareTo(BigDecimal::zero()) <= 0) $this->reject('A zero-value payroll line cannot be paid.');
+            if(!LedgerAccount::whereKey($locked->payable_ledger_id)
+                ->where('type','liability')->where('is_active',true)
+                ->where('is_group',false)->exists())
+                $this->reject('Accrued payroll payable ledger changed after original payroll approval; do not debit an unrelated or inactive liability account.');
 
             DocumentSequence::firstOrCreate(['document_type' => 'payment'], ['prefix' => 'PAY-', 'next_number' => 1, 'padding' => 6, 'is_active' => true]);
             $number = DocumentSequence::issue('payment');
