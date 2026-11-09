@@ -409,6 +409,57 @@ class FinishedGoodsCostPostingService
                 $usedQty+=(int)$row->quantity_packages;
                 $usedCost=$usedCost->plus((string)$row->amount);
             }
+            if($historicalBatchPlanId!==null){
+                // An original invoice can have BOTH saleable QC restock and
+                // independently signed scrapped credit portions. Reserve
+                // every already posted scrap fraction from this SAME
+                // source COGS amount before allocating the next release.
+                // Ordinary QC workflows are unchanged.
+                $priorScraps=DB::table('finance_historical_batch_scrap_allocations')
+                    ->where('finance_historical_batch_capitalization_id',
+                        $historicalBatchPlanId)
+                    ->where('sales_invoice_line_id',$credit->sales_invoice_line_id)
+                    ->whereNotNull('journal_entry_id')->get();
+                foreach($priorScraps as $scrap){
+                    $journal=DB::table('journal_entries')
+                        ->where('id',$scrap->journal_entry_id)->first();
+                    if(!$journal || $journal->status!=='posted' ||
+                        $journal->reversal_of_id ||
+                        DB::table('journal_entries')
+                            ->where('reversal_of_id',$journal->id)->exists() ||
+                        (int)$journal->currency_id!==(int)$cost->currency_id ||
+                        (int)$scrap->currency_id!==(int)$cost->currency_id ||
+                        (int)$scrap->source_cogs_posting_id!==(int)$source->id ||
+                        (string)$journal->entry_date!==(string)$scrap->original_qc_scrap_date ||
+                        (string)$journal->entry_date>$date ||
+                        (int)$scrap->quantity_packages<1 ||
+                        !BigDecimal::of((string)$scrap->scrap_reclass_amount)->isPositive()){
+                        $this->reject('A prior original-currency QC scrap source allocation is unposted, reversed, mismatched or later than this warehouse restock.');
+                    }
+                    $loss=BigDecimal::zero();$cogsCredit=BigDecimal::zero();
+                    $entries=DB::table('journal_lines')
+                        ->where('journal_entry_id',$journal->id)->get();
+                    if($entries->count()!==2)
+                        $this->reject('A prior QC scrap journal must have exactly its approved loss debit and original COGS credit.');
+                    foreach($entries as $entry){
+                        $value=BigDecimal::of((string)$entry->debit)
+                            ->minus((string)$entry->credit);
+                        if((int)$entry->ledger_account_id===(int)$scrap->loss_expense_ledger_id)
+                            $loss=$loss->plus($value);
+                        elseif((int)$entry->ledger_account_id===(int)$policy->cogs_ledger_id)
+                            $cogsCredit=$cogsCredit->plus($value);
+                        else
+                            $this->reject('A prior QC scrap journal includes an unrelated inventory asset or GL ledger.');
+                    }
+                    if(!$loss->isEqualTo((string)$scrap->scrap_reclass_amount) ||
+                        !$cogsCredit->isEqualTo(
+                            BigDecimal::of((string)$scrap->scrap_reclass_amount)->negated()
+                        ))
+                        $this->reject('Prior scrapped customer inventory expense exceeds or differs from its exact approved original sale COGS.');
+                    $usedQty+=(int)$scrap->quantity_packages;
+                    $usedCost=$usedCost->plus((string)$scrap->scrap_reclass_amount);
+                }
+            }
             $qty=(int)$record->quantity_packages;
             if($qty<1 || $usedQty+$qty>(int)$source->quantity_packages){
                 $this->reject('Returned packages exceed the original sale quantity already charged to COGS.');
@@ -422,6 +473,13 @@ class FinishedGoodsCostPostingService
                 $this->reject('Physical return recovery exceeds the remaining original customer COGS amount.');
             }
             $amount=(string)$amount->toScale(4,RoundingMode::HalfUp);
+            if($historicalBatchPlanId!==null &&
+                (!BigDecimal::of((string)$allocation->original_invoiced_cogs_amount)
+                    ->isEqualTo((string)$source->amount) ||
+                 !BigDecimal::of((string)$allocation->original_return_cost_amount)
+                    ->isEqualTo($amount))){
+                $this->reject('Joint saleable and scrapped original-currency cost fractions differ from their independently approved single invoice-level allocation.');
+            }
             $journal=$this->journal((int)$cost->currency_id,$date,
                 'RET-QC-'.$record->id,
                 'QC-approved inventory asset recovery from original customer COGS',
