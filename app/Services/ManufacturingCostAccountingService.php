@@ -222,6 +222,22 @@ class ManufacturingCostAccountingService
                 $this->reject('The original opening FIFO material inventory/equity was historically recognized through a complete source-linked raw/WIP/FG/COGS chain, but that original source or posted journal is invalid, later dated or currency mismatched.');
             return;
         }
+        $multi=DB::table('finance_historical_fifo_multi_recovery_lots as member')
+            ->join('finance_historical_fifo_multi_recoveries as recovery',
+                'recovery.id','=','member.finance_historical_fifo_multi_recovery_id')
+            ->where('member.inventory_cost_layer_id',$layer->id)
+            ->where('recovery.status','posted')
+            ->select('recovery.id','recovery.currency_id',
+                'member.original_opening_date')->first();
+        if($multi){
+            if((int)$multi->currency_id!==(int)$policy->currency_id ||
+                $multi->original_opening_date>$materialIssueDate ||
+                $multi->original_opening_date>$capitalizationDate ||
+                !app(HistoricalProductionFifoMultiRecoveryService::class)
+                    ->auditPosted((int)$multi->id))
+                $this->reject('Original material opening FIFO source was booked through multi-lot historical raw/WIP/finished/COGS recovery, but the original currency, value or posted journals are invalid or predate the source issue.');
+            return;
+        }
         $proof=DB::table('finance_opening_fifo_valuations as source')
             ->join('finance_historical_correction_cases as review',
                 'review.id','=','source.finance_historical_correction_case_id')
