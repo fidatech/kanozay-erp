@@ -19,7 +19,13 @@ class WarehouseStockController extends Controller
     {
         abort_unless($request->user()->canAny(['inventory.view','administration.view']),403);
         $state=$service->snapshot();
-        $layers=InventoryCostLayer::with('material')->where('remaining_quantity','>',0)
+        $layers=InventoryCostLayer::with('material')
+            ->where('remaining_quantity','>',0)
+            ->where('source_type','inventory_stock_movement')
+            ->whereIn('source_id',function($query){
+                $query->select('id')->from('inventory_stock_movements')
+                    ->where('type','opening')->where('direction','in');
+            })
             ->orderBy('received_on')->orderBy('id')->limit(400)->get();
         $positionSums=DB::table('inventory_cost_layer_locations')
             ->whereIn('inventory_cost_layer_id',$layers->pluck('id'))
@@ -30,9 +36,17 @@ class WarehouseStockController extends Controller
                 $located=$located->plus((string)$position->quantity);
             }
             $missing=BigDecimal::of((string)$layer->remaining_quantity)->minus($located);
+            $pool=BigDecimal::zero();
+            foreach($positionSums->get($layer->id,collect())
+                ->where('location_key','unassigned') as $unknown){
+                $pool=$pool->plus((string)$unknown->quantity);
+            }
             $layer->setAttribute('unpositioned_quantity',(string)$missing->toScale(6));
+            $layer->setAttribute('unassigned_legacy_quantity',(string)$pool->toScale(6));
+            $layer->setAttribute('needs_legacy_location_review',
+                $missing->isPositive() || $pool->isPositive());
             return $layer;
-        })->filter(fn($layer)=>BigDecimal::of($layer->unpositioned_quantity)->isPositive())->values();
+        })->filter(fn($layer)=>$layer->needs_legacy_location_review)->values();
         $recentMovementIds=DB::table('inventory_warehouse_movements')
             ->orderByDesc('id')->limit(50)->pluck('id');
         $lotMovementDetails=DB::table('inventory_warehouse_lot_movements as moved')
