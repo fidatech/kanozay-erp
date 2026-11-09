@@ -71,6 +71,10 @@ final class HistoricalBatchReturnSourceService
         $result=[];$qtyByInvoice=[];
         foreach($sourceCredits as $credit){
             $qc=$qcByCredit->get($credit->id);
+            // Scrapped source credits are validated and cost-fingerprinted
+            // separately by HistoricalBatchScrapSourceService. No scrap
+            // packages can enter the saleable-inventory recovery register.
+            if($qc && $qc->status==='scrapped')continue;
             $sale=DB::table('sales_invoice_lines')->where('id',$credit->sales_invoice_line_id)->first();
             $invoice=$sale?DB::table('sales_invoices')
                 ->where('id',$sale->sales_invoice_id)->first():null;
