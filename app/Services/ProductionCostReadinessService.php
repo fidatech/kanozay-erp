@@ -28,6 +28,16 @@ class ProductionCostReadinessService {
    ->where('recovery.status','posted')
    ->select('recovery.*','currency.code as historical_currency_code')
    ->get()->keyBy('production_batch_id');
+  $multiLotPosted=DB::table('finance_historical_fifo_multi_recoveries as recovery')
+   ->join('currencies as currency','currency.id','=','recovery.currency_id')
+   ->whereIn('recovery.production_batch_id',$ids)
+   ->where('recovery.status','posted')
+   ->select('recovery.id','recovery.production_batch_id',
+       'recovery.source_material_total as original_material_cost',
+       'currency.code as historical_currency_code')
+   ->get();
+  foreach($multiLotPosted as $recovery)
+   $historicRecoveries->put($recovery->production_batch_id,$recovery);
   $wastes=DB::table('production_material_wastes as waste')
    ->join('production_order_materials as item',
       'item.id','=','waste.production_order_material_id')
