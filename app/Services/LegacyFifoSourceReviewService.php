@@ -60,16 +60,48 @@ final class LegacyFifoSourceReviewService
                 'movement.direction','movement.type','movement.company_warehouse_id',
                 'movement.reference_type','movement.reference_id',
                 'movement.occurred_on','movement.created_by']);
+        $historicalRecognitions=DB::table('finance_historical_fifo_adjustment_cost_lines as used')
+            ->join('finance_historical_fifo_adjustment_valuations as case',
+                'case.id','=','used.finance_historical_fifo_adjustment_valuation_id')
+            ->leftJoin('journal_entries as journal','journal.id','=','used.journal_entry_id')
+            ->where('case.inventory_cost_layer_id',$lot->id)
+            ->where('case.status','posted')
+            ->get(['used.id','used.inventory_cost_consumption_id',
+                'used.inventory_stock_movement_id','used.original_issue_date',
+                'used.quantity','used.amount','used.journal_entry_id',
+                'case.currency_id','case.original_total_cost',
+                'journal.status as journal_status',
+                'journal.reversal_of_id','journal.entry_date',
+                'journal.currency_id as journal_currency_id'])
+            ->keyBy('inventory_cost_consumption_id');
         $used=BigDecimal::zero();$movementTotals=[];
         foreach($consumptions as $cost){
             $quantity=BigDecimal::of((string)$cost->quantity);
+            $recovery=$historicalRecognitions->get($cost->id);
+            $validBackfill=$valued &&
+                !$cost->is_valued && $cost->amount===null &&
+                $cost->currency_id===null && $cost->currency_code===null &&
+                $recovery &&
+                $recovery->journal_entry_id &&
+                $recovery->journal_status==='posted' && !$recovery->reversal_of_id &&
+                (int)$recovery->currency_id===(int)$lot->currency_id &&
+                (int)$recovery->journal_currency_id===(int)$lot->currency_id &&
+                (int)$recovery->inventory_stock_movement_id===
+                    (int)$cost->inventory_stock_movement_id &&
+                (string)$recovery->original_issue_date===(string)$cost->occurred_on &&
+                (string)$recovery->entry_date===(string)$cost->occurred_on &&
+                BigDecimal::of((string)$recovery->quantity)->isEqualTo($quantity) &&
+                BigDecimal::of((string)$recovery->original_total_cost)
+                    ->isEqualTo((string)$lot->original_cost) &&
+                !DB::table('journal_entries')
+                    ->where('reversal_of_id',$recovery->journal_entry_id)->exists();
             if(!$quantity->isPositive() || $cost->direction!=='out' ||
                 (int)$cost->inventory_material_id!==(int)$material->id ||
                 (string)$cost->occurred_on<$lot->received_on->toDateString() ||
                 ($unvalued &&
                     ($cost->amount!==null || $cost->is_valued ||
                      $cost->currency_id!==null || $cost->currency_code!==null)) ||
-                ($valued &&
+                ($valued && !$validBackfill &&
                     (!$cost->is_valued || $cost->amount===null ||
                      (int)$cost->currency_id!==(int)$lot->currency_id ||
                      (string)$cost->currency_code!==(string)$lot->currency_code)) ||
@@ -142,6 +174,8 @@ final class LegacyFifoSourceReviewService
                 $lot->currency_id,$lot->currency_code],
             'physical_material'=>[$material->id,$material->on_hand_quantity],
             'source_issues'=>$consumptions->toArray(),
+            'separately_posted_immutable_source_cost'=>$historicalRecognitions
+                ->values()->toArray(),
             'locations'=>$positions->toArray(),
             'physical_warehouse_balances'=>$balances->toArray(),
         ],JSON_UNESCAPED_UNICODE|JSON_PRESERVE_ZERO_FRACTION));
