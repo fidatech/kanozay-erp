@@ -44,6 +44,9 @@ Route::middleware('auth')->post('/inventory/materials/{material}/catalog', [\App
 Route::middleware('auth')->post('/production/finished-goods/{good}/catalog', [\App\Http\Controllers\FinishedGoodController::class,'assignCatalog'])->name('production.finished-goods.catalog');
 Route::middleware('auth')->post('/inventory/warehouse-stock', [\App\Http\Controllers\WarehouseStockController::class,'store'])->name('inventory.warehouse-stock.store');
 Route::middleware('auth')->post('/inventory/warehouse-stock/legacy-lots', [\App\Http\Controllers\WarehouseStockController::class,'assignLegacy'])->name('inventory.warehouse-stock.legacy.assign');
+Route::middleware('auth')->get('/inventory/legacy-fifo-reviews', [\App\Http\Controllers\LegacyFifoSourceReviewController::class,'index'])->name('inventory.legacy-fifo-reviews.index');
+Route::middleware('auth')->post('/inventory/legacy-fifo-reviews/consumed', [\App\Http\Controllers\LegacyFifoSourceReviewController::class,'consumed'])->name('inventory.legacy-fifo-reviews.consumed');
+Route::middleware('auth')->post('/inventory/legacy-fifo-reviews/{review}/decision', [\App\Http\Controllers\LegacyFifoSourceReviewController::class,'review'])->whereNumber('review')->name('inventory.legacy-fifo-reviews.review');
 Route::middleware('auth')->get('/reports/dispatch-cost-reconciliation', [\App\Http\Controllers\DispatchCostReconciliationController::class,'index'])->name('reports.dispatch-cost.index');
 Route::middleware('auth')->get('/reports/manufacturing-financial-reconciliation', [\App\Http\Controllers\ManufacturingFinancialReconciliationController::class,'index'])->name('reports.manufacturing-financial.index');
 Route::middleware('auth')->get('/reports/production-waste-financial', [\App\Http\Controllers\ProductionWasteFinancialReportController::class,'index'])->name('reports.production-waste.index');
