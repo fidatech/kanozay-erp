@@ -368,6 +368,139 @@ class FinanceCloseReadinessService
             );
     }
 
+    /**
+     * Validate both original receipt asset/equity and every historic
+     * adjustment loss debit / inventory credit for an immutable original
+     * opening FIFO layer. No manufactured amount can disappear through
+     * consumed rows which are deliberately still marked unvalued.
+     */
+    private function sourceHistoricFifoAdjustmentIsValid(object $plan):bool
+    {
+        $lot=DB::table('inventory_cost_layers')
+            ->where('id',$plan->inventory_cost_layer_id)->first();
+        $opening=$lot?DB::table('inventory_stock_movements')
+            ->where('id',$lot->source_id)->first():null;
+        $sourceReview=DB::table('finance_legacy_fifo_source_reviews')
+            ->where('id',$plan->finance_legacy_fifo_source_review_id)->first();
+        $journal=DB::table('journal_entries')
+            ->where('id',$plan->opening_journal_entry_id)->first();
+        $policy=DB::table('manufacturing_cost_ledger_policies')
+            ->where('currency_id',$plan->currency_id)->first();
+        $sourceExpense=DB::table('ledger_accounts')
+            ->where('id',$plan->adjustment_loss_ledger_id)->first();
+        $sourceEquity=DB::table('ledger_accounts')
+            ->where('id',$plan->opening_equity_ledger_id)->first();
+        if(!$lot || !$opening || !$sourceReview || !$journal || !$policy ||
+            !$sourceExpense || !$sourceEquity ||
+            $plan->status!=='posted' || !$plan->executed_by ||
+            !$plan->approved_by || !$plan->submitted_by ||
+            count(array_unique([(int)$plan->submitted_by,
+                (int)$plan->approved_by,(int)$plan->executed_by,
+                (int)$sourceReview->requested_by,(int)$sourceReview->reviewed_by,
+                (int)$opening->created_by]))!==6 ||
+            $sourceReview->status!=='approved' ||
+            $sourceReview->review_type!=='consumed_provenance' ||
+            (int)$sourceReview->inventory_cost_layer_id!==(int)$lot->id ||
+            $lot->source_type!=='inventory_stock_movement' ||
+            $opening->type!=='opening' || $opening->direction!=='in' ||
+            (int)$opening->inventory_material_id!==(int)$lot->inventory_material_id ||
+            $sourceExpense->type!=='expense' || !$sourceExpense->is_active ||
+            $sourceExpense->is_group ||
+            $sourceEquity->type!=='equity' || !$sourceEquity->is_active ||
+            $sourceEquity->is_group ||
+            $policy->status!=='approved' ||
+            (int)$policy->material_inventory_ledger_id!==(int)$plan->inventory_ledger_id ||
+            (int)$policy->cogs_ledger_id===(int)$plan->adjustment_loss_ledger_id ||
+            (int)$lot->currency_id!==(int)$plan->currency_id ||
+            (string)$lot->currency_code!==(string)DB::table('currencies')
+                ->where('id',$plan->currency_id)->value('code') ||
+            $lot->original_cost===null ||
+            !BigDecimal::of((string)$lot->original_cost)
+                ->isEqualTo((string)$plan->original_total_cost) ||
+            !BigDecimal::of((string)$lot->original_quantity)
+                ->isEqualTo((string)$plan->original_quantity) ||
+            !BigDecimal::of((string)$lot->remaining_quantity)
+                ->isEqualTo((string)$plan->remaining_quantity) ||
+            $journal->status!=='posted' || $journal->reversal_of_id ||
+            (int)$journal->currency_id!==(int)$plan->currency_id ||
+            (string)$journal->entry_date!==(string)$opening->occurred_on ||
+            DB::table('journal_entries')
+                ->where('reversal_of_id',$journal->id)->exists())
+            return false;
+
+        $checkJournal=function(int $id,int $debitLedger,int $creditLedger,
+            string $amount,string $date,int $currency):bool{
+            $entry=DB::table('journal_entries')->where('id',$id)->first();
+            if(!$entry || $entry->status!=='posted' || $entry->reversal_of_id ||
+                (string)$entry->entry_date!==$date ||
+                (int)$entry->currency_id!==$currency ||
+                DB::table('journal_entries')->where('reversal_of_id',$entry->id)->exists())
+                return false;
+            $lines=DB::table('journal_lines')->where('journal_entry_id',$id)->get();
+            if($lines->count()!==2)return false;
+            $debit=BigDecimal::zero();$credit=BigDecimal::zero();
+            foreach($lines as $line){
+                if((int)$line->ledger_account_id===$debitLedger)
+                    $debit=$debit->plus((string)$line->debit)
+                        ->minus((string)$line->credit);
+                elseif((int)$line->ledger_account_id===$creditLedger)
+                    $credit=$credit->plus((string)$line->credit)
+                        ->minus((string)$line->debit);
+                else return false;
+            }
+            return $debit->isEqualTo($amount) && $credit->isEqualTo($amount);
+        };
+        if(!$checkJournal((int)$journal->id,(int)$plan->inventory_ledger_id,
+            (int)$plan->opening_equity_ledger_id,
+            (string)$plan->original_total_cost,(string)$opening->occurred_on,
+            (int)$plan->currency_id))return false;
+
+        $parts=DB::table('finance_historical_fifo_adjustment_cost_lines')
+            ->where('finance_historical_fifo_adjustment_valuation_id',$plan->id)->get();
+        $issues=DB::table('inventory_cost_consumptions')
+            ->where('inventory_cost_layer_id',$lot->id)->get();
+        if($parts->isEmpty() || $parts->count()!==$issues->count())return false;
+        $qty=BigDecimal::zero();$amount=BigDecimal::zero();
+        foreach($parts as $part){
+            $source=$issues->firstWhere('id',$part->inventory_cost_consumption_id);
+            $move=$source?DB::table('inventory_stock_movements')
+                ->where('id',$source->inventory_stock_movement_id)->first():null;
+            $adjustment=$move?DB::table('inventory_stock_adjustments')
+                ->where('id',$move->reference_id)->first():null;
+            if(!$source || !$move || !$adjustment ||
+                (int)$part->inventory_stock_movement_id!==(int)$move->id ||
+                (int)$move->inventory_material_id!==(int)$lot->inventory_material_id ||
+                $move->reference_type!=='inventory_adjustment' ||
+                $move->type!=='adjustment_out' || $move->direction!=='out' ||
+                (int)$move->reference_id!==(int)$adjustment->id ||
+                $adjustment->direction!=='adjustment_out' ||
+                (string)$move->occurred_on!==(string)$part->original_issue_date ||
+                (string)$adjustment->occurred_on!==(string)$move->occurred_on ||
+                (int)$adjustment->created_by!==(int)$move->created_by ||
+                (int)$part->inventory_stock_movement_id!==(int)$source->inventory_stock_movement_id ||
+                !BigDecimal::of((string)$source->quantity)
+                    ->isEqualTo((string)$part->quantity) ||
+                $source->is_valued || $source->amount!==null ||
+                !BigDecimal::of((string)$part->amount)->isPositive() ||
+                !$part->journal_entry_id ||
+                !$checkJournal((int)$part->journal_entry_id,
+                    (int)$plan->adjustment_loss_ledger_id,
+                    (int)$plan->inventory_ledger_id,
+                    (string)$part->amount,(string)$part->original_issue_date,
+                    (int)$plan->currency_id))
+                return false;
+            $qty=$qty->plus((string)$part->quantity);
+            $amount=$amount->plus((string)$part->amount);
+        }
+        $openingQty=BigDecimal::of((string)$plan->original_quantity);
+        return $openingQty->isEqualTo(
+                $qty->plus((string)$plan->remaining_quantity)
+            ) &&
+            $amount->isEqualTo((string)$plan->consumed_original_cost) &&
+            $amount->plus((string)$plan->remaining_original_cost)
+                ->isEqualTo((string)$plan->original_total_cost);
+    }
+
     public function inspect(string $month):array
     {
         $start=CarbonImmutable::createFromFormat('!Y-m-d',$month.'-01');
@@ -1060,6 +1193,40 @@ class FinanceCloseReadinessService
         // permission to invent its source price, update an immutable
         // consumption amount or expense an unrelated batch. Missing
         // original-cost issues must remain a finance closing exception.
+        // Validate all posted original-date historic FIFO adjustment journals
+        // touching this month. They may be paired with a receipt or issue in
+        // another historical month; examine the entire frozen allocation.
+        $historicAdjustmentPlans=DB::table('finance_historical_fifo_adjustment_valuations as financial')
+            ->join('inventory_cost_layers as lot','lot.id','=','financial.inventory_cost_layer_id')
+            ->where('financial.status','posted')
+            ->where(function($query)use($begin,$end){
+                $query->whereBetween('lot.received_on',[$begin,$end])
+                    ->orWhereExists(function($sub)use($begin,$end){
+                        $sub->selectRaw('1')
+                            ->from('finance_historical_fifo_adjustment_cost_lines as issue')
+                            ->whereColumn('issue.finance_historical_fifo_adjustment_valuation_id',
+                                'financial.id')
+                            ->whereBetween('issue.original_issue_date',[$begin,$end]);
+                    });
+            })
+            ->select('financial.*')->get();
+        $invalidHistoricAdjustment=0;
+        foreach($historicAdjustmentPlans as $plan){
+            if(!$this->sourceHistoricFifoAdjustmentIsValid($plan))
+                $invalidHistoricAdjustment++;
+        }
+        if($invalidHistoricAdjustment)
+            $blockers[]=$invalidHistoricAdjustment.
+                ' historic consumed opening FIFO correction(s) have unbalanced, reversed, duplicate or wrong-currency original asset/equity or source adjustment-loss journals.';
+
+        $pendingHistoricAdjustment=DB::table('finance_historical_fifo_adjustment_valuations as financial')
+            ->join('inventory_cost_layers as lot','lot.id','=','financial.inventory_cost_layer_id')
+            ->whereIn('financial.status',['submitted','approved'])
+            ->whereBetween('lot.received_on',[$begin,$end])->count();
+        if($pendingHistoricAdjustment)
+            $blockers[]=$pendingHistoricAdjustment.
+                ' original consumed-opening FIFO financial valuation proposal(s) await signed review or actual journal execution. Documentation alone is not a booked source cost.';
+
         $unvaluedOpeningIssues=DB::table('inventory_cost_consumptions as consumed')
             ->join('inventory_cost_layers as lot',
                 'lot.id','=','consumed.inventory_cost_layer_id')
@@ -1070,11 +1237,20 @@ class FinanceCloseReadinessService
             ->where('lot.source_type','inventory_stock_movement')
             ->where('opening.type','opening')
             ->where('opening.direction','in')
+            ->leftJoin('finance_historical_fifo_adjustment_cost_lines as cost',
+                'cost.inventory_cost_consumption_id','=','consumed.id')
+            ->leftJoin('finance_historical_fifo_adjustment_valuations as recovery',
+                'recovery.id','=','cost.finance_historical_fifo_adjustment_valuation_id')
             ->whereBetween('issue.occurred_on',[$begin,$end])
             ->where(function($query){
                 $query->whereNull('lot.original_cost')
                     ->orWhereNull('consumed.amount')
                     ->orWhere('consumed.is_valued',false);
+            })
+            ->where(function($query){
+                $query->whereNull('cost.journal_entry_id')
+                    ->orWhereNull('recovery.id')
+                    ->orWhere('recovery.status','!=','posted');
             })->distinct()->count('consumed.id');
         if($unvaluedOpeningIssues)
             $blockers[]=$unvaluedOpeningIssues.
