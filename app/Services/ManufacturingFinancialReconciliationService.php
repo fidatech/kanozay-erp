@@ -60,15 +60,39 @@ class ManufacturingFinancialReconciliationService
                 'settlement.finished_good_dispatch_id',
                 'settlement.finance_historical_dispatch_disposition_id')
             ->get()->groupBy('production_batch_cost_posting_id');
-        $scrapped=DB::table('finance_historical_customer_return_disposition_reviews as scrap')
+        $standaloneScrap=DB::table('finance_historical_customer_return_disposition_reviews as scrap')
             ->join('production_invoice_cogs_postings as original',
                 'original.id','=','scrap.production_invoice_cogs_posting_id')
             ->whereIn('original.production_batch_cost_posting_id',$posted->pluck('id'))
             ->where('scrap.treatment','scrap_cogs_reclass')
             ->where('scrap.status','posted')
             ->select('scrap.*',
-                'original.production_batch_cost_posting_id as cost_batch_id')
-            ->get()->groupBy('cost_batch_id');
+                'original.production_batch_cost_posting_id as cost_batch_id')->get();
+        $historicalBatchScrap=DB::table('finance_historical_batch_scrap_allocations as scrap')
+            ->join('finance_historical_batch_capitalizations as recovery',
+                'recovery.id','=','scrap.finance_historical_batch_capitalization_id')
+            ->join('production_invoice_cogs_postings as original',
+                'original.id','=','scrap.source_cogs_posting_id')
+            ->join('production_batch_cost_postings as manufacturing',
+                'manufacturing.id','=','original.production_batch_cost_posting_id')
+            ->join('manufacturing_cost_ledger_policies as policy',
+                'policy.id','=','manufacturing.manufacturing_cost_ledger_policy_id')
+            ->whereIn('original.production_batch_cost_posting_id',$posted->pluck('id'))
+            ->where('recovery.status','posted')
+            ->whereNotNull('scrap.journal_entry_id')
+            ->get([
+                'scrap.sales_return_quarantine_id','scrap.sales_invoice_line_id',
+                'scrap.source_cogs_posting_id as production_invoice_cogs_posting_id',
+                'scrap.quantity_packages','scrap.currency_id',
+                'scrap.loss_expense_ledger_id as loss_ledger_id',
+                'scrap.original_qc_scrap_date as posting_date',
+                'scrap.original_invoice_cogs_amount as original_invoice_cogs',
+                'scrap.scrap_reclass_amount as source_loss_amount',
+                'scrap.journal_entry_id','policy.cogs_ledger_id',
+                'original.production_batch_cost_posting_id as cost_batch_id',
+            ]);
+        $scrapped=$standaloneScrap->concat($historicalBatchScrap)
+            ->groupBy('cost_batch_id');
         $sourceIds=$cogs->flatten()->pluck('id');
         $returns=DB::table('production_return_cost_postings')
             ->whereIn('production_invoice_cogs_posting_id',$sourceIds)
