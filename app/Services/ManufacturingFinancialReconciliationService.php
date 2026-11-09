@@ -45,6 +45,9 @@ class ManufacturingFinancialReconciliationService
         $ids=$batches->pluck('id')->all();
         $posted=DB::table('production_batch_cost_postings')
             ->whereIn('production_batch_id',$ids)->get()->keyBy('production_batch_id');
+        $originalMultiRecoveries=DB::table('finance_historical_fifo_multi_recoveries')
+            ->whereIn('production_batch_id',$ids)
+            ->get()->keyBy('production_batch_id');
         $policies=DB::table('manufacturing_cost_ledger_policies')
             ->whereIn('id',$posted->pluck('manufacturing_cost_ledger_policy_id'))
             ->get()->keyBy('id');
@@ -129,6 +132,16 @@ class ManufacturingFinancialReconciliationService
         $result=collect();
         foreach($batches as $batch){
             $issues=[];$capital=$posted->get($batch->id);
+            $multiSource=$originalMultiRecoveries->get($batch->id);
+            if($multiSource){
+                if($multiSource->status==='posted'){
+                    if(!app(HistoricalProductionFifoMultiRecoveryService::class)
+                        ->auditPosted((int)$multiSource->id))
+                        $issues[]='Signed multi-original FIFO lot opening/equity, combined WIP, finished asset and genuine invoice COGS source accounting is incomplete, reversed or inconsistent with original material issues and independently approved currency.';
+                }elseif(in_array($multiSource->status,
+                    ['submitted','approved'],true))
+                    $issues[]='Historic multi-original FIFO material cost plan is only submitted/approved. Original raw/WIP/finished and invoiced COGS GL have not been posted atomically.';
+            }
             $originalPackages=(int)$batch->accepted_packages;
             $received=0;
             foreach($warehouseReceipts->get($batch->id,collect()) as $receipt){
@@ -389,6 +402,8 @@ class ManufacturingFinancialReconciliationService
                 'remaining_asset_value'=>$remaining?(string)$remaining->toScale(4):null,
                 'issues'=>array_values(array_unique($issues)),
                 'has_capitalization'=>(bool)$capital,
+                'historical_multi_fifo_recovery_id'=>$multiSource?->id,
+                'historical_multi_fifo_recovery_status'=>$multiSource?->status,
             ]);
         }
         return $result;
