@@ -379,7 +379,7 @@ Signed purpose case approved · finance reviewer #{{ $dispatch->purpose_reviewed
 @endforelse
 </tbody></table></div>
 <h3>Independently QC-scrapped customer credit notes — no saleable stock</h3>
-<p class="hfcs-alert">A signed, genuinely scrapped customer credit is a source-price expense reclassification: after posting the original sale COGS, finance debits the separately approved returned-goods loss expense and credits genuine original sale COGS. No inventory asset, customer credit/refund or new physical stock is created. A single original invoice line with both released-to-stock and scrapped portions remains blocked pending a separately authorized combined cost allocation.</p>
+<p class="hfcs-alert">A signed, genuinely scrapped customer credit is a source-price expense reclassification: after posting the original sale COGS, finance debits the separately approved returned-goods loss expense and credits genuine original sale COGS. No inventory asset, customer credit/refund or new physical stock is created. When one genuine invoice line includes independently QC-released and QC-scrapped portions, the single shared original-currency COGS budget now fixes chronological package and cost fractions with only one final four-decimal rounding remainder. The finance reviewer approves those exact source fingerprints and expense accounts.</p>
 <div style="overflow-x:auto"><table style="width:100%;min-width:740px">
 <thead><tr><th>Signed scrap QC</th><th>Genuine original credit</th><th>Sale line</th><th>Scrapped packages</th><th>Original scrap date</th><th>Independent QC</th><th>Saleable warehouse</th></tr></thead><tbody>
 @forelse($historicalBatchScraps as $scrap)
@@ -512,7 +512,7 @@ $historicalBatchDispatches->isNotEmpty() &&
 (int)$case->requested_by!==auth()->id() &&
 (int)$case->reviewed_by!==auth()->id())
 <h3>Propose historical manufacturing, original customer credits, released QC and signed scrap costs</h3>
-<p class="hfcs-alert">Manufacturing must follow QC/FIFO/supplier evidence, precede the first physical dispatch and use an open period. Genuine sales and non-sale expenses post on original dispatch dates. QC-released customer credits require exact pre-existing warehouse restock; independently QC-scrapped credits require a signed loss decision and NO saleable restock. All original scrap/QC dates must be open. Still-quarantined and undocumented credits, or released and scrapped portions of one invoice line, remain blocked.</p>
+<p class="hfcs-alert">Manufacturing must follow QC/FIFO/supplier evidence, precede the first physical dispatch and use an open period. Genuine sales and non-sale expenses post on original dispatch dates. QC-released customer credits require exact pre-existing warehouse restock; independently QC-scrapped credits require a signed loss decision and NO saleable restock. All original scrap/QC dates must be open. Still-quarantined and undocumented credits remain blocked. Mixed released/scrapped quantities on the same genuine invoice are eligible only after a single independently approved and source-frozen invoice-level cost allocation, with every original month open.</p>
 <form method="POST" action="{{ route('finance.historical-corrections.historical-batch-submit',$case->id) }}" class="hfcs-form">
 @csrf
 <label>Original manufacturing accounting date (open month)
