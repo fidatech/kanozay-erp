@@ -155,6 +155,42 @@ final class LegacyFifoSourceReviewController extends Controller
                 ]]
             );
         }
+        $multiRecoveryCandidates=$productionAllocations->flatten(1)
+            ->groupBy('production_batch_id')
+            ->map(function($allocations,$batchId)use($productionPlans){
+                $ids=$allocations->pluck(
+                    'finance_historical_fifo_production_cost_review_id'
+                )->unique()->values();
+                $plans=$productionPlans
+                    ->whereIn('id',$ids)->where('status','approved')->values();
+                return [
+                    'batch_id'=>(int)$batchId,'plans'=>$plans,
+                    'batch_number'=>$allocations->first()?->batch_number,
+                ];
+            })->filter(fn($group)=>$group['plans']->count()>=2)->values();
+        $multiRecoveryCases=DB::table('finance_historical_fifo_multi_recoveries as recovery')
+            ->join('production_batches as batch',
+                'batch.id','=','recovery.production_batch_id')
+            ->leftJoin('currencies as currency',
+                'currency.id','=','recovery.currency_id')
+            ->leftJoin('journal_entries as wip',
+                'wip.id','=','recovery.wip_journal_id')
+            ->leftJoin('journal_entries as fg',
+                'fg.id','=','recovery.finished_journal_id')
+            ->select('recovery.*','batch.batch_number',
+                'currency.code as currency_code',
+                'wip.number as wip_journal_number',
+                'fg.number as finished_journal_number')
+            ->orderByDesc('recovery.id')->limit(60)->get();
+        $multiRecoveryLots=DB::table('finance_historical_fifo_multi_recovery_lots as lot')
+            ->leftJoin('journal_entries as opening',
+                'opening.id','=','lot.opening_journal_id')
+            ->whereIn('lot.finance_historical_fifo_multi_recovery_id',
+                $multiRecoveryCases->pluck('id'))
+            ->select('lot.*',
+                'opening.number as opening_journal_number')
+            ->orderBy('lot.inventory_cost_layer_id')->get()
+            ->groupBy('finance_historical_fifo_multi_recovery_id');
         $productionRecoveries=DB::table('finance_historical_fifo_production_recoveries as recovery')
             ->join('finance_historical_fifo_production_cost_reviews as source',
                 'source.id','=','recovery.finance_historical_fifo_production_cost_review_id')
@@ -192,6 +228,9 @@ final class LegacyFifoSourceReviewController extends Controller
             'productionAllocations'=>$productionAllocations,
             'productionBatchDependencies'=>$productionBatchDependencies,
             'productionRecoveries'=>$productionRecoveries,
+            'multiRecoveryCandidates'=>$multiRecoveryCandidates,
+            'multiRecoveryCases'=>$multiRecoveryCases,
+            'multiRecoveryLots'=>$multiRecoveryLots,
             'recoveredWipSourceIds'=>$recoveredWipSourceIds,
             'historicCostPlans'=>$historicCostPlans,
             'historicIssueCosts'=>$historicIssueCosts,
@@ -199,6 +238,71 @@ final class LegacyFifoSourceReviewController extends Controller
             'equityLedgers'=>$equityLedgers,
             'expenseLedgers'=>$expenseLedgers,
         ]);
+    }
+
+    public function submitMultiProductionRecovery(Request $request,
+        \App\Services\HistoricalProductionFifoMultiRecoveryService $service)
+    {
+        $this->authorizeAccess($request,true);
+        abort_unless($request->user()->can('finance.update') ||
+            $request->user()->can('administration.update'),403);
+        $data=$request->validate([
+            'source_cost_review_ids'=>['required','array','min:2','max:12'],
+            'source_cost_review_ids.*'=>[
+                'required','integer','distinct',
+                'exists:finance_historical_fifo_production_cost_reviews,id',
+            ],
+            'opening_equity_ledger_id'=>[
+                'required','integer','exists:ledger_accounts,id',
+            ],
+            'approval_reference'=>['required','string','min:4','max:180'],
+            'reconciliation_notes'=>['required','string','min:120','max:5000'],
+            'confirm_original_ownership_sources'=>['accepted'],
+            'confirm_all_material_inputs'=>['accepted'],
+            'confirm_one_currency_one_issue_date'=>['accepted'],
+        ]);
+        $service->submit($data['source_cost_review_ids'],$data,
+            (int)$request->user()->id);
+        return redirect()->route('inventory.legacy-fifo-reviews.index')->with(
+            'success','Original multi-FIFO opening/raw/WIP/finished and genuine invoice-COGS source case submitted for independent finance approval. No GL, original issues or customer sale was modified.'
+        );
+    }
+
+    public function reviewMultiProductionRecovery(Request $request,int $recovery,
+        \App\Services\HistoricalProductionFifoMultiRecoveryService $service)
+    {
+        $this->authorizeAccess($request,true);
+        abort_unless($request->user()->can('finance.update') ||
+            $request->user()->can('administration.update'),403);
+        $data=$request->validate([
+            'decision'=>['required',Rule::in(['approve','reject'])],
+            'review_reference'=>['required','string','min:4','max:180'],
+            'review_notes'=>['required','string','min:120','max:5000'],
+            'confirm_independently_reviewed_all_lots'=>['accepted'],
+        ]);
+        $result=$service->approve($recovery,$data,(int)$request->user()->id);
+        return redirect()->route('inventory.legacy-fifo-reviews.index')->with(
+            'success',$result->status==='approved'
+                ?'Original multi-FIFO lot ownership, genuine issued material, accepted finished source and original customer sale/COGS chronology approved. Separate final executor required.'
+                :'Unsupported coordinated original FIFO cost source rejected without GL.'
+        );
+    }
+
+    public function postMultiProductionRecovery(Request $request,int $recovery,
+        \App\Services\HistoricalProductionFifoMultiRecoveryService $service)
+    {
+        $this->authorizeAccess($request,true);
+        abort_unless($request->user()->can('finance.update') ||
+            $request->user()->can('administration.update'),403);
+        $request->validate([
+            'confirm_original_months_open'=>['accepted'],
+            'confirm_no_duplicate_manual_GL'=>['accepted'],
+            'confirm_atomic_full_chain'=>['accepted'],
+        ]);
+        $result=$service->post($recovery,(int)$request->user()->id);
+        return redirect()->route('inventory.legacy-fifo-reviews.index')->with(
+            'success','Approved original multiple FIFO opening assets, combined WIP, QC finished goods and authentic invoice COGS source postings committed together. Source manufacturing posting #'.$result->production_batch_cost_posting_id
+        );
     }
 
     public function submitProductionRecovery(Request $request,
