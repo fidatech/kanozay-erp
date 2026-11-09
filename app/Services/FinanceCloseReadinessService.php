@@ -554,6 +554,24 @@ class FinanceCloseReadinessService
         if($draftBank){
             $blockers[]=$draftBank.' overlapping draft bank statement reconciliation(s) are awaiting approval.';
         }
+        // Previously signed bank statements can become financially stale
+        // if an original mapped account, bank transaction or unrelated GL
+        // journal changes after approval. Never close a month relying on an
+        // invalid signed source document.
+        $approvedBankStatements=DB::table('bank_reconciliation_periods')
+            ->where('status','approved')
+            ->where('period_start','<=',$end)
+            ->where('period_end','>=',$begin)
+            ->get(['id']);
+        $invalidBankStatements=0;
+        foreach($approvedBankStatements as $bankStatement){
+            if(!app(BankReconciliationService::class)
+                ->auditApproved((int)$bankStatement->id))
+                $invalidBankStatements++;
+        }
+        if($invalidBankStatements)
+            $blockers[]=$invalidBankStatements.
+                ' independently signed bank statement(s) no longer match their original posted, unreversed GL records, source bank currency, statement totals, account mappings or real cash movements. Reconcile the actual bank evidence before financial close.';
         $openDisposals=DB::table('fixed_asset_disposals')
             ->whereBetween('disposed_on',[$begin,$end])
             ->where('financial_status','pending_reconciliation')->count();

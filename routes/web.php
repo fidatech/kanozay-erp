@@ -314,6 +314,13 @@ Route::middleware('auth')->group(function () {
     Route::get('/finance/profit-and-loss', [\App\Http\Controllers\ProfitAndLossController::class,'index'])->name('finance.profit-and-loss.index');
     Route::get('/finance/balance-sheet', [\App\Http\Controllers\BalanceSheetController::class,'index'])->name('finance.balance-sheet.index');
     Route::get('/finance/cash-movements', [\App\Http\Controllers\CashMovementReportController::class,'index'])->name('finance.cash-movements.index');
+    Route::get('/finance/bank-reconciliations', [\App\Http\Controllers\BankReconciliationController::class,'index'])->name('finance.bank-reconciliations.index');
+    Route::post('/finance/bank-reconciliations', [\App\Http\Controllers\BankReconciliationController::class,'create'])->name('finance.bank-reconciliations.store');
+    Route::get('/finance/bank-reconciliations/{period}', [\App\Http\Controllers\BankReconciliationController::class,'show'])->whereNumber('period')->name('finance.bank-reconciliations.show');
+    Route::post('/finance/bank-reconciliations/{period}/lines', [\App\Http\Controllers\BankReconciliationController::class,'line'])->whereNumber('period')->name('finance.bank-reconciliations.lines.store');
+    Route::post('/finance/bank-reconciliations/{period}/import', [\App\Http\Controllers\BankReconciliationController::class,'import'])->whereNumber('period')->name('finance.bank-reconciliations.import');
+    Route::post('/finance/bank-reconciliations/{period}/lines/{line}/match', [\App\Http\Controllers\BankReconciliationController::class,'match'])->whereNumber('period')->whereNumber('line')->name('finance.bank-reconciliations.match');
+    Route::post('/finance/bank-reconciliations/{period}/approve', [\App\Http\Controllers\BankReconciliationController::class,'approve'])->whereNumber('period')->name('finance.bank-reconciliations.approve');
     Route::get('/finance/periods', [\App\Http\Controllers\FinancePeriodClosingController::class,'index'])->name('finance.periods.index');
     Route::post('/finance/periods/close', [\App\Http\Controllers\FinancePeriodClosingController::class,'close'])->name('finance.periods.close');
     Route::post('/finance/periods/{period}/reopen', [\App\Http\Controllers\FinancePeriodClosingController::class,'reopen'])->name('finance.periods.reopen');

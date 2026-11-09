@@ -321,6 +321,16 @@ New \`finance_historical_source_amendments\` and \`finance_historical_source_rev
 
 **Verification:** PHP lint, Blade cache compilation and Laravel route registration passed on the authorized development MacBook. Migrations, automated feature/regression tests, real SQL posting/UAT and deployment were not executed. None of D01–D09 may be declared fully delivered solely on these syntax/source checks.
 
+## D07 authenticated bank statement reconciliation — usable web screen (2026-11-10)
+
+The earlier strict bank reconciliation service had no controller or screen and could not be used by staff. The following complete scoped, server-validated workflow is now exposed in the Finance sidebar as **Bank Reconciliation**, with seven authenticated routes: bank statement register/period creation, original-currency statement detail, manual statement lines, source-CSV import, exact posted bank GL matching, independent final approval, and immutable signed source register. No original general-ledger journal, money transaction, bank statement or bank FX rate is fabricated.
+
+CSV import requires five exact original source columns (date,direction,amount,reference,description), date bound to statement period, up to 4-decimal currency precision, at most 2,000 rows/2 MB, and a deterministic UUID5 per bank period + original file SHA256 + actual row. The whole import transaction rolls back on malformed data or mismatched original-date source; reimporting the same file does not duplicate those rows. Bank matching and independent approval require authentic posted unreversed journal source currency, bank GL ledger mapping, exact date, direction and amount, full statement opening/deposits/withdrawals/closing math and all bank cash movements covered; the original creator cannot approve. The existing month-close readiness check retains warnings for missing approved statements and now REJECTS previously approved statements if a later journal, linked match, GL balance or actual bank document has changed via \`BankReconciliationService::auditApproved\`.
+
+Original bank fee, timing-difference, partial-payment and outstanding deposit/transfer exception documents are **not** silently matched. Such exceptions remain separately unreconciled pending a verified source correction. The historical multi-currency bank opening source and real bank statement UAT still require evidence.
+
+[Full D07 integration notes](bank-reconciliation-ui-source-integration-2026-11-10.md).
+
 ## Acceptance and release gates
 
 1. Passing SQLite feature suite and isolated regression suite on the latest commit.

@@ -160,6 +160,90 @@ class BankReconciliationService
   });
  }
 
+ /**
+  * Re-audit a previously approved original-currency bank statement without
+  * creating or modifying any journal, bank source row or transaction.
+  * Used by financial period close to catch later source changes.
+  */
+ public function auditApproved(int $periodId):bool
+ {
+  $period=DB::table('bank_reconciliation_periods')->where('id',$periodId)->first();
+  if(!$period || $period->status!=='approved' ||
+    !$period->approved_at || !$period->approved_by ||
+    (int)$period->approved_by===(int)$period->created_by ||
+    (string)$period->period_start>(string)$period->period_end)
+   return false;
+
+  $bank=FinancialAccount::whereKey($period->financial_account_id)->first();
+  if(!$bank || $bank->type!=='bank' ||
+    (int)$bank->currency_id!==(int)$period->currency_id)return false;
+
+  $mapping=DB::table('entity_ledger_accounts')
+   ->where('entity_type','bank')
+   ->where('entity_id',$period->financial_account_id)
+   ->where('currency_id',$period->currency_id)
+   ->where('purpose','cash')->first();
+  if(!$mapping)return false;
+
+  $in=BigDecimal::zero();$out=BigDecimal::zero();
+  $entries=DB::table('bank_statement_entries')
+   ->where('bank_reconciliation_period_id',$period->id)->get();
+  foreach($entries as $entry){
+   if(!in_array($entry->direction,['deposit','withdrawal'],true) ||
+     $entry->posted_on<$period->period_start ||
+     $entry->posted_on>$period->period_end ||
+     !BigDecimal::of((string)$entry->amount)->isPositive())
+    return false;
+   $match=DB::table('bank_statement_matches')
+     ->where('bank_statement_entry_id',$entry->id)->first();
+   $money=$match?MoneyTransaction::whereKey($match->money_transaction_id)->first():null;
+   if(!$match || !$money ||
+     (int)$match->financial_account_id!==(int)$period->financial_account_id ||
+     (int)$money->currency_id!==(int)$period->currency_id ||
+     (string)$money->transaction_date!==(string)$entry->posted_on ||
+     $this->direction($money,(int)$period->financial_account_id)!==$entry->direction ||
+     !BigDecimal::of((string)$money->amount)->isEqualTo((string)$entry->amount))
+    return false;
+   try{
+    $this->assertBankJournal($money,$period,$entry->direction);
+   }catch(ValidationException $e){return false;}
+   if($entry->direction==='deposit')$in=$in->plus((string)$entry->amount);
+   else $out=$out->plus((string)$entry->amount);
+  }
+  if(!BigDecimal::of((string)$period->statement_opening)
+      ->plus($in)->minus($out)
+      ->isEqualTo((string)$period->statement_closing))
+   return false;
+
+  $money=MoneyTransaction::where(function($q)use($period){
+      $q->where('source_account_id',$period->financial_account_id)
+        ->orWhere('destination_account_id',$period->financial_account_id);
+    })
+    ->whereDate('transaction_date','>=',$period->period_start)
+    ->whereDate('transaction_date','<=',$period->period_end)->get();
+  foreach($money as $tx){
+   $match=DB::table('bank_statement_matches')
+    ->where('financial_account_id',$period->financial_account_id)
+    ->where('money_transaction_id',$tx->id)->first();
+   if(!$match ||
+     !DB::table('bank_statement_entries')->where('id',$match->bank_statement_entry_id)
+      ->where('bank_reconciliation_period_id',$period->id)->exists())
+    return false;
+  }
+  $amount=BigDecimal::zero();
+  foreach(DB::table('journal_lines as line')
+    ->join('journal_entries as entry',
+      'entry.id','=','line.journal_entry_id')
+    ->where('line.ledger_account_id',$mapping->ledger_account_id)
+    ->where('entry.status','posted')
+    ->where('entry.currency_id',$period->currency_id)
+    ->whereDate('entry.entry_date','<=',$period->period_end)
+    ->get(['line.debit','line.credit']) as $line)
+    $amount=$amount->plus((string)$line->debit)
+      ->minus((string)$line->credit);
+  return $amount->isEqualTo((string)$period->statement_closing);
+ }
+
  public function approve(int $periodId,string $notes,int $actorId):object
  {
   return DB::transaction(function()use($periodId,$notes,$actorId){
