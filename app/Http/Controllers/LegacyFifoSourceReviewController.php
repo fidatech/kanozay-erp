@@ -64,9 +64,126 @@ final class LegacyFifoSourceReviewController extends Controller
             ->orderByDesc('review.id')->paginate(30);
         $warehouses=DB::table('company_warehouses')->where('is_active',true)
             ->orderBy('name')->get(['id','name','code']);
+        $sourceCostReviews=DB::table('finance_legacy_fifo_source_reviews as review')
+            ->join('inventory_cost_layers as lot',
+                'lot.id','=','review.inventory_cost_layer_id')
+            ->join('inventory_materials as material',
+                'material.id','=','review.inventory_material_id')
+            ->leftJoin('finance_historical_fifo_adjustment_valuations as booked',
+                'booked.inventory_cost_layer_id','=','review.inventory_cost_layer_id')
+            ->where('review.review_type','consumed_provenance')
+            ->where('review.status','approved')
+            ->whereNull('booked.id')
+            ->select('review.*','material.sku','lot.source_id',
+                'lot.original_cost as source_lot_cost')
+            ->orderByDesc('review.id')->limit(60)->get();
+        $historicCostPlans=DB::table('finance_historical_fifo_adjustment_valuations as financial')
+            ->join('inventory_cost_layers as lot',
+                'lot.id','=','financial.inventory_cost_layer_id')
+            ->join('inventory_materials as material',
+                'material.id','=','lot.inventory_material_id')
+            ->leftJoin('currencies as currency','currency.id','=','financial.currency_id')
+            ->leftJoin('journal_entries as journal',
+                'journal.id','=','financial.opening_journal_entry_id')
+            ->select('financial.*','material.sku','currency.code as currency_code',
+                'journal.number as opening_journal_number',
+                'journal.status as opening_journal_status')
+            ->orderByDesc('financial.id')->limit(60)->get();
+        $historicIssueCosts=DB::table('finance_historical_fifo_adjustment_cost_lines as cost')
+            ->leftJoin('journal_entries as journal','journal.id','=','cost.journal_entry_id')
+            ->whereIn('cost.finance_historical_fifo_adjustment_valuation_id',
+                $historicCostPlans->pluck('id'))
+            ->select('cost.*','journal.number as journal_number',
+                'journal.status as journal_status')
+            ->orderBy('cost.original_issue_date')
+            ->orderBy('cost.inventory_cost_consumption_id')->get()
+            ->groupBy('finance_historical_fifo_adjustment_valuation_id');
+        $currencies=DB::table('currencies')
+            ->where('is_active',true)->orderBy('code')->get(['id','code']);
+        $equityLedgers=DB::table('ledger_accounts')
+            ->where('type','equity')->where('is_active',true)
+            ->where('is_group',false)->orderBy('code')->get(['id','code','name']);
+        $expenseLedgers=DB::table('ledger_accounts')
+            ->where('type','expense')->where('is_active',true)
+            ->where('is_group',false)->orderBy('code')->get(['id','code','name']);
         return view('inventory.legacy-fifo-reviews',[
             'layers'=>$layers,'reviews'=>$reviews,'warehouses'=>$warehouses,
+            'sourceCostReviews'=>$sourceCostReviews,
+            'historicCostPlans'=>$historicCostPlans,
+            'historicIssueCosts'=>$historicIssueCosts,
+            'currencies'=>$currencies,
+            'equityLedgers'=>$equityLedgers,
+            'expenseLedgers'=>$expenseLedgers,
         ]);
+    }
+
+    public function submitCost(Request $request,
+        \App\Services\HistoricalConsumedFifoAdjustmentValuationService $service)
+    {
+        $this->authorizeAccess($request,true);
+        abort_unless($request->user()->can('finance.update') ||
+            $request->user()->can('administration.update'),403);
+        $request->merge([
+            'original_total_cost'=>\App\Support\LocalizedDecimal::normalize(
+                $request->input('original_total_cost')
+            ),
+        ]);
+        $data=$request->validate([
+            'finance_legacy_fifo_source_review_id'=>[
+                'required','integer','exists:finance_legacy_fifo_source_reviews,id',
+            ],
+            'currency_id'=>['required','integer','exists:currencies,id'],
+            'opening_equity_ledger_id'=>['required','integer','exists:ledger_accounts,id'],
+            'adjustment_loss_ledger_id'=>['required','integer','exists:ledger_accounts,id'],
+            'original_total_cost'=>[
+                'required','string',
+                'regex:/^(?:0|[1-9][0-9]{0,15})(?:\.[0-9]{1,4})?$/',
+            ],
+            'original_cost_evidence_reference'=>['required','string','min:4','max:180'],
+            'source_cost_reconciliation'=>['required','string','min:80','max:5000'],
+            'confirm_evidence_original_cost'=>['accepted'],
+            'confirm_no_duplicate_manual_gl'=>['accepted'],
+        ]);
+        $service->submit((int)$data['finance_legacy_fifo_source_review_id'],
+            $data,(int)$request->user()->id);
+        return redirect()->route('inventory.legacy-fifo-reviews.index')->with(
+            'success','Original source-documented opening FIFO cost and adjustment-loss fractions submitted for independent approval. No old issues, stock or GL were changed.'
+        );
+    }
+
+    public function reviewCost(Request $request,int $plan,
+        \App\Services\HistoricalConsumedFifoAdjustmentValuationService $service)
+    {
+        $this->authorizeAccess($request,true);
+        abort_unless($request->user()->can('finance.update') ||
+            $request->user()->can('administration.update'),403);
+        $data=$request->validate([
+            'decision'=>['required',Rule::in(['approve','reject'])],
+            'approval_reference'=>['required','string','min:4','max:180'],
+            'approval_notes'=>['required','string','min:80','max:5000'],
+            'confirm_independent_cost_review'=>['accepted'],
+        ]);
+        $result=$service->approve($plan,$data,(int)$request->user()->id);
+        return redirect()->route('inventory.legacy-fifo-reviews.index')
+            ->with('success',$result->status==='approved'
+                ?'Independent original FIFO opening source cost and physical adjustment-loss account review approved. No journal posted; separate executor required.'
+                :'Historical consumed FIFO original-cost proposal rejected. No GL or stock changed.');
+    }
+
+    public function postCost(Request $request,int $plan,
+        \App\Services\HistoricalConsumedFifoAdjustmentValuationService $service)
+    {
+        $this->authorizeAccess($request,true);
+        abort_unless($request->user()->can('finance.update') ||
+            $request->user()->can('administration.update'),403);
+        $request->validate([
+            'confirm_original_open_periods'=>['accepted'],
+            'confirm_original_cost_not_manual_gl'=>['accepted'],
+        ]);
+        $result=$service->post($plan,(int)$request->user()->id);
+        return redirect()->route('inventory.legacy-fifo-reviews.index')->with(
+            'success','Original opening FIFO inventory/equity and historical adjustment write-off expense posted under source-linked journal approvals. Original FIFO issues and physical stock unchanged. Opening GL #'.$result->opening_journal_entry_id
+        );
     }
 
     public function consumed(Request $request,LegacyFifoSourceReviewService $service)
