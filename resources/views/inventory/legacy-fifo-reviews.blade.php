@@ -315,4 +315,110 @@ I independently verified there is no previous manual original inventory/equity o
 @endforelse
 </tbody></table></div>
 </section>
+
+<section class="lfr-panel">
+<h2>Original opening FIFO production material costs — source-only preflight</h2>
+<p class="lfr-warning">Previously unvalued raw-material FIFO consumed by production belongs to original production-order WIP, not to an inventory-adjustment loss account. This register checks authentic opening, consumption, production-order and released-batch records, current immutable cost snapshots, existing dispatches and genuine customer invoices before any financial correction can be considered. A finance-approved cost proposal is an <strong>evidence document only</strong>. It does not authorize posting raw inventory, WIP, finished stock or COGS. Those must be reconciled together by a separately approved chronological financial executor. Any closed accounting month, prior manufacturing journal, source-changing event or unsupported currency continues to block that executor.</p>
+@if(auth()->user()->can('finance.update') || auth()->user()->can('administration.update'))
+@foreach($productionSourceReviews as $review)
+<details class="lfr-review" style="margin:10px 0">
+<summary style="font-weight:700;cursor:pointer">
+Original FIFO lot #{{ $review->inventory_cost_layer_id }} · {{ $review->sku }}
+· approved source provenance #{{ $review->id }}
+</summary>
+<p class="lfr-muted">Source opener and independent consumption approval are already recorded. Original opening {{ $review->opening_quantity }}, consumed {{ $review->consumed_quantity }}, remaining {{ $review->remaining_quantity }}. Submission will fail if even one old consumption is a supplier return, adjustment or other non-production source.</p>
+<form action="{{ route('inventory.legacy-fifo-reviews.production-cost-submit') }}" method="POST" class="lfr-grid" style="margin:14px 0">
+@csrf
+<input type="hidden" name="finance_legacy_fifo_source_review_id" value="{{ $review->id }}">
+<label>Original documented FIFO cost currency
+<select name="currency_id" required><option value="">Select actual original source currency</option>
+@foreach($currencies as $currency)
+<option value="{{ $currency->id }}" @selected(old('currency_id')==$currency->id)>{{ $currency->code }}</option>
+@endforeach</select></label>
+<label>Authentic original opening LOT cost (4 decimal places)
+<input type="text" inputmode="decimal" name="original_lot_cost" minlength="1"
+required placeholder="Verified original source cost" value="{{ old('original_lot_cost') }}"></label>
+<label>Original purchase/opening source evidence ID
+<input name="original_cost_evidence_reference" required minlength="4" maxlength="180"
+placeholder="Real source owner, purchase document or approved opening valuation"></label>
+<label style="grid-column:span 3">Explain physical issue chronology, source ownership and original cost, immutable production batch snapshots, previously invoiced finished-goods dispatch/COGS and all original accounting dates
+<textarea name="original_cost_evidence_notes" rows="5" minlength="80" maxlength="5000" required
+placeholder="Document original supplier/ownership valuation, each actual production order and batch, existing GL audit, currency, before/after QC manufacturing stage, sold products and why these expenses have not already been posted."></textarea></label>
+<label style="grid-column:span 3;display:flex;flex-direction:row;gap:8px;align-items:center">
+<input name="confirm_original_purchase_source" type="checkbox" value="1" required style="width:auto">
+The amount/currency is backed by authentic original purchase/ownership evidence, not estimated or converted at an assumed FX rate.</label>
+<label style="grid-column:span 3;display:flex;flex-direction:row;gap:8px;align-items:center">
+<input name="confirm_no_financial_posting" type="checkbox" value="1" required style="width:auto">
+This request records a SOURCE-ONLY signed plan: I must not post any original inventory/WIP/finished goods/COGS or change immutable production cost rows through this action.</label>
+<div style="grid-column:span 3"><button class="btn" type="submit">Submit original production FIFO/WIP cost for independent evidence approval</button></div>
+</form></details>
+@endforeach
+@endif
+@if($productionSourceReviews->isEmpty())
+<p class="lfr-muted">No independently approved unvalued opening FIFO provenance is available for a new production source-cost plan. Already proposed cases are shown below.</p>
+@endif
+<h3 style="margin:18px 0 12px">Independently reviewed production WIP source budgets — no GL posted</h3>
+<div class="lfr-table"><table>
+<thead><tr>
+<th>Opening source / authorization</th>
+<th>Original cost in source currency</th>
+<th>Projected production WIP / remaining raw asset</th>
+<th>Real production batches and physical issue dates</th>
+<th>Source documentation / independent decision</th>
+</tr></thead><tbody>
+@forelse($productionPlans as $plan)
+<tr>
+<td><strong>Original lot #{{ $plan->inventory_cost_layer_id }}</strong> · {{ $plan->sku }}
+<div>Review #{{ $plan->id }} · <strong>{{ ucfirst($plan->status) }}</strong></div>
+<div class="lfr-muted">Proposer #{{ $plan->submitted_by }}
+@if($plan->approved_by) · Independent approver #{{ $plan->approved_by }}@endif</div></td>
+<td><strong>{{ $plan->original_lot_cost }} {{ $plan->currency_code }}</strong>
+<div class="lfr-muted">Inventory GL #{{ $plan->source_inventory_ledger_id }} / WIP GL #{{ $plan->target_wip_ledger_id }}</div></td>
+<td>Production material WIP: <strong>{{ $plan->consumed_production_cost }}</strong><div>
+Genuine remaining opening stock: <strong>{{ $plan->remaining_inventory_cost }}</strong></div>
+<small>Opening {{ $plan->original_quantity }} · consumed {{ $plan->consumed_quantity }} · remaining {{ $plan->remaining_quantity }}</small></td>
+<td>
+<details><summary>Original material issues and released batches</summary>
+@foreach($productionAllocations->get($plan->id,collect()) as $line)
+<div style="padding:7px 0;border-bottom:1px solid #e0e8f1">
+Original issue #{{ $line->inventory_stock_movement_id }} · {{ $line->original_material_issue_date }}
+· batch #{{ $line->production_batch_id }} ({{ $line->batch_number }})
+· qty {{ $line->quantity }}
+· proposed original WIP <strong>{{ $line->proposed_original_wip_cost }} {{ $plan->currency_code }}</strong>
+</div>
+@endforeach
+</details>
+<div class="lfr-muted">No GL/post action exists for these source-only allocations.</div>
+</td>
+<td>
+<strong>{{ $plan->original_cost_evidence_reference }}</strong>
+<div class="lfr-muted" style="white-space:pre-wrap">{{ $plan->original_cost_evidence_notes }}</div>
+@if($plan->approval_reference)
+<div>Independent review: {{ $plan->approval_reference }}</div>
+<div class="lfr-muted" style="white-space:pre-wrap">{{ $plan->approval_notes }}</div>
+@endif
+@if($plan->status==='submitted' &&
+(auth()->user()->can('finance.update') || auth()->user()->can('administration.update')) &&
+(int)$plan->submitted_by!==auth()->id())
+<form method="POST" action="{{ route('inventory.legacy-fifo-reviews.production-cost-review',$plan->id) }}" class="lfr-review" style="margin:12px 0">
+@csrf
+<label>Review decision<select name="decision" required>
+<option value="">Select decision</option>
+<option value="approve">Approve genuine original-source WIP cost evidence ONLY</option>
+<option value="reject">Reject unsupported cost or downstream manufacturing evidence</option>
+</select></label>
+<label>Independent signed finance reference
+<input name="approval_reference" required minlength="4" maxlength="180"></label>
+<label style="grid-column:span 2">Independent original source price, currency, material issue, production batch, existing dispatch, potential COGS/period and duplicate manual journal review
+<textarea name="approval_notes" rows="5" minlength="80" maxlength="5000" required></textarea></label>
+<label style="grid-column:span 2;display:flex;flex-direction:row;gap:8px;align-items:center">
+<input name="confirm_source_and_downstream_dependencies" type="checkbox" value="1" required style="width:auto">
+I independently verified the immutable FIFO source and production dependencies. No GL may be posted by this documentary approval.</label>
+<button class="btn" type="submit">Record independent WIP source review (no GL)</button>
+</form>
+@endif
+</td></tr>
+@empty<tr><td colspan="5">No source-priced original production FIFO/WIP proposals submitted.</td></tr>@endforelse
+</tbody></table></div>
+</section>
 @endsection
