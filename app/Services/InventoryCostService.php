@@ -397,11 +397,29 @@ class InventoryCostService
         $historic=DB::table('finance_historical_fifo_adjustment_cost_lines as cost')
             ->join('finance_historical_fifo_adjustment_valuations as approved',
                 'approved.id','=','cost.finance_historical_fifo_adjustment_valuation_id')
+            ->leftJoin('journal_entries as original',
+                'original.id','=','cost.journal_entry_id')
             ->where('approved.inventory_cost_layer_id',$layer->id)
             ->where('approved.status','posted')
-            ->whereNotNull('cost.journal_entry_id')
-            ->pluck('cost.amount');
-        foreach($historic as $prior)$used=$used->plus((string)$prior);
+            ->get(['cost.amount','cost.original_issue_date',
+                'cost.journal_entry_id',
+                'approved.currency_id','approved.adjustment_loss_ledger_id',
+                'approved.inventory_ledger_id',
+                'original.status as journal_status',
+                'original.reversal_of_id','original.currency_id as journal_currency_id',
+                'original.entry_date']);
+        foreach($historic as $prior){
+            if(!$prior->journal_entry_id ||
+                $prior->journal_status!=='posted' || $prior->reversal_of_id ||
+                (int)$prior->journal_currency_id!==(int)$layer->currency_id ||
+                (string)$prior->entry_date!==(string)$prior->original_issue_date ||
+                DB::table('journal_entries')
+                    ->where('reversal_of_id',$prior->journal_entry_id)->exists())
+                throw ValidationException::withMessages([
+                    'quantity'=>'Source original FIFO adjustment cost has a missing, reversed or wrong-date original-currency journal. Reconcile the signed historical expense before another FIFO stock movement.',
+                ]);
+            $used=$used->plus((string)$prior->amount);
+        }
         $remaining=$totalCost->minus($used);
         if($remaining->isNegative())
             throw ValidationException::withMessages([
