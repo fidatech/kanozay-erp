@@ -321,7 +321,7 @@ Finance verified the original customer COGS remains valid and no journal previou
 @if($case->case_type==='batch_uncapitalized')
 <section class="hfcs-card">
 <h2>Historical mixed dispatch manufacturing cost and GL recovery</h2>
-<p class="hfcs-alert">Restricted historical accounting: every physical line of a previously uncapitalized, QC-approved batch must have EITHER a real posted original-date customer invoice OR a separately approved, signed source-purpose case for samples, damaged goods or internal consumption. Non-sale lines must receive independently reviewed purpose-specific expense accounts. Unclassified or disputed dispatches, customer returns, uncertain source costs and closed original accounting months are blocked. Existing customer sales revenue is never duplicated.</p>
+<p class="hfcs-alert">Restricted historical accounting: every physical line of a previously uncapitalized, QC-approved batch must have EITHER a real posted original-date customer invoice OR a separately approved, signed source-purpose case for samples, damaged goods or internal consumption. Non-sale lines must receive independently reviewed purpose-specific expense accounts. Unsupported physical dispatches, still-quarantined credits, undocumented QC loss, uncertain original manufacturing cost and closed accounting months are blocked. Genuine previously QC-released credits require exact source warehouse restock; independently QC-scrapped credits require no saleable return and a source-cost expense reclassification. Existing customer sales revenue is never duplicated.</p>
 @if($historicalBatchReadiness)
 <div class="hfcs-grid">
 <div><small>Frozen original cost readiness</small><div><strong>{{ $historicalBatchReadiness['ready'] ? 'Source preview ready' : 'Source reconciliation blocked' }}</strong></div></div>
@@ -365,7 +365,7 @@ Signed purpose case approved · finance reviewer #{{ $dispatch->purpose_reviewed
 @endforelse
 </tbody></table></div>
 <h3>Original customer credit notes and independently released QC returns</h3>
-<p class="hfcs-alert">Every original credited return must have a signed, independently QC-released physical restock in the recorded warehouse. Quarantined, scrapped, directly restocked or undocumented returns remain blocked. Inventory cost is recovered from the original manufacturing COGS, never the selling price or a guessed currency rate.</p>
+<p class="hfcs-alert">These saleable customer returns must already have signed independent QC release and exact matching warehouse restock. They restore finished-goods inventory at the authentic original manufacturing COGS cost. Signed scrapped credits appear separately below and never produce a finished-inventory asset. Still-quarantined and undocumented customer credits remain blocked.</p>
 <div style="overflow-x:auto"><table style="width:100%;min-width:750px">
 <thead><tr><th>Original QC return</th><th>Genuine credit note</th><th>Sale line</th><th>Packages</th><th>QC date</th><th>Independent QC / status</th><th>Already recovered</th></tr></thead>
 <tbody>
@@ -376,6 +376,20 @@ Signed purpose case approved · finance reviewer #{{ $dispatch->purpose_reviewed
 <td>{{ ucfirst($returned->qc_status) }} · reviewer #{{ $returned->decided_by??'Unsigned' }}</td>
 <td>{{ $returned->recorded_asset_recovery??'Not posted' }}</td></tr>
 @empty<tr><td colspan="7">No genuine customer credit-note QC returns recorded in this production batch.</td></tr>
+@endforelse
+</tbody></table></div>
+<h3>Independently QC-scrapped customer credit notes — no saleable stock</h3>
+<p class="hfcs-alert">A signed, genuinely scrapped customer credit is a source-price expense reclassification: after posting the original sale COGS, finance debits the separately approved returned-goods loss expense and credits genuine original sale COGS. No inventory asset, customer credit/refund or new physical stock is created. A single original invoice line with both released-to-stock and scrapped portions remains blocked pending a separately authorized combined cost allocation.</p>
+<div style="overflow-x:auto"><table style="width:100%;min-width:740px">
+<thead><tr><th>Signed scrap QC</th><th>Genuine original credit</th><th>Sale line</th><th>Scrapped packages</th><th>Original scrap date</th><th>Independent QC</th><th>Saleable warehouse</th></tr></thead><tbody>
+@forelse($historicalBatchScraps as $scrap)
+<tr><td>#{{ $scrap->qc_id }} · {{ $scrap->quality_reference }}</td>
+<td>{{ $scrap->credit_number }} · {{ $scrap->credit_date }}</td>
+<td>#{{ $scrap->sales_invoice_line_id }}</td><td>{{ number_format($scrap->quantity_packages) }}</td>
+<td>{{ $scrap->decided_on }}</td>
+<td>Registrar #{{ $scrap->registered_by }} · signed QC #{{ $scrap->decided_by??'Missing' }}</td>
+<td>{{ $scrap->released_warehouse_id ? 'YES — blocked' : 'No restored inventory' }}</td></tr>
+@empty<tr><td colspan="7">No signed original QC customer scraps associated with this batch.</td></tr>
 @endforelse
 </tbody></table></div>
 @if($historicalBatchPosting)
@@ -390,9 +404,29 @@ Signed purpose case approved · finance reviewer #{{ $dispatch->purpose_reviewed
 <div><small>Posted non-sale expenses</small><div>{{ $historicalBatchPosting->posted_non_sale_lines }}</div></div>
 <div><small>Approved released-QC return lines</small><div>{{ $historicalBatchPosting->return_line_count??0 }}</div></div>
 <div><small>Restored original COGS lines</small><div>{{ $historicalBatchPosting->posted_return_lines }}</div></div>
+<div><small>Signed original customer QC scraps</small><div>{{ $historicalBatchPosting->scrap_line_count??0 }}</div></div>
+<div><small>Posted QC scraps reclassified to loss expense</small><div>{{ $historicalBatchPosting->posted_scrap_lines }}</div></div>
 <div><small>Source WIP journal</small><div>{{ $historicalBatchPosting->issue_journal_id ? '#'.$historicalBatchPosting->issue_journal_id : 'Not posted' }}</div></div>
 <div><small>Finished inventory journal</small><div>{{ $historicalBatchPosting->capitalization_journal_id ? '#'.$historicalBatchPosting->capitalization_journal_id : 'Not posted' }}</div></div>
 </div>
+@if($historicalBatchScrapAllocations->isNotEmpty())
+<h3>Independently approved original-currency QC-scrap COGS-to-loss allocations</h3>
+<div style="overflow-x:auto"><table style="width:100%;min-width:740px">
+<thead><tr><th>QC scrap</th><th>Customer credit</th><th>Sale line</th><th>Packages</th><th>QC/GL date</th><th>Original invoice COGS</th><th>Approved loss fraction</th><th>Approved loss GL</th><th>Posted journal</th></tr></thead><tbody>
+@foreach($historicalBatchScrapAllocations as $scrap)
+<tr><td>#{{ $scrap->sales_return_quarantine_id }}</td>
+<td>#{{ $scrap->sales_credit_note_line_id }}</td>
+<td>#{{ $scrap->sales_invoice_line_id }}</td>
+<td>{{ number_format($scrap->quantity_packages) }}</td>
+<td>{{ $scrap->original_qc_scrap_date }}</td>
+<td>{{ $scrap->original_invoice_cogs_amount }} {{ $scrap->currency_code }}</td>
+<td><strong>{{ $scrap->scrap_reclass_amount }} {{ $scrap->currency_code }}</strong></td>
+<td>{{ $scrap->loss_code }} · {{ $scrap->loss_name }}</td>
+<td>{{ $scrap->journal_number??'Awaiting approval' }}
+{{ $scrap->journal_status ? '('.$scrap->journal_status.')' : '' }}</td></tr>
+@endforeach
+</tbody></table></div>
+@endif
 @if($historicalBatchReturnAllocations->isNotEmpty())
 <h3>Finance-approved original-currency QC-return cost allocations</h3>
 <div style="overflow-x:auto"><table style="width:100%;min-width:720px">
@@ -438,16 +472,16 @@ Signed purpose case approved · finance reviewer #{{ $dispatch->purpose_reviewed
 @csrf
 <label>Decision<select name="decision" required>
 <option value="">Choose an independent original-cost decision</option>
-<option value="approve">Approve manufacturing, genuine invoice COGS, signed non-sale expenses and released QC-return cost recovery</option>
+<option value="approve">Approve original manufacturing, real invoice COGS, non-sale expense, QC-released inventory and signed scrapped-customer loss fractions</option>
 <option value="reject">Reject source evidence</option>
 </select></label>
 <label>Signed independent finance approval reference
 <input name="approval_reference" required minlength="4" maxlength="180"></label>
-<label>Original FIFO/WIP, signed non-sale GL, genuine posted customer revenue and credits, independently QC-released physical returns, original manufacturing COGS fractions and all accounting dates
+<label>Reconcile original FIFO/WIP, genuine posted customer sale/credit journals, approved non-sale GL, physical QC releases, signed condemnation, original sale COGS, independent scrapped loss expense accounts and source-date periods
 <textarea name="approval_notes" rows="5" minlength="60" maxlength="5000" required></textarea></label>
 <label style="display:flex;align-items:center;gap:8px">
 <input type="checkbox" name="confirm_historical_cost_review" value="1" required style="width:auto">
-I independently reviewed each invoice, signed purpose, original customer credit and QC warehouse return, original factory-cost currency and all open posting dates.
+I independently reviewed each genuine customer sale/credit, physical QC return or signed QC scrap, separate loss accounts, source currency and all original open journal dates.
 </label>
 <button class="btn" type="submit">Save independent financial approval</button>
 </form>
@@ -458,17 +492,17 @@ I independently reviewed each invoice, signed purpose, original customer credit 
 (int)$historicalBatchPosting->approved_by!==auth()->id() &&
 (int)$case->requested_by!==auth()->id() &&
 (int)$case->reviewed_by!==auth()->id())
-<h3>Post original manufacturing, sale COGS, non-sale expenses and QC-return recovery</h3>
+<h3>Post original manufacturing, COGS, signed non-sale, released QC and scrapped QC losses</h3>
 <form method="POST" action="{{ route('finance.historical-corrections.historical-batch-post',$case->id) }}" class="hfcs-form">
 @csrf
-<p class="hfcs-alert">This posts manufacturing WIP/finished asset, genuine sale COGS, authorized non-sale expenses and previously QC-released return recovery (Dr finished asset / Cr original COGS) in ORIGINAL SOURCE DATE ORDER. All journal entries commit atomically. Changed credits, unsupported QC/warehouse proof, incorrect source currency/cost or closed periods roll back every journal. No physical inventory, customer refund, original revenue or credit-note data changes.</p>
+<p class="hfcs-alert">This posts original manufacturing WIP/finished inventory, genuine customer sale COGS, signed non-sale expense, actual QC-released inventory restorations (Dr finished asset / Cr COGS) and independently QC-scrapped customer loss reclassifications (Dr approved loss expense / Cr original COGS), in ORIGINAL DATE ORDER. Scrapped packages never restore stock. Every source/journal commits together or rolls back; no original physical inventory, customer credit/refund, sale revenue or QC decision is changed.</p>
 <label style="display:flex;align-items:center;gap:8px">
 <input type="checkbox" name="confirm_atomic_historical_posting" value="1" required style="width:auto">
 I confirm original accounting periods are open and all source and original customer invoice evidence remains valid.
 </label>
 <button class="btn" type="submit"
-onclick="return confirm('Post manufacturing, genuine sales COGS, signed non-sale expenses and original QC-return asset recoveries in one atomic transaction?')">
-Post approved manufacturing, dispatch and return costs</button>
+onclick="return confirm('Post original manufacturing, genuine invoice COGS, signed non-sale, QC-restored inventory and signed scrapped-customer COGS-to-loss journals atomically?')">
+Post approved manufacturing, dispatch, QC return and scrap accounting</button>
 </form>
 @endif
 @elseif($case->status==='approved' && $historicalBatchReadiness &&
@@ -477,8 +511,8 @@ $historicalBatchDispatches->isNotEmpty() &&
 (auth()->user()->can('finance.update') || auth()->user()->can('administration.update')) &&
 (int)$case->requested_by!==auth()->id() &&
 (int)$case->reviewed_by!==auth()->id())
-<h3>Propose original manufacturing, signed non-sale and customer-return cost recovery</h3>
-<p class="hfcs-alert">Manufacturing capitalization must follow QC/FIFO/supplier evidence, precede the first dispatch and use an open period. Genuine invoice COGS and signed non-sale expenses post on their exact original dispatch dates. Every previously QC-released credit-note return must have its original warehouse restock and an open original QC accounting month. Scrapped, quarantined and undocumented credits remain blocked.</p>
+<h3>Propose historical manufacturing, original customer credits, released QC and signed scrap costs</h3>
+<p class="hfcs-alert">Manufacturing must follow QC/FIFO/supplier evidence, precede the first physical dispatch and use an open period. Genuine sales and non-sale expenses post on original dispatch dates. QC-released customer credits require exact pre-existing warehouse restock; independently QC-scrapped credits require a signed loss decision and NO saleable restock. All original scrap/QC dates must be open. Still-quarantined and undocumented credits, or released and scrapped portions of one invoice line, remain blocked.</p>
 <form method="POST" action="{{ route('finance.historical-corrections.historical-batch-submit',$case->id) }}" class="hfcs-form">
 @csrf
 <label>Original manufacturing accounting date (open month)
@@ -500,15 +534,28 @@ in_array($dispatch->business_purpose,['promotional_sample','production_loss','in
 </label>
 @endif
 @endforeach
+@foreach($historicalBatchScraps as $scrap)
+<label>Signed original customer QC scrap loss ledger — QC #{{ $scrap->qc_id }}, {{ $scrap->credit_number }}, original sale line #{{ $scrap->sales_invoice_line_id }} · {{ number_format($scrap->quantity_packages) }} packages
+<select name="scrap_loss_ledgers[{{ $scrap->qc_id }}]" required>
+<option value="">Select independent scrapped-returns expense ledger — NOT original sales COGS</option>
+@foreach($historicalBatchExpenseLedgers as $ledger)
+<option value="{{ $ledger->id }}"
+@selected(old('scrap_loss_ledgers.'.$scrap->qc_id)==$ledger->id)>
+{{ $ledger->code }} · {{ $ledger->name }}</option>
+@endforeach
+</select>
+<small>QC document {{ $scrap->quality_reference }} · independent inspector #{{ $scrap->decided_by }} · signed on {{ $scrap->decided_on }}. This reclassifies already recognized genuine original factory COGS without restoring stock or creating a second loss.</small>
+</label>
+@endforeach
 <label>Original accounting reconciliation and signed authorization reference
 <input name="source_authorization_reference" required minlength="4" maxlength="180"
 value="{{ old('source_authorization_reference') }}"></label>
 <label>Independent source reconciliation notes
 <textarea name="source_reconciliation_notes" rows="5" minlength="60" maxlength="5000" required
-placeholder="Document original QC, supplier FIFO and overhead, posted genuine sale and credit-note journals, signed non-sale expense ledgers, each independent QC warehouse return, original currency, COGS and return fraction, open accounting periods, and evidence that none of the inventory/COGS restorations was previously posted.">{{ old('source_reconciliation_notes') }}</textarea></label>
+placeholder="Document original supplier FIFO/overhead, customer invoice and credit-note revenue GL, independent QC saleable warehouse restocks, separately QC-condemned scrapped goods with NO warehouse recovery, source factory currency, genuine COGS fraction, dedicated loss ledger, open original months and no duplicate accounting.">{{ old('source_reconciliation_notes') }}</textarea></label>
 <label style="display:flex;align-items:center;gap:8px">
 <input type="checkbox" name="confirm_all_original_sources" value="1" required style="width:auto">
-Every dispatch is matched to a genuine posted invoice or independently authorized non-sale purpose. Every original credit-note return is physically and independently QC-released, the warehouse movement exists, and all original source costs/periods are verified without duplicate COGS or stock.
+Every physical dispatch has a genuine posted invoice or signed non-sale classification. Every original credit note has a signed independent QC status: saleable release has exact warehouse restock, scrap has documented destruction/condemnation with NO saleable stock. All source costs, allocations and original periods were reviewed; no asset, customer credit or loss can be duplicated.
 </label>
 <button class="btn" type="submit">Submit reviewed mixed-source historical batch recovery</button>
 </form>
