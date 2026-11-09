@@ -357,7 +357,7 @@ This request records a SOURCE-ONLY signed plan: I must not post any original inv
 @if($productionSourceReviews->isEmpty())
 <p class="lfr-muted">No independently approved unvalued opening FIFO provenance is available for a new production source-cost plan. Already proposed cases are shown below.</p>
 @endif
-<h3 style="margin:18px 0 12px">Independently reviewed production WIP source budgets — no GL posted</h3>
+<h3 style="margin:18px 0 12px">Independently reviewed production WIP source budgets — GL only through signed atomic recovery</h3>
 <div class="lfr-table"><table>
 <thead><tr>
 <th>Opening source / authorization</th>
@@ -398,7 +398,7 @@ Prior manufacturing capitalization: {{ $dependency['manufacturing_gl_id']?'POSTE
 </div>
 @endforeach
 </details>
-<div class="lfr-muted">No GL/post action exists for these source-only allocations.</div>
+<div class="lfr-muted">Source review alone posts NO GL. A different finance proposer/reviewer/executor may separately authorize the restricted all-or-nothing original raw/WIP/QC-finished/customer-COGS recovery.</div>
 </td>
 <td>
 <strong>{{ $plan->original_cost_evidence_reference }}</strong>
@@ -427,8 +427,124 @@ I independently verified the immutable FIFO source and production dependencies. 
 <button class="btn" type="submit">Record independent WIP source review (no GL)</button>
 </form>
 @endif
+@if($plan->status==='approved' &&
+!$recoveredWipSourceIds->contains($plan->id) &&
+(auth()->user()->can('finance.update') || auth()->user()->can('administration.update')) &&
+(int)$plan->submitted_by!==auth()->id() &&
+(int)$plan->approved_by!==auth()->id())
+<details class="lfr-review" style="margin-top:12px">
+<summary style="font-weight:700;cursor:pointer">Propose source-linked original raw/WIP/finished-goods and genuine invoice COGS recovery</summary>
+<p class="lfr-warning">A restricted executor is available ONLY if one original opening FIFO lot feeds ONE genuine released batch, ALL material sources and physical issues are from that lot on ONE original issue date, and the batch has no overhead, waste, other suppliers, non-sale issues, customer credits or returns. Any dispatched units require exactly matching actual posted invoice and customer revenue/receivable journals. Every original accounting period must be open; there must be no prior manually recognized raw, WIP, finished or COGS source. A different finance reviewer and final executor are mandatory. Unsupported batches stay BLOCKED with no journal or document changes.</p>
+<form action="{{ route('inventory.legacy-fifo-reviews.production-recovery-submit') }}" method="POST" class="lfr-grid" style="margin:12px 0">
+@csrf
+<input type="hidden" name="source_cost_review_id" value="{{ $plan->id }}">
+<label>Independently sourced original opening equity account
+<select name="opening_equity_ledger_id" required>
+<option value="">Choose actual authenticated original ownership/equity ledger</option>
+@foreach($equityLedgers as $ledger)
+<option value="{{ $ledger->id }}">{{ $ledger->code }} · {{ $ledger->name }}</option>
+@endforeach</select></label>
+<label style="grid-column:span 2">Independently authorized original source reference
+<input name="approval_reference" required minlength="4" maxlength="180"
+placeholder="Original supplier/ownership and batch source GL reference"></label>
+<label style="grid-column:span 3">Reconcile original source ownership cost and currency, immutable issued quantities, authentic material/QC/finished stock dates, posted original customer invoices, prior GL and no mixed-source manufacturing
+<textarea name="reconciliation_notes" minlength="120" maxlength="5000" rows="5" required
+placeholder="Document genuine original cost evidence, dated stock and production movements, original QC, any customer invoices and revenue GL, precise original opening equity, period status and no duplicate manual accounting."></textarea></label>
+<label style="grid-column:span 3;display:flex;flex-direction:row;gap:8px;align-items:center">
+<input type="checkbox" name="confirm_original_documents" value="1" required style="width:auto">
+I verified independent genuine original source price, ownership, QC receipts, existing customer invoice/revenue and absence of duplicated source GL.</label>
+<label style="grid-column:span 3;display:flex;flex-direction:row;gap:8px;align-items:center">
+<input type="checkbox" name="confirm_no_other_raw_materials" value="1" required style="width:auto">
+ALL actual raw materials and packaging for this one released batch came exclusively from this one approved opening FIFO source. No additional overhead, waste, non-sale, returns or mixed accounting exists.</label>
+<label style="grid-column:span 3;display:flex;flex-direction:row;gap:8px;align-items:center">
+<input type="checkbox" name="confirm_historical_finance_periods" value="1" required style="width:auto">
+Every original opening, material issue, finished QC release and actual invoice/dispatch month is OPEN and will be rejected if not.</label>
+<div style="grid-column:span 3">
+<button class="btn" type="submit">Submit full original production accounting chain for separate approval</button>
+</div></form></details>
+@endif
 </td></tr>
 @empty<tr><td colspan="5">No source-priced original production FIFO/WIP proposals submitted.</td></tr>@endforelse
+</tbody></table></div>
+</section>
+<section class="lfr-panel">
+<h2>Historical original-source production cost recovery — signed atomic GL</h2>
+<p class="lfr-warning">Original opening FIFO source cost, production WIP, independently QC-released finished inventory and authentic invoiced customer COGS must be posted together in one transaction. All historical dates must be OPEN. If any single physical/GL/source check fails, every newly drafted journal, cost posting and source cost valuation is rolled back. Neither the old immutable production batch-cost snapshots, original raw FIFO consumption rows, warehouse movement, customer receivable, sales revenue nor customer credit is changed by this execution.</p>
+<div class="lfr-table"><table>
+<thead><tr><th>Signed recovery</th><th>Original dates</th><th>Exact original currency value</th><th>GL and source IDs</th><th>Independent authorization</th></tr></thead><tbody>
+@forelse($productionRecoveries as $recovery)
+<tr>
+<td>Recovery #{{ $recovery->id }}
+<div>Original opening lot #{{ $recovery->inventory_cost_layer_id }}</div>
+<div>QC batch #{{ $recovery->production_batch_id }} · {{ $recovery->batch_number }}</div>
+<div><strong>{{ strtoupper($recovery->status) }}</strong></div>
+<div class="lfr-muted">{{ $recovery->source_issue_lines }} original issue(s); {{ $recovery->source_invoice_lines }} genuine original sale COGS line(s)</div></td>
+<td>Opening {{ $recovery->original_opening_date }}<div>
+Actual WIP issue {{ $recovery->original_issue_date }}</div>
+QC finished stock {{ $recovery->original_finished_date }}</td>
+<td>Original lot cost: <strong>{{ $recovery->original_lot_cost }} {{ $recovery->currency_code }}</strong>
+<div>Actual batch material / finished goods: {{ $recovery->original_material_cost }}</div>
+<div>Original raw stock still physically remaining: {{ $recovery->original_remaining_raw_cost }}</div></td>
+<td>
+@if($recovery->status==='posted')
+Opening asset/equity: <strong>{{ $recovery->opening_journal_number }}</strong><div>
+Raw to WIP: <strong>{{ $recovery->wip_journal_number }}</strong></div>
+QC finished: <strong>{{ $recovery->finished_journal_number }}</strong><div>
+Batch original manufacturing cost posting #{{ $recovery->production_batch_cost_posting_id }}</div>
+@else
+<span class="lfr-muted">No finance journal posted — original physical/customer sources unchanged.</span>
+@endif
+</td>
+<td>Source proposer #{{ $recovery->submitted_by }}
+@if($recovery->approved_by)<div>Independent reviewer #{{ $recovery->approved_by }}</div>@endif
+@if($recovery->executed_by)<div>Final executor #{{ $recovery->executed_by }}</div>@endif
+<div>{{ $recovery->approval_reference }}</div>
+<div class="lfr-muted" style="white-space:pre-wrap">{{ $recovery->reconciliation_notes }}</div>
+@if($recovery->review_reference)
+<strong>{{ $recovery->review_reference }}</strong><div class="lfr-muted" style="white-space:pre-wrap">{{ $recovery->review_notes }}</div>
+@endif
+@if($recovery->status==='submitted' &&
+(auth()->user()->can('finance.update') || auth()->user()->can('administration.update')) &&
+(int)$recovery->submitted_by!==auth()->id())
+<form method="POST" action="{{ route('inventory.legacy-fifo-reviews.production-recovery-review',$recovery->id) }}" class="lfr-review">
+@csrf
+<label>Independent source and accounting decision<select name="decision" required>
+<option value="">Choose</option><option value="approve">Approve exact original raw/WIP/finished/customer COGS source</option>
+<option value="reject">Reject incomplete, ambiguous or previously booked original GL</option>
+</select></label>
+<label>Separate financial approval reference
+<input name="review_reference" minlength="4" maxlength="180" required></label>
+<label style="grid-column:span 2">Independent assessment of original purchase/source ownership, physical QC release, unvalued material source, existing customer revenue/COGS, original currency and period chronology
+<textarea name="review_notes" rows="5" minlength="120" maxlength="5000" required></textarea></label>
+<label style="grid-column:span 2;display:flex;flex-direction:row;gap:8px;align-items:center">
+<input name="confirm_independent_full_chain" type="checkbox" value="1" required style="width:auto">
+I independently verified every original source document, accountant's source cost allocation and the full chronological GL chain; I am not a source author/proposer.</label>
+<button type="submit" class="btn">Record independent full-chain decision</button>
+</form>
+@endif
+@if($recovery->status==='approved' &&
+(auth()->user()->can('finance.update') || auth()->user()->can('administration.update')) &&
+(int)$recovery->submitted_by!==auth()->id() &&
+(int)$recovery->approved_by!==auth()->id())
+<form method="POST" action="{{ route('inventory.legacy-fifo-reviews.production-recovery-post',$recovery->id) }}" class="lfr-review">
+@csrf
+<label style="grid-column:span 2;display:flex;flex-direction:row;gap:8px;align-items:center">
+<input name="confirm_open_source_periods" type="checkbox" value="1" required style="width:auto">
+All original receipt, material issue, finished QC and customer dispatch/invoice source months remain OPEN.</label>
+<label style="grid-column:span 2;display:flex;flex-direction:row;gap:8px;align-items:center">
+<input name="confirm_no_prior_gl" type="checkbox" value="1" required style="width:auto">
+I independently checked existing inventory/equity/WIP/finished/COGS manual journals and signed source logs for duplicate financial recognition.</label>
+<label style="grid-column:span 2;display:flex;flex-direction:row;gap:8px;align-items:center">
+<input name="confirm_atomic_accounting" type="checkbox" value="1" required style="width:auto">
+I authorize ONLY the complete source-validated original-date accounting chain; do not modify original stock, frozen production costs or sales revenue.</label>
+<button class="btn" type="submit" onclick="return confirm('Create all original-cost opening, WIP, QC finished inventory and real invoice COGS journals in ONE atomic DB transaction? Any unsupported source or period must abort everything.')">
+Post original raw inventory, WIP, finished and customer COGS atomically</button>
+</form>
+@endif
+</td>
+</tr>
+@empty<tr><td colspan="5">No separately approved complete production FIFO historical GL recovery plan yet.</td></tr>
+@endforelse
 </tbody></table></div>
 </section>
 @endsection
