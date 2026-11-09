@@ -1260,6 +1260,42 @@ class FinanceCloseReadinessService
             $blockers[]=$pendingProductionWip.
                 ' historical production FIFO original-currency WIP plans are SOURCE REVIEW ONLY, not posted cost: original raw inventory, production WIP, released finished goods and any genuine invoiced COGS need a single separately authorized original-date financial recovery before this accounting month can close.';
 
+        // A fully posted source chain must reconcile on each original
+        // opening, material issue, finished production and real customer
+        // invoice month; pending chains must not close any of those periods.
+        $productionRecoveries=DB::table('finance_historical_fifo_production_recoveries as recovery')
+            ->where(function($query)use($begin,$end){
+                $query->whereBetween('recovery.original_opening_date',[$begin,$end])
+                    ->orWhereBetween('recovery.original_issue_date',[$begin,$end])
+                    ->orWhereBetween('recovery.original_finished_date',[$begin,$end])
+                    ->orWhereExists(function($sub)use($begin,$end){
+                        $sub->selectRaw('1')
+                            ->from('production_invoice_cogs_postings as cogs')
+                            ->join('sales_invoice_lines as sold',
+                                'sold.id','=','cogs.sales_invoice_line_id')
+                            ->join('sales_invoices as invoice',
+                                'invoice.id','=','sold.sales_invoice_id')
+                            ->whereColumn('sold.production_batch_id',
+                                'recovery.production_batch_id')
+                            ->whereBetween('invoice.invoice_date',[$begin,$end]);
+                    });
+            })->select('recovery.*')->get();
+        $badProductionGL=0;$awaitingProductionGL=0;
+        foreach($productionRecoveries as $recovery){
+            if($recovery->status==='posted'){
+                if(!app(HistoricalProductionFifoRecoveryService::class)
+                    ->auditPosted((int)$recovery->id))
+                    $badProductionGL++;
+            }elseif(in_array($recovery->status,['submitted','approved'],true))
+                $awaitingProductionGL++;
+        }
+        if($badProductionGL)
+            $blockers[]=$badProductionGL.
+                ' source-backed historic original production FIFO raw/equity, WIP, QC finished-goods or genuine sale COGS entries are missing, altered, reversed or original-date mismatched.';
+        if($awaitingProductionGL)
+            $blockers[]=$awaitingProductionGL.
+                ' independently signed original production FIFO recovery plan(s) still need a separate authorized all-or-nothing raw/WIP/finished/COGS posting. Document review alone is not financial capitalization.';
+
         $unvaluedOpeningIssues=DB::table('inventory_cost_consumptions as consumed')
             ->join('inventory_cost_layers as lot',
                 'lot.id','=','consumed.inventory_cost_layer_id')
@@ -1274,6 +1310,12 @@ class FinanceCloseReadinessService
                 'cost.inventory_cost_consumption_id','=','consumed.id')
             ->leftJoin('finance_historical_fifo_adjustment_valuations as recovery',
                 'recovery.id','=','cost.finance_historical_fifo_adjustment_valuation_id')
+            ->leftJoin('finance_historical_fifo_production_cost_lines as produced',
+                'produced.inventory_cost_consumption_id','=','consumed.id')
+            ->leftJoin('finance_historical_fifo_production_cost_reviews as plan',
+                'plan.id','=','produced.finance_historical_fifo_production_cost_review_id')
+            ->leftJoin('finance_historical_fifo_production_recoveries as execution',
+                'execution.finance_historical_fifo_production_cost_review_id','=','plan.id')
             ->whereBetween('issue.occurred_on',[$begin,$end])
             ->where(function($query){
                 $query->whereNull('lot.original_cost')
@@ -1281,9 +1323,17 @@ class FinanceCloseReadinessService
                     ->orWhere('consumed.is_valued',false);
             })
             ->where(function($query){
-                $query->whereNull('cost.journal_entry_id')
-                    ->orWhereNull('recovery.id')
-                    ->orWhere('recovery.status','!=','posted');
+                $query->where(function($adjustment){
+                    $adjustment->whereNull('cost.journal_entry_id')
+                        ->orWhereNull('recovery.id')
+                        ->orWhere('recovery.status','!=','posted');
+                })->where(function($production){
+                    $production->whereNull('produced.historical_wip_journal_id')
+                        ->orWhereNull('plan.id')
+                        ->orWhere('plan.status','!=','posted')
+                        ->orWhereNull('execution.id')
+                        ->orWhere('execution.status','!=','posted');
+                });
             })->distinct()->count('consumed.id');
         if($unvaluedOpeningIssues)
             $blockers[]=$unvaluedOpeningIssues.
