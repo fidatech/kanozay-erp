@@ -127,4 +127,192 @@ I independently reviewed unchanged original stock and evidence and did not regis
 </tbody></table></div>
 <div style="margin-top:14px">{{ $reviews->links() }}</div>
 </section>
+
+<section class="lfr-panel">
+<h2>Source-backed original cost for historical FIFO adjustment write-offs</h2>
+<p class="lfr-warning">
+A signed provenance review is documentary only until a separate original-cost
+proposal is approved. Financial recognition below is restricted to FIFO lots
+whose EVERY historical issue is a genuine, original-dated inventory
+<em>adjustment_out</em> with matching stock-adjustment source records. Production
+materials, supplier returns, unverified original ownership/pricing, missing
+source warehouse positions, already-capitalized GL and closed original months
+remain blocked. The declared original cost must come from real supporting
+opening/purchase evidence, not an estimate. Two separate GL steps recognize
+the historical original opening <strong>Dr raw inventory / Cr opening equity</strong>
+and each actual original adjustment issue <strong>Dr approved adjustment loss /
+Cr raw inventory</strong>. Original material issues and physical stock never
+change, and the recognized original remaining FIFO amount must equal the
+original cost less all previously expensed adjustment issues.
+</p>
+@if(auth()->user()->can('finance.update') || auth()->user()->can('administration.update'))
+@foreach($sourceCostReviews as $review)
+<details class="lfr-review" style="margin-bottom:13px">
+<summary style="cursor:pointer;font-weight:700">
+Original FIFO #{{ $review->inventory_cost_layer_id }} · {{ $review->sku }}
+— signed consumption evidence review #{{ $review->id }}
+</summary>
+<p class="lfr-muted">
+Original opening {{ $review->opening_quantity }};
+consumed {{ $review->consumed_quantity }};
+remaining {{ $review->remaining_quantity }}.
+Provenance requester #{{ $review->requested_by }};
+independent reviewer #{{ $review->reviewed_by }}.
+The source accounting service rejects any non-adjustment issue on this lot.
+</p>
+<form action="{{ route('inventory.legacy-fifo-reviews.cost-submit') }}"
+method="POST" class="lfr-grid" style="margin:14px 0">
+@csrf
+<input type="hidden" name="finance_legacy_fifo_source_review_id" value="{{ $review->id }}">
+<label>Original factory/purchase currency
+<select name="currency_id" required><option value="">Choose documented currency</option>
+@foreach($currencies as $currency)
+<option value="{{ $currency->id }}" @selected(old('currency_id')==$currency->id)>
+{{ $currency->code }}</option>
+@endforeach
+</select></label>
+<label>Authentic ORIGINAL opening lot cost (total, 4 decimal places)
+<input name="original_total_cost" inputmode="decimal" type="text"
+required placeholder="Source-documented amount, not estimated"
+value="{{ old('original_total_cost') }}"></label>
+<label>Opening equity / source ownership account
+<select name="opening_equity_ledger_id" required><option value="">Choose approved equity source</option>
+@foreach($equityLedgers as $account)
+<option value="{{ $account->id }}">{{ $account->code }} · {{ $account->name }}</option>
+@endforeach
+</select></label>
+<label>Original physical stock-adjustment loss expense
+<select name="adjustment_loss_ledger_id" required>
+<option value="">Choose independent loss expense ledger (not COGS)</option>
+@foreach($expenseLedgers as $account)
+<option value="{{ $account->id }}">{{ $account->code }} · {{ $account->name }}</option>
+@endforeach
+</select></label>
+<label style="grid-column:span 2">Documented original opening / purchase source-cost evidence reference
+<input name="original_cost_evidence_reference" minlength="4" maxlength="180"
+required placeholder="Actual opening valuation or genuine purchase/source document ID"></label>
+<label style="grid-column:span 3">Detailed independent original price, source ownership, GL, historic adjustment issue and no-duplicate-posting reconciliation
+<textarea name="source_cost_reconciliation" rows="5"
+minlength="80" maxlength="5000" required
+placeholder="Identify real dated original ownership/valuation evidence, physical adjustment issue records and source dates, why every issue is a loss (not WIP/supplier return), original currency, approved ledger, physical remaining stock and proof that the source values have not been separately booked."></textarea></label>
+<label style="grid-column:span 3;display:flex;flex-direction:row;align-items:center;gap:9px">
+<input name="confirm_evidence_original_cost" type="checkbox" value="1" required style="width:auto">
+This amount is evidenced by an authentic source document, not a guessed historic purchase price or exchange rate.</label>
+<label style="grid-column:span 3;display:flex;flex-direction:row;align-items:center;gap:9px">
+<input name="confirm_no_duplicate_manual_gl" type="checkbox" value="1" required style="width:auto">
+I reviewed prior manual journals, original WIP/stock-adjustment accounting and ownership: the original receipt and lost issues were not already financially recognized.</label>
+<div style="grid-column:span 3">
+<button type="submit" class="btn">Submit original FIFO cost and loss fractions for separate financial approval</button>
+</div>
+</form>
+</details>
+@endforeach
+@endif
+@if($sourceCostReviews->isEmpty())
+<p class="lfr-muted">No approved consumed-opening FIFO provenance review is awaiting an original-cost proposal. Source-reviewed production issues must use their own WIP/manufacturing accounting correction.</p>
+@endif
+<h3 style="margin:18px 0 11px">Independently reviewed and posted original opening/adjustment cost cases</h3>
+<div class="lfr-table"><table>
+<thead><tr>
+<th>Source opening lot</th><th>Financial authorization</th>
+<th>Original source cost</th><th>Remaining asset / consumed loss</th>
+<th>Independent accounts / evidence</th><th>GL journal and review action</th>
+</tr></thead><tbody>
+@forelse($historicCostPlans as $plan)
+<tr>
+<td><strong>#{{ $plan->inventory_cost_layer_id }}</strong>
+<div>{{ $plan->sku }}</div>
+<div class="lfr-muted">Provenance #{{ $plan->finance_legacy_fifo_source_review_id }}
+· Original qty {{ $plan->original_quantity }}
+· Remaining {{ $plan->remaining_quantity }}</div>
+</td>
+<td><strong>{{ ucfirst($plan->status) }}</strong>
+<div class="lfr-muted">Proposer #{{ $plan->submitted_by }}
+@if($plan->approved_by) · Independent reviewer #{{ $plan->approved_by }}@endif
+@if($plan->executed_by) · Final executor #{{ $plan->executed_by }}@endif
+</div>
+@if($plan->approval_reference)
+<div>{{ $plan->approval_reference }}</div>
+<div class="lfr-muted" style="white-space:pre-wrap">{{ $plan->approval_notes }}</div>
+@endif
+</td>
+<td><strong>{{ $plan->original_total_cost }} {{ $plan->currency_code }}</strong></td>
+<td>Existing original remaining inventory
+<strong>{{ $plan->remaining_original_cost }}</strong><br>
+Recognized original adjustment-loss cost
+<strong>{{ $plan->consumed_original_cost }}</strong></td>
+<td>
+<div>Inventory GL #{{ $plan->inventory_ledger_id }}</div>
+<div>Opening equity GL #{{ $plan->opening_equity_ledger_id }}</div>
+<div>Actual loss GL #{{ $plan->adjustment_loss_ledger_id }}</div>
+<div><strong>{{ $plan->original_cost_evidence_reference }}</strong></div>
+<div class="lfr-muted" style="white-space:pre-wrap">{{ $plan->source_cost_reconciliation }}</div>
+</td>
+<td>
+@if($plan->opening_journal_entry_id)
+<strong>{{ $plan->opening_journal_number }}</strong>
+<div class="lfr-muted">Opening GL #{{ $plan->opening_journal_entry_id }} {{ $plan->opening_journal_status }}</div>
+@else <span class="lfr-muted">No journal yet</span>@endif
+<details style="margin:8px 0"><summary>View source adjustment issue allocations</summary>
+<div>
+@foreach($historicIssueCosts->get($plan->id,collect()) as $costLine)
+<div style="padding:7px 0;border-bottom:1px solid #e5edf5">
+Original issue #{{ $costLine->inventory_stock_movement_id }}
+· {{ $costLine->original_issue_date }}
+· {{ $costLine->quantity }} packages
+· <strong>{{ $costLine->amount }} {{ $plan->currency_code }}</strong>
+<div class="lfr-muted">
+{{ $costLine->journal_number??'Awaiting GL' }}
+{{ $costLine->journal_status??'' }}
+</div></div>
+@endforeach
+</div></details>
+@if($plan->status==='submitted' &&
+(auth()->user()->can('finance.update') || auth()->user()->can('administration.update')) &&
+(int)$plan->submitted_by!==auth()->id())
+<form action="{{ route('inventory.legacy-fifo-reviews.cost-review',$plan->id) }}"
+method="POST" class="lfr-review" style="margin:10px 0">
+@csrf
+<label>Independent finance decision<select name="decision" required>
+<option value="">Choose</option><option value="approve">Approve authenticated original cost/GL</option>
+<option value="reject">Reject unsupported historical cost</option></select></label>
+<label>Independent approval reference
+<input name="approval_reference" minlength="4" maxlength="180" required></label>
+<label style="grid-column:span 2">Review genuine source price/ownership document, original stock issues, separate loss/equity GL, historic dates and duplicate manual GL risk
+<textarea name="approval_notes" rows="5" minlength="80" maxlength="5000" required></textarea></label>
+<label style="grid-column:span 2;display:flex;align-items:center;flex-direction:row;gap:8px">
+<input name="confirm_independent_cost_review" type="checkbox" value="1" required style="width:auto">
+I independently verified this documented original cost and accounting treatment and did not enter the original opening or adjustments.</label>
+<button class="btn" type="submit">Record independent cost decision</button>
+</form>
+@endif
+@if($plan->status==='approved' &&
+(auth()->user()->can('finance.update') || auth()->user()->can('administration.update')) &&
+(int)$plan->submitted_by!==auth()->id() &&
+(int)$plan->approved_by!==auth()->id())
+<form action="{{ route('inventory.legacy-fifo-reviews.cost-post',$plan->id) }}"
+method="POST" class="lfr-review" style="margin:10px 0">
+@csrf
+<p class="lfr-warning" style="grid-column:span 2">
+This executor posts source opening inventory/equity on the original receipt date
+and each original stock adjustment expense on its actual issue date. All
+affected accounting periods must be OPEN. Every journal and value assignment
+commits or rolls back together. Original consumed FIFO source rows and physical
+inventory are not rewritten. Production issues remain excluded.
+</p>
+<label style="grid-column:span 2;display:flex;align-items:center;flex-direction:row;gap:8px">
+<input name="confirm_original_open_periods" type="checkbox" value="1" required style="width:auto">
+Every original issue and opening accounting month is open; no later or guessed date is substituted.</label>
+<label style="grid-column:span 2;display:flex;align-items:center;flex-direction:row;gap:8px">
+<input name="confirm_original_cost_not_manual_gl" type="checkbox" value="1" required style="width:auto">
+I independently verified there is no previous manual original inventory/equity or source loss GL and that I am a distinct executor.</label>
+<button class="btn" type="submit" onclick="return confirm('Post historic source original inventory/equity and separately approved adjustment loss journals atomically? No physical stock will be created.')">Post original opening and adjustment GL</button>
+</form>
+@endif
+</td>
+</tr>
+@empty<tr><td colspan="6">No signed original-cost financial proposal exists for historical opening adjustment losses.</td></tr>
+@endforelse
+</tbody></table></div>
+</section>
 @endsection
