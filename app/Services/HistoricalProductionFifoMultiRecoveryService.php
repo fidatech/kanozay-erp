@@ -199,9 +199,13 @@ final class HistoricalProductionFifoMultiRecoveryService
             $this->fail('Original physical production material movements include source lots or material issue dates outside this complete coordinated FIFO recovery.');
         foreach($lines as $materialLine){
             $expected=BigDecimal::of((string)($materialLine->issued_quantity??'0'));
-            if(!$expected->isPositive())continue;
-            $actual=BigDecimal::zero();
             $movementRows=$outbound->where('reference_id',$materialLine->id);
+            if(!$expected->isPositive()){
+                if($movementRows->isNotEmpty())
+                    $this->fail('Original production material line shows zero issued units but authentic physical outward stock movements exist. Never infer or omit their cost.');
+                continue;
+            }
+            $actual=BigDecimal::zero();
             if($movementRows->isEmpty())
                 $this->fail('An original production ingredient or packaging issue has no matching physical stock movement.');
             foreach($movementRows as $move){
@@ -743,7 +747,7 @@ final class HistoricalProductionFifoMultiRecoveryService
 
         $openingSum=BigDecimal::zero();$wipSum=BigDecimal::zero();
         $remainingSum=BigDecimal::zero();$sourceActors=[];
-        $issueIds=[];
+        $issueIds=[];$physicalMovements=[];
         foreach($lots as $r){
             $lot=DB::table('inventory_cost_layers')
                 ->where('id',$r->inventory_cost_layer_id)->first();
@@ -810,11 +814,29 @@ final class HistoricalProductionFifoMultiRecoveryService
                         ->isEqualTo((string)$issue->quantity))
                     return false;
                 $issueIds[$issue->inventory_cost_consumption_id]=true;
+                $physicalMovements[(int)$physical->id]=
+                    ($physicalMovements[(int)$physical->id]??BigDecimal::zero())
+                        ->plus((string)$issue->quantity);
                 $wipSum=$wipSum->plus((string)$issue->proposed_original_wip_cost);
                 $sourceActors[]=(int)$physical->created_by;
             }
             $openingSum=$openingSum->plus((string)$r->original_source_total);
             $remainingSum=$remainingSum->plus((string)$r->remaining_raw_cost);
+        }
+        $sourceMaterialLines=DB::table('production_order_materials')
+            ->where('production_order_id',$batch->production_order_id)
+            ->pluck('id');
+        $currentPhysicalIssues=DB::table('inventory_stock_movements')
+            ->where('reference_type','production_order_material')
+            ->whereIn('reference_id',$sourceMaterialLines)
+            ->where('direction','out')->get();
+        if($currentPhysicalIssues->count()!==count($physicalMovements))
+            return false;
+        foreach($currentPhysicalIssues as $movement){
+            if(!isset($physicalMovements[(int)$movement->id]) ||
+                !BigDecimal::of((string)$movement->quantity)
+                    ->isEqualTo($physicalMovements[(int)$movement->id]))
+                return false;
         }
         foreach([(int)$c->submitted_by,(int)$c->approved_by,
             (int)$c->executed_by] as $authId){
@@ -839,7 +861,14 @@ final class HistoricalProductionFifoMultiRecoveryService
             ->where('line.production_batch_id',$c->production_batch_id)
             ->get(['cost.*']);
         if($sales->count()!==(int)$c->genuine_invoice_line_count ||
-            $postedCOGS->count()!==$sales->count())return false;
+            $postedCOGS->count()!==$sales->count() ||
+            DB::table('finished_good_dispatch_lines')
+                ->where('production_batch_id',$batch->id)->count()!==$sales->count() ||
+            DB::table('sales_credit_note_lines')
+                ->where('production_batch_id',$batch->id)->exists() ||
+            DB::table('sales_return_quarantines')
+                ->where('production_batch_id',$batch->id)->exists())
+            return false;
         $costTotal=BigDecimal::zero();$packages=0;
         foreach($sales as $sale){
             $costed=$postedCOGS->firstWhere('sales_invoice_line_id',$sale->id);
