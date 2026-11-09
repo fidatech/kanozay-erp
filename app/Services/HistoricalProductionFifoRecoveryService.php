@@ -257,6 +257,10 @@ final class HistoricalProductionFifoRecoveryService
                 ->where('case_type','batch_uncapitalized')
                 ->where('source_id',$batchId)
                 ->whereIn('status',['submitted','approved'])->exists() ||
+            DB::table('finance_historical_fifo_multi_recoveries')
+                ->where('production_batch_id',$batchId)->exists() ||
+            DB::table('finance_historical_fifo_multi_recovery_lots')
+                ->where('inventory_cost_layer_id',$wip->inventory_cost_layer_id)->exists() ||
             DB::table('production_invoice_cogs_postings as cogs')
                 ->join('sales_invoice_lines as sale',
                     'sale.id','=','cogs.sales_invoice_line_id')
