@@ -74,10 +74,34 @@ final class LegacyFifoSourceReviewService
                 'journal.reversal_of_id','journal.entry_date',
                 'journal.currency_id as journal_currency_id'])
             ->keyBy('inventory_cost_consumption_id');
+        $productionRecognitions=DB::table('finance_historical_fifo_production_cost_lines as used')
+            ->join('finance_historical_fifo_production_cost_reviews as source',
+                'source.id','=','used.finance_historical_fifo_production_cost_review_id')
+            ->join('finance_historical_fifo_production_recoveries as recovery',
+                'recovery.finance_historical_fifo_production_cost_review_id','=','source.id')
+            ->leftJoin('journal_entries as journal',
+                'journal.id','=','used.historical_wip_journal_id')
+            ->where('source.inventory_cost_layer_id',$lot->id)
+            ->where('source.status','posted')
+            ->where('recovery.status','posted')
+            ->get(['used.id','used.inventory_cost_consumption_id',
+                'used.inventory_stock_movement_id',
+                'used.original_material_issue_date as original_issue_date',
+                'used.quantity','used.proposed_original_wip_cost as amount',
+                'used.historical_wip_journal_id as journal_entry_id',
+                'source.currency_id','source.original_lot_cost as original_total_cost',
+                'journal.status as journal_status',
+                'journal.reversal_of_id','journal.entry_date',
+                'journal.currency_id as journal_currency_id'])
+            ->keyBy('inventory_cost_consumption_id');
         $used=BigDecimal::zero();$movementTotals=[];
         foreach($consumptions as $cost){
             $quantity=BigDecimal::of((string)$cost->quantity);
-            $recovery=$historicalRecognitions->get($cost->id);
+            $recovery=$historicalRecognitions->get($cost->id)
+                ??$productionRecognitions->get($cost->id);
+            if($historicalRecognitions->has($cost->id) &&
+                $productionRecognitions->has($cost->id))
+                $this->fail('An original FIFO issue was financially recognized as BOTH adjustment loss and production WIP. No source movement may be expensed twice.');
             $validBackfill=$valued &&
                 !$cost->is_valued && $cost->amount===null &&
                 $cost->currency_id===null && $cost->currency_code===null &&
@@ -180,6 +204,9 @@ final class LegacyFifoSourceReviewService
         if($historicalRecognitions->isNotEmpty())
             $fingerprintSource['separately_posted_immutable_source_cost']=
                 $historicalRecognitions->values()->toArray();
+        if($productionRecognitions->isNotEmpty())
+            $fingerprintSource['separately_posted_immutable_production_WIP_cost']=
+                $productionRecognitions->values()->toArray();
         $fingerprint=hash('sha256',json_encode($fingerprintSource,
             JSON_UNESCAPED_UNICODE|JSON_PRESERVE_ZERO_FRACTION));
         return [
