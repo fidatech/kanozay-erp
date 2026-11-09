@@ -331,6 +331,14 @@ Original bank fee, timing-difference, partial-payment and outstanding deposit/tr
 
 [Full D07 integration notes](bank-reconciliation-ui-source-integration-2026-11-10.md).
 
+## D08 original-currency employee withholding remittance and bank/GL integration (2026-11-10)
+
+The original payroll salary accrual and independently signed tax brackets previously had no financial payment executor for the withheld liability. Added \`payroll_tax_remittances\` source ledger, \`PayrollTaxRemittanceService\`, authenticated Finance controller, four proposal/review/payment routes, full withholding register/approval forms and finance menu entry. Every employee's existing approved and immutable payroll tax application is reconciled against the actual deduction component, original posted same-currency salary journal and approved tax liability GL. Submissions freeze an authenticated source SHA-256 fingerprint and reserve amounts across approved, pending and already paid remittances to prevent overpayment. The proposer, independent finance reviewer and final bank/cash executor must be different authorized actors; source payroll and tax-policy approval actors cannot approve their own remittance. Final execution checks original-date open period, actual bank/cash asset balance, true outstanding withholding payable, and atomically posts **debit withholding liability / credit bank or cash asset** with a normal bank statement-matchable payment transaction. The original salary expense and employee deductions are NOT re-posted. **No tax rate, statutory payee or due date is invented**: tax rules and payment instructions must be supplied and signed by the client.
+
+Full documentation: [source withholding remittances](payroll-withholding-remittance-2026-11-10.md).
+
+**Remaining D08 acceptance:** project migrations, real tax source proof, role/UAT coverage, partial payment and concurrency tests, accounting source GL/cashbook balance checks and secure refund/reversal workflow. The GitHub connector verifies matching source files and routes; the Mac desktop has been unavailable for local PHP compilation and database tests after D07 was committed. The unrelated overall GitHub Actions suite still reports failures and **D08 is not certified complete**.
+
 ## Acceptance and release gates
 
 1. Passing SQLite feature suite and isolated regression suite on the latest commit.
