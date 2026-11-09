@@ -314,6 +314,20 @@ class InventoryCostService
                     ]);
                 }
             }
+            if($layer->source_type==='inventory_stock_movement'){
+                $recovered=DB::table('finance_historical_fifo_production_recoveries')
+                    ->where('inventory_cost_layer_id',$layer->id)
+                    ->where('status','posted')->first();
+                if($recovered &&
+                    ($recovered->original_opening_date>
+                        $movement->occurred_on->toDateString() ||
+                     (int)$recovered->currency_id!==(int)$layer->currency_id ||
+                     !app(HistoricalProductionFifoRecoveryService::class)
+                         ->auditPosted((int)$recovered->id)))
+                    throw ValidationException::withMessages([
+                        'quantity'=>'This opening FIFO lot has source-linked historic production raw/WIP/finished/COGS values whose GL, original cost or original date is not fully reconciled. New FIFO consumption is blocked.',
+                    ]);
+            }
             if($layer->source_type==='goods_receipt_line'){
                 app(GoodsReceiptLandedCostPostingService::class)->assertLotCostPosted(
                     (int)$layer->source_id,$movement->occurred_on->toDateString()
