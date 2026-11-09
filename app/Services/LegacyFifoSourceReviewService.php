@@ -365,6 +365,13 @@ final class LegacyFifoSourceReviewService
                 (int)$review->requested_by,(int)$source['opening']->created_by,
             ],true))
                 $this->fail('Independent reviewer must differ from the original opening-stock registrar and evidence proposer.');
+            if($review->review_type==='consumed_provenance'){
+                foreach($source['consumptions'] as $historicIssue){
+                    if((int)$historicIssue->created_by===$actorId ||
+                        (int)$historicIssue->created_by===(int)$review->requested_by)
+                        $this->fail('Independent consumed-opening FIFO source evidence requester/reviewer cannot be the original adjustment or production issue author.');
+                }
+            }
             $approved=$decision['decision']==='approve';
             DB::table('finance_legacy_fifo_source_reviews')->where('id',$reviewId)
                 ->update([
