@@ -77,13 +77,20 @@ final class LegacyFifoSourceReviewService
         $productionRecognitions=DB::table('finance_historical_fifo_production_cost_lines as used')
             ->join('finance_historical_fifo_production_cost_reviews as source',
                 'source.id','=','used.finance_historical_fifo_production_cost_review_id')
-            ->join('finance_historical_fifo_production_recoveries as recovery',
+            ->leftJoin('finance_historical_fifo_production_recoveries as recovery',
                 'recovery.finance_historical_fifo_production_cost_review_id','=','source.id')
+            ->leftJoin('finance_historical_fifo_multi_recovery_lots as grouped',
+                'grouped.finance_historical_fifo_production_cost_review_id','=','source.id')
+            ->leftJoin('finance_historical_fifo_multi_recoveries as multi',
+                'multi.id','=','grouped.finance_historical_fifo_multi_recovery_id')
             ->leftJoin('journal_entries as journal',
                 'journal.id','=','used.historical_wip_journal_id')
             ->where('source.inventory_cost_layer_id',$lot->id)
             ->where('source.status','posted')
-            ->where('recovery.status','posted')
+            ->where(function($query){
+                $query->where('recovery.status','posted')
+                    ->orWhere('multi.status','posted');
+            })
             ->get(['used.id','used.inventory_cost_consumption_id',
                 'used.inventory_stock_movement_id',
                 'used.original_material_issue_date as original_issue_date',
