@@ -169,9 +169,10 @@ class ProcurementToFinishedGoodsCostChainTest extends TestCase
         $service = app(ManufacturingCostAccountingService::class);
         $posting = $service->capitalize($batch->id, $this->approval(), $this->finance->id);
 
-        $this->assertSame('100.0000', (string) $posting->material_amount);
-        $this->assertSame('0.0000', (string) $posting->overhead_amount);
-        $this->assertSame('100.0000', (string) $posting->total_amount);
+        // Compared numerically: SQLite and MySQL format stored decimals differently.
+        $this->assertTrue(BigDecimal::of((string) $posting->material_amount)->isEqualTo('100'));
+        $this->assertTrue(BigDecimal::of((string) $posting->overhead_amount)->isZero());
+        $this->assertTrue(BigDecimal::of((string) $posting->total_amount)->isEqualTo('100'));
         $this->assertSame(15, (int) $posting->accepted_packages);
 
         // General Ledger after capitalization.
