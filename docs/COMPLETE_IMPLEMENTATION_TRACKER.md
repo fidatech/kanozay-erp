@@ -152,3 +152,4 @@ have executable tests and a human has run the browser checklist in `docs/uat-che
 | 2026-11-09 | `407b744` | 42705545856 | FAILED — SQLite: 33 failed, 368 passed, 1 skipped. MySQL steps not reached |
 | 2026-11-10 | `59b1058` | first green run of this pass | PASSED — SQLite: 408 passed, 1 skipped, 3,176 assertions; frontend build; clean SQLite and MySQL install; tested ZIP artifact |
 | 2026-11-10 | `f2fd3e2` | MySQL suite added | SQLite: 408 passed, 1 skipped (3,177 assertions). MySQL: 407 passed, 1 failed, 1 skipped — the failure was a test assuming row id 1 |
+| 2026-11-10 | `500f282` | 42897987456 | PASSED — SQLite: 408 passed, 1 skipped, 3,178 assertions. MySQL 8.4: 408 passed, 1 skipped, 3,178 assertions. Frontend build, compiled Blade lint, clean SQLite and MySQL install, tested ZIP artifact `kanozay-erp-tested-zip`. The skipped test needs the original client workbook, which is not in the repository |
