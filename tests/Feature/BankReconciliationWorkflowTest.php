@@ -113,7 +113,7 @@ class BankReconciliationWorkflowTest extends TestCase
         $depositLine = DB::table('bank_statement_entries')->where('bank_reference', 'BNK-0001')->value('id');
         $withdrawalLine = DB::table('bank_statement_entries')->where('bank_reference', 'BNK-0002')->value('id');
         $match = fn (User $user, int $line, int $money) => $this->actingAs($user)->post(
-            route('finance.bank-reconciliations.lines.match', [$periodId, $line]), ['money_transaction_id' => $money]);
+            route('finance.bank-reconciliations.match', [$periodId, $line]), ['money_transaction_id' => $money]);
 
         // Wrong direction/date/amount cannot be matched; the right movement can, once.
         $match($maker, $depositLine, $withdrawal->id)->assertSessionHasErrors('money_transaction_id');
@@ -171,7 +171,7 @@ class BankReconciliationWorkflowTest extends TestCase
             ->assertSessionHasErrors('submission_token');
         $this->assertDatabaseCount('bank_statement_entries', 1);
         $lineId = (int) DB::table('bank_statement_entries')->value('id');
-        $this->actingAs($maker)->post(route('finance.bank-reconciliations.lines.match', [$periodId, $lineId]), ['money_transaction_id' => $deposit->id])
+        $this->actingAs($maker)->post(route('finance.bank-reconciliations.match', [$periodId, $lineId]), ['money_transaction_id' => $deposit->id])
             ->assertRedirect()->assertSessionHasNoErrors();
 
         // Statement arithmetic agrees (0 + 500 = 500) but the ledger holds 540 and one movement is unmatched.
