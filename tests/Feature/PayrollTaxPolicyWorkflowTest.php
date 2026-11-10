@@ -84,7 +84,11 @@ class PayrollTaxPolicyWorkflowTest extends TestCase {
   ]);
   $this->actingAs($maker)->get(route('hr.payroll.tax-policies.index',[
    'period_id'=>$period->id,'policy_id'=>$policy->id,
-  ]))->assertOk()->assertSee('TEST-TAX-AFN');
+  ]))->assertOk()->assertSee('TEST-TAX-AFN')
+   // The policy form renders exactly one starter bracket row (regression: an
+   // unincremented Blade loop previously rendered rows until memory ran out).
+   ->assertSee('name="brackets[0][lower_bound]"',false)
+   ->assertDontSee('name="brackets[1][lower_bound]"',false);
  }
 
  public function test_unapproved_policy_does_not_change_payroll():void {

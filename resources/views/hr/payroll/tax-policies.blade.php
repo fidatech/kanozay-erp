@@ -28,7 +28,7 @@
 <h3>Marginal salary brackets</h3>
 <p>Each bracket starts where the previous one ends. Upper bound is exclusive and can be blank only for the final bracket.</p>
 <div class="tax-wrap"><table><thead><tr><th>Lower bound</th><th>Upper bound</th><th>Fixed amount at lower bound</th><th>Percentage above lower bound</th></tr></thead><tbody id="tax-brackets">
-@for($i=0;$i<1;$i)<tr>
+@for($i=0;$i<1;$i++)<tr>
 <td><input name="brackets[{{ $i }}][lower_bound]" inputmode="decimal" placeholder="{{ $i===0?'0':'' }}" @if($i===0) value="0" @endif required></td>
 <td><input name="brackets[{{ $i }}][upper_bound]" inputmode="decimal" placeholder="Blank for final"></td>
 <td><input name="brackets[{{ $i }}][fixed_tax]" inputmode="decimal" value="0" required></td>
