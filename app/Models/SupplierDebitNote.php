@@ -3,6 +3,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use LogicException;
 class SupplierDebitNote extends Model {
+    use \App\Models\Concerns\StoresDateOnlyColumns;
+
  protected $fillable=[
   'number','submission_token','purchase_return_record_id','trade_document_id','journal_entry_id',
   'credit_offset_ledger_id','currency_id','credit_date','amount',

@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class InventoryStockCount extends Model
 {
+    use \App\Models\Concerns\StoresDateOnlyColumns;
+
     protected $fillable = [
         'number', 'submission_token', 'counted_on', 'status', 'notes', 'created_by',
         'approved_by', 'approved_at', 'company_warehouse_id', 'count_scope',

@@ -5,6 +5,8 @@ use LogicException;
 
 class PurchaseReturnRecord extends Model
 {
+    use \App\Models\Concerns\StoresDateOnlyColumns;
+
     protected $fillable=[
         'number','submission_token','goods_receipt_id','purchase_order_id','currency_id',
         'company_warehouse_id','returned_on','supplier_reference','status','financial_status',

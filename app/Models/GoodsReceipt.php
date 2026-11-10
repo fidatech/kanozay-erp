@@ -8,6 +8,8 @@ use Brick\Math\BigDecimal;
 
 class GoodsReceipt extends Model
 {
+    use \App\Models\Concerns\StoresDateOnlyColumns;
+
     protected $fillable = [
         'number', 'purchase_order_id', 'receipt_token', 'received_on',
         'supplier_reference', 'status', 'notes', 'created_by', 'company_warehouse_id',

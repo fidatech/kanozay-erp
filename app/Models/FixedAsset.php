@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class FixedAsset extends Model
 {
+    use \App\Models\Concerns\StoresDateOnlyColumns;
+
     protected $fillable = [
         'asset_tag', 'name', 'fixed_asset_category_id', 'acquired_on', 'acquisition_cost',
         'currency_id', 'source_reference', 'status', 'custodian_id', 'notes', 'created_by', 'company_warehouse_id',

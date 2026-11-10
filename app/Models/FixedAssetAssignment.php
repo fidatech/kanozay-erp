@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class FixedAssetAssignment extends Model
 {
+    use \App\Models\Concerns\StoresDateOnlyColumns;
+
     protected $fillable = [
         'fixed_asset_id', 'employee_profile_id', 'assigned_on', 'returned_on',
         'assigned_by', 'returned_by', 'notes',

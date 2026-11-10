@@ -7,6 +7,8 @@ use LogicException;
 
 class SalesQuotation extends Model
 {
+    use \App\Models\Concerns\StoresDateOnlyColumns;
+
     protected $fillable = ['number', 'submission_token', 'customer_id', 'currency_id', 'currency_code', 'quotation_date', 'valid_until', 'status', 'subtotal', 'total', 'reference', 'notes', 'created_by'];
 
     protected $casts = ['quotation_date' => 'date', 'valid_until' => 'date', 'subtotal' => 'decimal:4', 'total' => 'decimal:4'];

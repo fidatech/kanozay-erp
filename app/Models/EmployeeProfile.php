@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class EmployeeProfile extends Model
 {
+    use \App\Models\Concerns\StoresDateOnlyColumns;
+
     protected $fillable = [
         'employee_number', 'full_name', 'father_name', 'gender', 'position', 'department_id',
         'phone', 'national_id', 'taxpayer_id', 'monthly_salary', 'salary_currency_id', 'is_active', 'hired_on', 'separated_on', 'created_by',

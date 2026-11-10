@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class EmployeeLeaveRequest extends Model
 {
+    use \App\Models\Concerns\StoresDateOnlyColumns;
+
     protected $fillable = [
         'employee_profile_id', 'starts_on', 'ends_on', 'reason', 'status',
         'decision_note', 'created_by', 'decided_by', 'decided_at',

@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class EmployeeAttendance extends Model
 {
+    use \App\Models\Concerns\StoresDateOnlyColumns;
+
     protected $table = 'employee_attendance';
     protected $fillable = [
         'employee_profile_id', 'attendance_date', 'status', 'notes', 'correction_reason',

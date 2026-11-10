@@ -7,6 +7,8 @@ use LogicException;
 
 class TradeDocumentCredit extends Model
 {
+    use \App\Models\Concerns\StoresDateOnlyColumns;
+
     protected $fillable = ['trade_document_id', 'sales_credit_note_id', 'supplier_debit_note_id', 'supplier_advance_application_id', 'customer_advance_application_id', 'credit_date', 'amount'];
     protected $casts = ['credit_date' => 'date', 'amount' => 'decimal:4'];
     protected static function booted(): void

@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class InventoryCostLayer extends Model
 {
+    use \App\Models\Concerns\StoresDateOnlyColumns;
+
     protected $fillable = [
         'inventory_material_id', 'source_type', 'source_id', 'original_quantity',
         'remaining_quantity', 'original_cost', 'currency_id', 'currency_code',

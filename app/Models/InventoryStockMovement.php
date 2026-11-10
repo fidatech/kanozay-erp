@@ -7,6 +7,8 @@ use LogicException;
 
 class InventoryStockMovement extends Model
 {
+    use \App\Models\Concerns\StoresDateOnlyColumns;
+
     protected $fillable = [
         'type', 'direction', 'quantity', 'reference_type', 'reference_id',
         'occurred_on', 'notes', 'created_by', 'company_warehouse_id',

@@ -7,6 +7,8 @@ use LogicException;
 
 class FixedAssetDepreciationEntry extends Model
 {
+    use \App\Models\Concerns\StoresDateOnlyColumns;
+
     protected $fillable=['fixed_asset_id','policy_id','period_month','amount','journal_entry_id','posted_by'];
     protected $casts=['period_month'=>'date','amount'=>'decimal:4'];
     protected static function booted():void {

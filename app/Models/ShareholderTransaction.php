@@ -7,6 +7,8 @@ use LogicException;
 
 class ShareholderTransaction extends Model
 {
+    use \App\Models\Concerns\StoresDateOnlyColumns;
+
     protected $fillable = [
         'number', 'idempotency_key', 'shareholder_id', 'type', 'transaction_date',
         'currency_id', 'financial_account_id', 'amount', 'reference', 'description',

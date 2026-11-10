@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class FixedAssetDepreciationPolicy extends Model
 {
+    use \App\Models\Concerns\StoresDateOnlyColumns;
+
     protected $fillable = [
         'fixed_asset_id','useful_life_months','salvage_value','start_month',
         'expense_ledger_id','accumulated_ledger_id','approved_by',

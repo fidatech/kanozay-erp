@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class SalesDeliveryNote extends Model
 {
+    use \App\Models\Concerns\StoresDateOnlyColumns;
+
     protected $fillable=[
         'number','submission_token','sales_invoice_id','delivery_date','status',
         'delivery_address','vehicle_number','driver_name','reference','notes',

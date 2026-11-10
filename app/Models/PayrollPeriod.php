@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class PayrollPeriod extends Model
 {
+    use \App\Models\Concerns\StoresDateOnlyColumns;
+
     protected $fillable = [
         'period_start', 'currency_id', 'status', 'expense_ledger_id', 'payable_ledger_id',
         'approval_journal_id', 'created_by', 'approved_by', 'approved_at',

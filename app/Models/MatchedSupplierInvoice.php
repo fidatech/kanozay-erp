@@ -7,6 +7,8 @@ use LogicException;
 
 class MatchedSupplierInvoice extends Model
 {
+    use \App\Models\Concerns\StoresDateOnlyColumns;
+
     protected $fillable = [
         'number','submission_token','supplier_id','purchase_order_id','goods_receipt_id',
         'currency_id','supplier_invoice_number','invoice_date','due_date','total','status',

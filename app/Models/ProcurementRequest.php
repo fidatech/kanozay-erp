@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class ProcurementRequest extends Model
 {
+    use \App\Models\Concerns\StoresDateOnlyColumns;
+
     protected $fillable=[
         'number','submission_token','status','requested_on','required_on','notes',
         'decision_note','created_by','approved_by','decided_at','purchase_order_id',

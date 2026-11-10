@@ -7,6 +7,8 @@ use LogicException;
 
 class SalesOrder extends Model
 {
+    use \App\Models\Concerns\StoresDateOnlyColumns;
+
     protected $fillable = ['number', 'submission_token', 'sales_quotation_id', 'customer_id', 'currency_id', 'currency_code', 'order_date', 'status', 'total', 'created_by'];
     protected $casts = ['order_date' => 'date', 'total' => 'decimal:4'];
     protected static function booted(): void

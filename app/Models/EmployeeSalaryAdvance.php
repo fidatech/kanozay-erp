@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class EmployeeSalaryAdvance extends Model
 {
+    use \App\Models\Concerns\StoresDateOnlyColumns;
+
     protected $fillable = [
         'employee_profile_id', 'currency_id', 'amount', 'issued_on', 'receivable_ledger_id',
         'money_transaction_id', 'submission_token', 'reason', 'created_by',

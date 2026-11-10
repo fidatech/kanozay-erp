@@ -7,6 +7,8 @@ use LogicException;
 
 class SalesInvoice extends Model
 {
+    use \App\Models\Concerns\StoresDateOnlyColumns;
+
     protected $fillable = [
         'number', 'submission_token', 'customer_id', 'currency_id', 'currency_code', 'invoice_date', 'due_date',
         'status', 'subtotal', 'total', 'journal_entry_id', 'trade_document_id', 'created_by',

@@ -7,6 +7,8 @@ use LogicException;
 
 class FinishedGoodDispatch extends Model
 {
+    use \App\Models\Concerns\StoresDateOnlyColumns;
+
     protected $fillable = ['number', 'submission_token', 'dispatch_date', 'reference', 'notes', 'created_by'];
     protected $casts = ['dispatch_date' => 'date'];
 
