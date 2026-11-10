@@ -25,6 +25,7 @@ use Tests\TestCase;
 class SalesInvoiceWorkflowTest extends TestCase
 {
     use RefreshDatabase;
+    use \Tests\Support\CapitalizesProductionBatches;
 
     public function test_invoice_posts_balanced_receivable_and_dispatches_batch_once(): void
     {
@@ -62,6 +63,28 @@ class SalesInvoiceWorkflowTest extends TestCase
             'production_batch_id' => $batch->id, 'type' => 'production_receipt',
             'quantity_packages' => 8, 'occurred_on' => now()->toDateString(), 'created_by' => $user->id,
         ]);
+
+        // Invoicing is blocked until the released batch is financially capitalized.
+        try {
+            app(SalesInvoiceService::class)->post([
+                'submission_token' => (string) Str::uuid(), 'customer_id' => $customer->id, 'currency_id' => $currency->id,
+                'income_ledger_id' => $income->id, 'invoice_date' => now()->toDateString(),
+                'due_date' => now()->addDays(14)->toDateString(),
+                'lines' => [['dispatch_token' => (string) Str::uuid(), 'production_batch_id' => $batch->id,
+                    'quantity_packages' => 1, 'unit_price' => '12.5000']],
+            ], $user->id);
+            $this->fail('An uncapitalized batch must not be invoiced.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('cost_of_goods_sold', $exception->errors());
+        }
+        $this->assertDatabaseCount('sales_invoices', 0);
+        $this->assertDatabaseCount('finished_good_dispatches', 0);
+        $this->assertEquals(8, $good->fresh()->on_hand_packages);
+        // Eight accepted packages carrying 80.0000 AFN of batch cost: 10.0000 per package.
+        $cost = $this->capitalizeBatchForTest($batch, $currency, '80.0000', now()->toDateString());
+        $finishedLedger = (int) $cost['policy']->finished_inventory_ledger_id;
+        $cogsLedger = (int) $cost['policy']->cogs_ledger_id;
+        $this->assertSame('80.0000', $this->ledgerBalanceForTest($finishedLedger, $currency->id));
 
         $quotation = app(SalesQuotationService::class)->create([
             'submission_token' => (string) Str::uuid(), 'customer_id' => $customer->id, 'currency_id' => $currency->id,
@@ -107,6 +130,13 @@ class SalesInvoiceWorkflowTest extends TestCase
         $this->assertDatabaseCount('sales_invoices', 1);
         $this->assertDatabaseCount('finished_good_dispatches', 1);
         $this->assertDatabaseCount('sales_invoice_lines', 1);
+        // COGS is posted once, in the batch cost currency, in the same transaction as the invoice.
+        $this->assertDatabaseCount('production_invoice_cogs_postings', 1);
+        $this->assertDatabaseHas('production_invoice_cogs_postings', [
+            'sales_invoice_line_id' => $invoice->lines->first()->id, 'quantity_packages' => 4, 'amount' => '40.0000',
+        ]);
+        $this->assertSame('40.0000', $this->ledgerBalanceForTest($finishedLedger, $currency->id));
+        $this->assertSame('40.0000', $this->ledgerBalanceForTest($cogsLedger, $currency->id));
         $this->assertNotEmpty($accounts['receivable']->id);
         Permission::findOrCreate('sales.view', 'web');
         $user->givePermissionTo('sales.view');
@@ -123,15 +153,60 @@ class SalesInvoiceWorkflowTest extends TestCase
         $partial['lines'][0]['quantity_packages'] = 4;
         $secondInvoice = $service->post($partial, $user->id);
         $this->assertSame('50.0000', $secondInvoice->total);
+        // The whole batch is sold: finished-goods GL value is fully relieved to COGS.
+        $this->assertSame('0.0000', $this->ledgerBalanceForTest($finishedLedger, $currency->id));
+        $this->assertSame('80.0000', $this->ledgerBalanceForTest($cogsLedger, $currency->id));
+        $this->assertEquals(0, $good->fresh()->on_hand_packages);
 
+        // A credit note can never restock directly; returned goods enter QC quarantine.
+        try {
+            app(SalesCreditNoteService::class)->post($invoice->id, [
+                'submission_token' => (string) Str::uuid(), 'credit_date' => now()->toDateString(),
+                'reason' => 'Synthetic returned package', 'lines' => [[
+                    'sales_invoice_line_id' => $invoice->lines->first()->id,
+                    'quantity_packages' => 1, 'restock' => true,
+                ]],
+            ], $user->id);
+            $this->fail('Direct restock from a credit note must be rejected.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('credit_note', $exception->errors());
+        }
+        $this->assertDatabaseCount('sales_credit_notes', 0);
         $credit = app(SalesCreditNoteService::class)->post($invoice->id, [
             'submission_token' => (string) Str::uuid(), 'credit_date' => now()->toDateString(),
             'reason' => 'Synthetic returned package', 'lines' => [[
                 'sales_invoice_line_id' => $invoice->lines->first()->id,
-                'quantity_packages' => 1, 'restock' => true,
+                'quantity_packages' => 1, 'restock' => false,
             ]],
         ], $user->id);
         $this->assertSame('12.5000', $credit->total);
+        // Credit alone restores neither saleable stock nor inventory value.
+        $this->assertEquals(0, $good->fresh()->on_hand_packages);
+        $this->assertSame(0, app(FinishedGoodDispatchService::class)->availablePackages($batch->fresh()));
+        $this->assertSame('0.0000', $this->ledgerBalanceForTest($finishedLedger, $currency->id));
+        $quarantine = \App\Models\SalesReturnQuarantine::firstOrFail();
+        $this->assertSame('quarantined', $quarantine->status);
+        // The person who registered the return cannot release it.
+        try {
+            app(\App\Services\SalesReturnQuarantineService::class)->decide($quarantine->id, [
+                'action' => 'release', 'decided_on' => now()->toDateString(),
+                'quality_reference' => 'QC-SELF', 'decision_notes' => 'Self release must be refused.',
+            ], $user->id);
+            $this->fail('Self-approved QC release must be rejected.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('action', $exception->errors());
+        }
+        $inspector = User::factory()->create();
+        app(\App\Services\SalesReturnQuarantineService::class)->decide($quarantine->id, [
+            'action' => 'release', 'decided_on' => now()->toDateString(),
+            'quality_reference' => 'QC-RETURN-INV-1', 'decision_notes' => 'Independent inspection passed.',
+        ], $inspector->id);
+        // Independent QC release restores one package and exactly its original COGS (10.0000).
+        $this->assertDatabaseHas('production_return_cost_postings', [
+            'sales_return_quarantine_id' => $quarantine->id, 'quantity_packages' => 1, 'amount' => '10.0000',
+        ]);
+        $this->assertSame('10.0000', $this->ledgerBalanceForTest($finishedLedger, $currency->id));
+        $this->assertSame('70.0000', $this->ledgerBalanceForTest($cogsLedger, $currency->id));
         $this->assertEquals(1, $good->fresh()->on_hand_packages);
         $this->assertSame(1, app(FinishedGoodDispatchService::class)->availablePackages($batch->fresh()));
         $this->assertDatabaseHas('trade_document_credits', ['trade_document_id' => $invoice->trade_document_id, 'amount' => '12.5000']);
@@ -145,7 +220,10 @@ class SalesInvoiceWorkflowTest extends TestCase
             $this->assertArrayHasKey('invoice', $exception->errors());
         }
         $this->assertDatabaseCount('sales_invoices', 2);
-        $this->assertDatabaseCount('journal_entries', 3);
+        // 3 fixture cost journals + 2 invoices + 2 COGS + 1 credit note + 1 QC return recovery.
+        $this->assertSame(3, \App\Models\JournalEntry::where('number', 'like', 'FGC-%')->where('status', 'posted')->count());
+        $this->assertDatabaseCount('journal_entries', 9);
+        $this->assertSame(0, \App\Models\JournalEntry::where('status', '!=', 'posted')->count());
         $this->assertDatabaseCount('finished_good_dispatches', 2);
         $this->assertEquals(1, $good->fresh()->on_hand_packages);
         $this->assertEquals(8, \App\Models\SalesInvoiceLine::where('sales_order_line_id', $salesOrderLine->id)->sum('quantity_packages'));

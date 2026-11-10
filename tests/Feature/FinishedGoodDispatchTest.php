@@ -48,7 +48,7 @@ class FinishedGoodDispatchTest extends TestCase
         $this->assertDatabaseCount('finished_good_dispatches', 0);
     }
 
-    public function test_dispatch_route_requires_inventory_update_permission(): void
+    public function test_dispatch_route_requires_permission_and_blocks_uninvoiced_direct_dispatch(): void
     {
         [$good, $batch, $user] = $this->releasedBatch();
         Permission::findOrCreate('inventory.update', 'web');
@@ -60,8 +60,12 @@ class FinishedGoodDispatchTest extends TestCase
         $this->actingAs($user)->post(route('production.finished-goods.dispatches.store', $good), [
             'submission_token' => (string) Str::uuid(), 'production_batch_id' => $batch->id,
             'quantity_packages' => 1, 'dispatch_date' => '2026-11-02',
-        ])->assertRedirect(route('production.finished-goods.show', $good));
-        $this->assertEquals(9, $good->fresh()->on_hand_packages);
+        ])->assertSessionHasErrors('dispatch');
+        // Standalone dispatch is deliberately disabled even for authorized users: it would
+        // reduce stock without a customer invoice or COGS posting. Saleable stock leaves
+        // through SalesInvoiceService; internal moves use warehouse transfers.
+        $this->assertEquals(10, $good->fresh()->on_hand_packages);
+        $this->assertDatabaseCount('finished_good_dispatches', 0);
     }
 
     private function releasedBatch(): array

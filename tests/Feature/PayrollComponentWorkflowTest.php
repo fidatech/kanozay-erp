@@ -46,11 +46,20 @@ class PayrollComponentWorkflowTest extends TestCase {
   $this->actingAs($u)->post(route('hr.payroll.components.store',[$p,$line]),$deduction)->assertRedirect();
   $this->assertSame('110.0000',$line->fresh()->payable_amount);
   $this->assertDatabaseCount('payroll_line_components',2);
-  $this->actingAs($u)->post(route('hr.payroll.approve',$p),[
+  // Evidence review covers the components; approval needs someone other than the preparer.
+  $approver=User::factory()->create();$approver->givePermissionTo(['hr.view','hr.update','finance.update']);
+  $this->actingAs($approver)->post(route('hr.payroll.lines.review',[$p,$line]),[
+   'reference'=>'SYN-COMPONENT-REVIEW','review_notes'=>'Synthetic allowance and deduction evidence reviewed.',
+   'confirm_evidence'=>1,
+  ])->assertRedirect()->assertSessionHasNoErrors();
+  $approval=[
    'expense_ledger_id'=>LedgerAccount::where('code','5410')->value('id'),
    'payable_ledger_id'=>LedgerAccount::where('code','2131.01')->value('id'),
    'confirm_review'=>1,
-  ])->assertRedirect();
+  ];
+  $this->actingAs($u)->post(route('hr.payroll.approve',$p),$approval)->assertSessionHasErrors('payroll');
+  $this->assertSame('draft',$p->fresh()->status);
+  $this->actingAs($approver)->post(route('hr.payroll.approve',$p),$approval)->assertRedirect()->assertSessionHasNoErrors();
   $this->assertSame('approved',$p->fresh()->status);
   $this->assertSame('posted',$p->fresh()->approvalJournal->status);
   $this->assertDatabaseCount('journal_lines',4);

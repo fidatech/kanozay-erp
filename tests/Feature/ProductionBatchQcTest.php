@@ -36,9 +36,52 @@ class ProductionBatchQcTest extends TestCase
         $this->warehouse->givePermissionTo(['inventory.update', 'inventory.create', 'inventory.view', 'administration.view']);
     }
 
+    /** Posts one valued opening lot and issues it to the order so the batch has traceable inputs. */
+    private function issueTraceableMaterial($order): void
+    {
+        $currency = Currency::firstOrCreate(['code' => 'AFN'], ['name' => 'Afghani', 'is_active' => true, 'is_base' => true]);
+        $material = InventoryMaterial::create(['sku' => 'TRACE-01', 'name' => 'Synthetic traceable input', 'unit' => 'kg']);
+        $line = $order->materials()->create([
+            'line_number' => 1, 'material_name' => 'Synthetic traceable input', 'unit' => 'kg',
+            'quantity_per_package' => '1.000000', 'required_quantity' => '5.000000',
+            'issued_quantity' => '5.000000', 'inventory_material_id' => $material->id,
+        ]);
+        $stock = app(InventoryStockService::class);
+        $stock->post($material, [
+            'type' => 'opening', 'direction' => 'in', 'quantity' => '5.000000',
+            'unit_cost' => '2.000000', 'currency_id' => $currency->id,
+            'reference_type' => 'opening', 'reference_id' => $material->id,
+            'occurred_on' => now()->toDateString(), 'created_by' => $this->operator->id,
+        ]);
+        $stock->post($material, [
+            'type' => 'issue', 'direction' => 'out', 'quantity' => '5.000000',
+            'reference_type' => 'production_order_material', 'reference_id' => $line->id,
+            'occurred_on' => now()->toDateString(), 'created_by' => $this->operator->id,
+        ]);
+    }
+
+    public function test_batch_without_traceable_material_issues_cannot_be_released_to_stock(): void
+    {
+        [$order, $good] = $this->setupOrder();
+        $batch = $this->submitBatch($order, $good, 6);
+        $this->actingAs($this->laboratory)->post(route('production.orders.batches.checks.store', [$order, $batch]), [
+            'test_name' => 'Moisture', 'result' => 'pass',
+        ])->assertRedirect();
+        $this->actingAs($this->laboratory)->post(route('production.orders.batches.decide', [$order, $batch]), [
+            'decision' => 'approve', 'rejected_packages' => 0, 'qc_notes' => 'Passed.',
+        ])->assertRedirect();
+        $this->actingAs($this->warehouse)->post(route('production.orders.batches.release', [$order, $batch]), [
+            'occurred_on' => now()->toDateString(),
+        ])->assertSessionHasErrors('production_batch');
+        $this->assertSame('qc_approved', $batch->fresh()->status);
+        $this->assertDatabaseCount('finished_good_movements', 0);
+        $this->assertEquals(0, $good->fresh()->on_hand_packages);
+    }
+
     public function test_accepted_packages_only_enter_stock_after_lab_approval_and_warehouse_release(): void
     {
         [$order, $good] = $this->setupOrder();
+        $this->issueTraceableMaterial($order);
         $this->actingAs($this->operator)->post(route('production.orders.batches.store', $order), [
             'finished_good_id' => $good->id, 'reported_packages' => 17,
         ])->assertRedirect();
@@ -60,7 +103,7 @@ class ProductionBatchQcTest extends TestCase
 
         $this->actingAs($this->warehouse)->post(route('production.orders.batches.release', [$order, $batch]), [
             'occurred_on' => now()->toDateString(),
-        ])->assertRedirect();
+        ])->assertRedirect()->assertSessionHasNoErrors();
         $this->assertSame('completed', $order->fresh()->status);
         $this->assertSame('released', $batch->fresh()->status);
         $this->assertEquals(15, $good->fresh()->on_hand_packages);

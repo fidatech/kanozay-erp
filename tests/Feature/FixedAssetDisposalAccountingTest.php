@@ -51,7 +51,10 @@ class FixedAssetDisposalAccountingTest extends TestCase {
    'created_at'=>now(),'updated_at'=>now(),
   ]);
   $asset->update(['status'=>'disposed']);
-  return [$user,$asset,$disposalId,$j,$ppe];
+  // Segregation of duties: the final finance poster must differ from the person
+  // who recorded the physical disposal.
+  $poster=User::factory()->create();$poster->givePermissionTo(['finance.update','finance.view']);
+  return [$poster,$asset,$disposalId,$j,$ppe,$user];
  }
  public function test_verified_acquisition_posts_balanced_disposal_with_receivable_and_book_loss():void {
   [$u,$asset,$id,$original,$ppe]=$this->records();
@@ -72,6 +75,18 @@ class FixedAssetDisposalAccountingTest extends TestCase {
   try{app(FixedAssetDisposalPostingService::class)->post($id,$data,$u->id);
    $this->fail('Duplicate posting should be blocked.');
   }catch(ValidationException $e){$this->assertArrayHasKey('disposal',$e->errors());}
+ }
+ public function test_recorder_of_physical_disposal_cannot_post_its_own_retirement_journal():void {
+  [$poster,$asset,$id,$original,$ppe,$recorder]=$this->records();
+  try{app(FixedAssetDisposalPostingService::class)->post($id,[
+   'acquisition_journal_id'=>$original->id,'asset_ledger_id'=>$ppe->id,
+   'receivable_ledger_id'=>LedgerAccount::where('code','1122')->value('id'),
+   'loss_ledger_id'=>LedgerAccount::where('code','5700')->value('id'),
+   'reconciliation_reference'=>'BOARD-ASSET-SELF-1'],$recorder->id);
+   $this->fail('Recorder must not authorize the final disposal journal.');
+  }catch(ValidationException $e){$this->assertArrayHasKey('disposal',$e->errors());}
+  $this->assertDatabaseCount('fixed_asset_disposal_postings',0);
+  $this->assertDatabaseCount('journal_entries',1);
  }
  public function test_wrong_acquisition_reference_rejects_disposal_posting():void {
   [$u,$asset,$id,$original,$ppe]=$this->records();

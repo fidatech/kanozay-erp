@@ -34,7 +34,36 @@ class FixedAssetDepreciationTest extends TestCase
             'acquisition_cost'=>'120.0000','currency_id'=>$currency->id,
             'source_reference'=>'SYNTHETIC-PO-1','status'=>'active','created_by'=>$user->id,
         ]);
+        // Depreciation requires the registered cost to be reconciled to exactly one
+        // posted, unreversed acquisition debit (FixedAssetCapitalizationService).
+        $ppe=LedgerAccount::create(['code'=>'1212','name'=>'Plant and machinery','type'=>'asset','is_active'=>true,'is_group'=>false]);
+        $capital=LedgerAccount::create(['code'=>'3200','name'=>'Owner capital','type'=>'equity','is_active'=>true,'is_group'=>false]);
+        $acquisition=JournalEntry::create([
+            'number'=>'FA-ACQ-TEST-1','reference'=>'SYNTHETIC-PO-1',
+            'entry_date'=>$asset->acquired_on,'currency_id'=>$currency->id,
+            'status'=>'draft','description'=>'Synthetic asset acquisition','created_by'=>$user->id,
+        ]);
+        $acquisition->lines()->createMany([
+            ['ledger_account_id'=>$ppe->id,'debit'=>'120.0000','credit'=>'0'],
+            ['ledger_account_id'=>$capital->id,'debit'=>'0','credit'=>'120.0000'],
+        ]);
+        app(\App\Services\Accounting\JournalPostingService::class)->post($acquisition,$user->id);
+        app(\App\Services\FixedAssetCapitalizationService::class)->link($asset,[
+            'journal_line_id'=>$acquisition->lines()->where('ledger_account_id',$ppe->id)->value('id'),
+            'reconciliation_reference'=>'SYNTHETIC-CAPEX-1',
+            'evidence_notes'=>'Synthetic acquisition evidence for automated testing.',
+        ],$user->id);
         return [$user,$asset,$expense,$accum];
+    }
+
+    public function test_depreciation_is_blocked_until_acquisition_cost_is_reconciled_to_posted_journal():void
+    {
+        [$user,$asset,$expense,$accum]=$this->fixture();
+        $this->policy($user,$asset,$expense,$accum);
+        \Illuminate\Support\Facades\DB::table('fixed_asset_capitalizations')->where('fixed_asset_id',$asset->id)->delete();
+        $this->actingAs($user)->post(route('assets.depreciation.post',$asset),['month'=>now()->subMonths(4)->format('Y-m')])
+            ->assertSessionHasErrors('asset');
+        $this->assertDatabaseCount('fixed_asset_depreciation_entries',0);
     }
 
     private function policy($user,$asset,$expense,$accum):array
@@ -61,8 +90,10 @@ class FixedAssetDepreciationTest extends TestCase
             $sum=$sum->plus((string)$entry->amount);
         }
         $this->assertSame('120.0000',(string)$sum->toScale(4));
-        $this->assertDatabaseCount('journal_entries',3);
-        $this->assertSame(3,JournalEntry::where('status','posted')->count());
+        // Three depreciation journals plus the one acquisition journal from the fixture.
+        $this->assertSame(3,JournalEntry::where('number','like','FA-DEP-%')->where('status','posted')->count());
+        $this->assertDatabaseCount('journal_entries',4);
+        $this->assertSame(4,JournalEntry::where('status','posted')->count());
         $this->actingAs($user)->post(route('assets.depreciation.post',$asset),['month'=>$start])->assertSessionHasErrors('month');
         $this->actingAs($user)->post(route('assets.depreciation.policy',$asset),$policy)->assertSessionHasErrors('policy');
     }
@@ -75,7 +106,8 @@ class FixedAssetDepreciationTest extends TestCase
         $this->policy($user,$asset,$expense,$accum);
         $this->actingAs($user)->post(route('assets.depreciation.post',$asset),['month'=>now()->format('Y-m')])
             ->assertSessionHasErrors('month');
-        $this->assertDatabaseCount('journal_entries',0);
+        $this->assertSame(0,JournalEntry::where('number','like','FA-DEP-%')->count());
+        $this->assertDatabaseCount('journal_entries',1);
     }
 
     public function test_requires_finance_permission_and_correct_ledger_types():void

@@ -14,6 +14,7 @@ use Tests\TestCase;
 class SalesPaidRefundWorkflowTest extends TestCase
 {
  use RefreshDatabase;
+ use \Tests\Support\CapitalizesProductionBatches;
 
  public function test_previously_paid_sale_can_be_returned_without_negative_receivable():void
  {
@@ -47,6 +48,10 @@ class SalesPaidRefundWorkflowTest extends TestCase
   $good->movements()->create(['production_batch_id'=>$batch->id,'type'=>'production_receipt',
    'quantity_packages'=>5,'occurred_on'=>today()->toDateString(),'created_by'=>$user->id]);
 
+  // Five accepted packages carrying 250.0000 AFN of batch cost: 50.0000 per package.
+  $cost=$this->capitalizeBatchForTest($batch,$currency,'250.0000',today()->toDateString());
+  $finishedLedger=(int)$cost['policy']->finished_inventory_ledger_id;
+  $cogsLedger=(int)$cost['policy']->cogs_ledger_id;
   $invoice=app(SalesInvoiceService::class)->post([
    'submission_token'=>(string)Str::uuid(),'customer_id'=>$customer->id,
    'currency_id'=>$currency->id,'income_ledger_id'=>\App\Models\LedgerAccount::where('code','4110')->value('id'),
@@ -55,6 +60,9 @@ class SalesPaidRefundWorkflowTest extends TestCase
     'quantity_packages'=>4,'unit_price'=>'12.5000']],
   ],$user->id);
   $this->assertSame('50.0000',$invoice->total);
+  $this->assertDatabaseHas('production_invoice_cogs_postings',['quantity_packages'=>4,'amount'=>'200.0000']);
+  $this->assertSame('50.0000',$this->ledgerBalanceForTest($finishedLedger,$currency->id));
+  $this->assertSame('200.0000',$this->ledgerBalanceForTest($cogsLedger,$currency->id));
   // A posted, allocated receipt of 30 leaves 20 unpaid.
   $receiptJournal=JournalEntry::create(['number'=>'REC-REF-TEST','entry_date'=>today()->toDateString(),
    'description'=>'Received partial invoice payment','currency_id'=>$currency->id,
@@ -108,11 +116,16 @@ class SalesPaidRefundWorkflowTest extends TestCase
   $this->assertSame(5,$good->fresh()->on_hand_packages);
   $this->assertSame(5,app(\App\Services\FinishedGoodDispatchService::class)->availablePackages($batch->fresh()));
   $this->assertDatabaseHas('sales_return_quarantines',['id'=>$q->id,'status'=>'released']);
+  // QC release restores the full original COGS of the four returned packages to inventory.
+  $this->assertDatabaseHas('production_return_cost_postings',['sales_return_quarantine_id'=>$q->id,'quantity_packages'=>4,'amount'=>'200.0000']);
+  $this->assertSame('250.0000',$this->ledgerBalanceForTest($finishedLedger,$currency->id));
+  $this->assertSame('0.0000',$this->ledgerBalanceForTest($cogsLedger,$currency->id));
   $this->actingAs($quality)->post(route('sales.returns.quarantine.decision',$q),[
    'action'=>'release','decided_on'=>today()->toDateString(),
    'quality_reference'=>'QC-RETURN-01','decision_notes'=>'Second release attempt must not double count.',
   ])->assertSessionHasErrors('action');
   $this->assertSame(5,$good->fresh()->on_hand_packages);
+  $this->assertDatabaseCount('production_return_cost_postings',1);
   $this->actingAs($user)->get(route('sales.credit-notes.show',$note))
    ->assertOk()->assertSee('REFUND-APPROVED-01');
   $this->assertSame('50.0000',\App\Models\JournalLine::where('journal_entry_id',$note->journal_entry_id)->sum('credit') == 50 ? '50.0000' : 'wrong');

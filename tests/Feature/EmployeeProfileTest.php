@@ -190,7 +190,7 @@ class EmployeeProfileTest extends TestCase
         @unlink($path);
     }
 
-    public function test_hr_view_filters_directory_and_status_change_does_not_resubmit_personal_data(): void
+    public function test_hr_view_filters_directory_and_employment_date_route_cannot_deactivate_employee(): void
     {
         $user = User::factory()->create();
         $this->grant($user, 'hr.view', 'hr.create', 'hr.update');
@@ -199,7 +199,20 @@ class EmployeeProfileTest extends TestCase
 
         $this->actingAs($user)->get(route('workspace.page', ['hr', 'employees']))
             ->assertOk()->assertSee('Synthetic UAT Employee')->assertDontSee('SYNTHETIC-NID')->assertDontSee('SYNTHETIC-TAX');
-        $this->actingAs($user)->patch(route('hr.employees.update', $employee), ['is_active' => false])->assertRedirect();
-        $this->assertDatabaseHas('employee_profiles', ['id' => $employee->id, 'is_active' => 0]);
+        // Deactivation belongs to the approved employee exit workflow (EmployeeExitService),
+        // which reconciles advances, payroll and returned assets first. The employment-date
+        // route must reject a bare status change and leave the employee active.
+        $this->actingAs($user)->patch(route('hr.employees.update', $employee), ['is_active' => false])
+            ->assertSessionHasErrors(['hired_on', 'evidence_reference', 'reason']);
+        $this->assertDatabaseHas('employee_profiles', ['id' => $employee->id, 'is_active' => 1]);
+        $hiredOn = today()->subMonth()->toDateString();
+        $this->actingAs($user)->patch(route('hr.employees.update', $employee), [
+            'is_active' => false, 'hired_on' => $hiredOn,
+            'evidence_reference' => 'SYNTHETIC-CONTRACT-1',
+            'reason' => 'Verified against the signed synthetic employment contract.',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $employee->refresh();
+        $this->assertTrue((bool) $employee->is_active);
+        $this->assertSame($hiredOn, $employee->hired_on->toDateString());
     }
 }

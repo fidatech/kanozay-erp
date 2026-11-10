@@ -22,6 +22,7 @@ use Tests\TestCase;
 class GoodsReceiptLandedCostTest extends TestCase
 {
     use RefreshDatabase;
+    use \Tests\Support\CapitalizesProductionBatches;
 
     public function test_rejects_unsupported_component_before_accessing_receipt(): void
     {
@@ -90,9 +91,58 @@ class GoodsReceiptLandedCostTest extends TestCase
     public function test_grn_landed_cost_is_carried_into_fifo_issue_cost(): void
     {
         [$user, , $receipt] = $this->postedReceiptWithTwoLines();
-        app(GoodsReceiptLandedCostService::class)->record($receipt->id, 'freight', '20.00', $user->id);
+        $cost = app(GoodsReceiptLandedCostService::class)->record($receipt->id, 'freight', '20.00', $user->id);
         $line = $receipt->lines()->orderBy('id')->first();
         $material = $line->material;
+        $issue = [
+            'type' => 'issue', 'direction' => 'out', 'quantity' => '0.500000',
+            'reference_type' => 'cost-test-issue', 'reference_id' => $line->id,
+            'occurred_on' => '2026-11-02', 'created_by' => $user->id,
+        ];
+
+        // The lot cannot be issued while its freight is recorded but not capitalized in the GL.
+        try {
+            app(InventoryStockService::class)->post($material, $issue);
+            $this->fail('A lot with uncapitalized landed cost must not be issued.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('landed_cost_posting', $exception->errors());
+        }
+        $this->assertSame('1.000000', $material->fresh()->on_hand_quantity);
+        $this->assertDatabaseCount('inventory_cost_consumptions', 0);
+
+        // Finance reclassifies one exact posted freight expense debit to raw-material inventory.
+        $currency = Currency::where('code', 'AFN')->firstOrFail();
+        ['policy' => $policy, 'ledgers' => $ledgers] = $this->approvedManufacturingPolicyForTest($currency);
+        $freight = \App\Models\LedgerAccount::create(['code' => 'T-FREIGHT', 'name' => 'Test freight expense', 'type' => 'expense', 'is_active' => true, 'is_group' => false]);
+        $expense = \App\Models\JournalEntry::create([
+            'number' => 'T-FREIGHT-1', 'entry_date' => '2026-11-02', 'reference' => 'SYNTHETIC-FREIGHT',
+            'description' => 'Synthetic freight bill', 'currency_id' => $currency->id, 'status' => 'draft', 'created_by' => $user->id,
+        ]);
+        $expense->lines()->createMany([
+            ['ledger_account_id' => $freight->id, 'debit' => '20.0000', 'credit' => '0'],
+            ['ledger_account_id' => $ledgers['opening']->id, 'debit' => '0', 'credit' => '20.0000'],
+        ]);
+        app(\App\Services\Accounting\JournalPostingService::class)->post($expense, $user->id);
+        $capitalization = [
+            'source_expense_journal_line_id' => $expense->lines()->where('ledger_account_id', $freight->id)->value('id'),
+            'accounting_date' => '2026-11-02', 'approval_reference' => 'TEST-LCC-1',
+            'evidence_notes' => 'Synthetic freight evidence for automated testing.',
+        ];
+        $posting = app(\App\Services\GoodsReceiptLandedCostPostingService::class);
+        try {
+            $posting->post($cost->id, $capitalization, $user->id);
+            $this->fail('The recorder of a landed cost must not approve its own GL capitalization.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('landed_cost_posting', $exception->errors());
+        }
+        $approver = User::factory()->create();
+        $posted = $posting->post($cost->id, $capitalization, $approver->id);
+        $replayed = $posting->post($cost->id, $capitalization, $approver->id);
+        $this->assertSame((int) $posted->id, (int) $replayed->id);
+        $this->assertDatabaseCount('goods_receipt_landed_cost_postings', 1);
+        // Freight left the expense ledger and now sits in raw-material inventory, exactly once.
+        $this->assertSame('20.0000', $this->ledgerBalanceForTest((int) $policy->material_inventory_ledger_id, $currency->id));
+        $this->assertSame('0.0000', $this->ledgerBalanceForTest($freight->id, $currency->id));
 
         app(InventoryStockService::class)->post($material, [
             'type' => 'issue', 'direction' => 'out', 'quantity' => '0.500000',

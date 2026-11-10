@@ -31,7 +31,7 @@ class PayrollTaxPolicyWorkflowTest extends TestCase {
   $service=app(PayrollTaxPolicyService::class);
   $policy=$service->create([
    'code'=>'TEST-TAX-AFN','name'=>'Synthetic withholding policy',
-   'currency_id'=>$currency->id,'effective_from'=>today()->startOfMonth()->toDateString(),
+   'currency_id'=>$currency->id,'effective_from'=>today()->subMonthNoOverflow()->startOfMonth()->toDateString(),
    'basis'=>'base_salary','liability_ledger_id'=>$liability->id,
    'notes'=>'This is synthetic test data, not statutory payroll tax guidance.',
    'brackets'=>[
@@ -49,7 +49,7 @@ class PayrollTaxPolicyWorkflowTest extends TestCase {
    'approval_reference'=>'TEST-APPROVAL-99',
   ])->assertRedirect();
   $this->actingAs($maker);
-  $period=app(PayrollPeriodService::class)->create(today()->format('Y-m'),$currency->id,$maker->id);
+  $period=app(PayrollPeriodService::class)->create(today()->subMonthNoOverflow()->format('Y-m'),$currency->id,$maker->id);
   $this->actingAs($maker)->post(route('hr.payroll.tax-policies.apply',$policy),[
    'payroll_period_id'=>$period->id,'confirm_review'=>'1',
   ])->assertRedirect();
@@ -64,11 +64,19 @@ class PayrollTaxPolicyWorkflowTest extends TestCase {
   ])->assertRedirect();
   $this->assertDatabaseCount('payroll_line_components',1);
 
-  $this->actingAs($maker)->post(route('hr.payroll.approve',$period),[
+  // The salary month has ended, the line evidence (including withholding) is reviewed,
+  // and an approver other than the payroll preparer posts the accrual.
+  $this->actingAs($checker)->post(route('hr.payroll.lines.review',[$period,$line]),[
+   'reference'=>'SYN-TAX-REVIEW','review_notes'=>'Synthetic salary and withholding evidence reviewed.',
+   'confirm_evidence'=>1,
+  ])->assertRedirect()->assertSessionHasNoErrors();
+  $approval=[
    'expense_ledger_id'=>LedgerAccount::where('code','5410')->value('id'),
    'payable_ledger_id'=>LedgerAccount::where('code','2131.01')->value('id'),
    'confirm_review'=>1,
-  ])->assertRedirect();
+  ];
+  $this->actingAs($maker)->post(route('hr.payroll.approve',$period),$approval)->assertSessionHasErrors('payroll');
+  $this->actingAs($checker)->post(route('hr.payroll.approve',$period),$approval)->assertRedirect()->assertSessionHasNoErrors();
   $journal=$period->fresh()->approvalJournal;
   $this->assertSame('posted',$journal->status);
   $this->assertDatabaseHas('journal_lines',[

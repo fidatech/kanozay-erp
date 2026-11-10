@@ -87,7 +87,11 @@ class ModulePageStructureTest extends TestCase
             ->assertOk()->assertSee('Finance &amp; Accounting Overview', false);
         $this->actingAs($user)->get(route('admin.index'))
             ->assertOk()->assertSee('Administration Overview');
-        $this->assertArrayNotHasKey('overview', config('erp_pages.reports.pages'));
+        // Reports gained a dedicated operations overview page (commit e0835c5); it must render.
+        $this->assertArrayHasKey('overview', config('erp_pages.reports.pages'));
+        Permission::findOrCreate('reports.view', 'web');
+        $user->givePermissionTo('reports.view');
+        $this->actingAs($user)->get(route('workspace.page', ['reports', 'overview']))->assertOk();
     }
 
     public function test_unknown_pages_and_unauthorized_access_are_rejected(): void

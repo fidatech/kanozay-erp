@@ -36,7 +36,7 @@ class OperationalReportCenterTest extends TestCase
 
         $this->actingAs($user)
             ->get(route('workspace.page', ['reports', 'inventory']))
-            ->assertSee('Current company-wide stock snapshot')
+            ->assertSee('Current company-wide material on-hand and reservation snapshot')
             ->assertDontSee('Structure ready');
     }
 

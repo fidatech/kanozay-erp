@@ -39,7 +39,7 @@ class FinancePeriodClosureWorkflowTest extends TestCase {
   $j=$this->journal($closer,$currency,$debit,$credit,$date);
   app(JournalPostingService::class)->post($j,$closer->id);
   $this->actingAs($closer)->post(route('finance.periods.close'),[
-   'period_start'=>$date,'authorization_reference'=>'BOARD-FP-100',
+   'period_start'=>$date,'confirm_source_reconciliation'=>'1','authorization_reference'=>'BOARD-FP-100',
    'closing_note'=>'Approved and reviewed accounting closure for synthetic testing',
   ])->assertRedirect();
   $this->assertDatabaseHas('finance_period_closures',['period_start'=>$date,'status'=>'closed','journal_count'=>1]);
@@ -64,7 +64,7 @@ class FinancePeriodClosureWorkflowTest extends TestCase {
   $date=today()->subMonthNoOverflow()->startOfMonth()->toDateString();
   $this->journal($closer,$currency,$a,$b,$date);
   $this->actingAs($closer)->post(route('finance.periods.close'),[
-   'period_start'=>$date,'authorization_reference'=>'BOARD-FP-200',
+   'period_start'=>$date,'confirm_source_reconciliation'=>'1','authorization_reference'=>'BOARD-FP-200',
    'closing_note'=>'Attempting to close while outstanding drafts still exist',
   ])->assertSessionHasErrors('period_start');
   $this->assertDatabaseCount('finance_period_closures',0);
