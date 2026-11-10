@@ -7,15 +7,15 @@ return new class extends Migration {
     public function up(): void {
         Schema::create('finance_supplier_short_credit_settlements', function (Blueprint $t) {
             $t->id();
-            $t->foreignId('finance_historical_correction_case_id')->unique()->constrained('finance_historical_correction_cases',indexName:'short_credit_case_fk')->restrictOnDelete();
-            $t->foreignId('finance_supplier_return_credit_dispute_id')->unique()->constrained('finance_supplier_return_credit_disputes',indexName:'short_credit_dispute_fk')->restrictOnDelete();
-            $t->foreignId('purchase_return_record_id')->unique()->constrained('purchase_return_records',indexName:'short_credit_return_fk')->restrictOnDelete();
+            $t->foreignId('finance_historical_correction_case_id')->unique('short_credit_case_uq')->constrained('finance_historical_correction_cases',indexName:'short_credit_case_fk')->restrictOnDelete();
+            $t->foreignId('finance_supplier_return_credit_dispute_id')->unique('short_credit_dispute_uq')->constrained('finance_supplier_return_credit_disputes',indexName:'short_credit_dispute_fk')->restrictOnDelete();
+            $t->foreignId('purchase_return_record_id')->unique('short_credit_return_uq')->constrained('purchase_return_records',indexName:'short_credit_return_fk')->restrictOnDelete();
             $t->foreignId('trade_document_id')->constrained('trade_documents',indexName:'short_credit_document_fk')->restrictOnDelete();
             $t->foreignId('currency_id')->constrained('currencies',indexName:'short_credit_currency_fk')->restrictOnDelete();
             $t->foreignId('inventory_ledger_id')->constrained('ledger_accounts',indexName:'short_credit_inventory_fk')->restrictOnDelete();
             $t->foreignId('payable_ledger_id')->constrained('ledger_accounts',indexName:'short_credit_payable_fk')->restrictOnDelete();
             $t->foreignId('difference_ledger_id')->constrained('ledger_accounts',indexName:'short_credit_difference_fk')->restrictOnDelete();
-            $t->foreignId('journal_entry_id')->nullable()->unique()->constrained('journal_entries',indexName:'short_credit_journal_fk')->restrictOnDelete();
+            $t->foreignId('journal_entry_id')->nullable()->unique('short_credit_journal_uq')->constrained('journal_entries',indexName:'short_credit_journal_fk')->restrictOnDelete();
             $t->string('treatment',35); $t->string('status',25)->default('submitted');
             $t->date('posting_date');
             $t->decimal('source_base_return_value',20,4);
@@ -30,13 +30,15 @@ return new class extends Migration {
             $t->timestamps();
         });
         Schema::table('trade_document_credits',function(Blueprint $t){
-            $t->foreignId('supplier_short_credit_settlement_id')->nullable()->unique()
+            $t->foreignId('supplier_short_credit_settlement_id')->nullable()->unique('trade_short_credit_uq')
                 ->constrained('finance_supplier_short_credit_settlements',indexName:'trade_short_credit_fk')->restrictOnDelete();
         });
     }
     public function down(): void {
         Schema::table('trade_document_credits',function(Blueprint $t){
-            $t->dropConstrainedForeignId('supplier_short_credit_settlement_id');
+            $t->dropForeign('trade_short_credit_fk');
+            $t->dropUnique('trade_short_credit_uq');
+            $t->dropColumn('supplier_short_credit_settlement_id');
         });
         Schema::dropIfExists('finance_supplier_short_credit_settlements');
     }

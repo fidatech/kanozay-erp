@@ -11,9 +11,9 @@ return new class extends Migration
         Schema::create('manufacturing_cost_ledger_policies',function(Blueprint $t){
             $t->id();
             $t->foreignId('currency_id')->unique()->constrained('currencies')->restrictOnDelete();
-            $t->foreignId('material_inventory_ledger_id')->constrained('ledger_accounts')->restrictOnDelete();
-            $t->foreignId('work_in_progress_ledger_id')->constrained('ledger_accounts')->restrictOnDelete();
-            $t->foreignId('finished_inventory_ledger_id')->constrained('ledger_accounts')->restrictOnDelete();
+            $t->foreignId('material_inventory_ledger_id')->constrained('ledger_accounts',indexName:'mfg_policy_material_ledger_fk')->restrictOnDelete();
+            $t->foreignId('work_in_progress_ledger_id')->constrained('ledger_accounts',indexName:'mfg_policy_wip_ledger_fk')->restrictOnDelete();
+            $t->foreignId('finished_inventory_ledger_id')->constrained('ledger_accounts',indexName:'mfg_policy_finished_ledger_fk')->restrictOnDelete();
             $t->foreignId('cogs_ledger_id')->constrained('ledger_accounts')->restrictOnDelete();
             $t->string('status',20)->default('draft');
             $t->string('authorization_reference',180);
@@ -54,7 +54,7 @@ return new class extends Migration
 
         Schema::create('production_return_cost_postings',function(Blueprint $t){
             $t->id();
-            $t->foreignId('sales_return_quarantine_id')->unique()->constrained('sales_return_quarantines',indexName:'prod_return_quarantine_fk')->restrictOnDelete();
+            $t->foreignId('sales_return_quarantine_id')->unique('prod_return_quarantine_uq')->constrained('sales_return_quarantines',indexName:'prod_return_quarantine_fk')->restrictOnDelete();
             $t->foreignId('production_invoice_cogs_posting_id')->constrained('production_invoice_cogs_postings',indexName:'prod_return_origin_fk')->restrictOnDelete();
             $t->unsignedInteger('quantity_packages');
             $t->decimal('amount',20,4);

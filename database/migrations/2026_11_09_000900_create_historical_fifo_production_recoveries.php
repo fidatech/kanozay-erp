@@ -61,7 +61,8 @@ return new class extends Migration
     public function down():void
     {
         Schema::table('finance_historical_fifo_production_cost_lines',function(Blueprint $t){
-            $t->dropConstrainedForeignId('historical_wip_journal_id');
+            $t->dropForeign('fhfpl_wip_journal_fk');
+            $t->dropColumn('historical_wip_journal_id');
         });
         Schema::dropIfExists('finance_historical_fifo_production_recoveries');
     }
