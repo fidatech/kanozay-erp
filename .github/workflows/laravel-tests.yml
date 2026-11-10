@@ -68,6 +68,12 @@ jobs:
         run: php artisan test tests/Feature/MatchedSupplierInvoiceTest.php --stop-on-failure
       - name: Run Laravel test suite
         run: timeout --signal=TERM 900 php artisan test
+      - name: Show raw PHPUnit output when the suite fails
+        if: failure()
+        run: |
+          # artisan test hides PHP fatal errors (memory, recursion); raw PHPUnit prints them.
+          timeout --signal=TERM 600 php -d display_errors=1 -d log_errors=1 -d error_log=/dev/stderr \
+            vendor/bin/phpunit --no-progress 2>&1 | tail -n 250 || true
       - name: Verify clean SQLite installation
         run: |
           touch database/database.sqlite
