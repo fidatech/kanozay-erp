@@ -25,8 +25,15 @@ class WarehouseStockServiceTest extends TestCase
         $a=CompanyWarehouse::create(['company_branch_id'=>$branch->id,'code'=>'WH-A','name'=>'Warehouse A','is_active'=>true]);
         $b=CompanyWarehouse::create(['company_branch_id'=>$branch->id,'code'=>'WH-B','name'=>'Warehouse B','is_active'=>true]);
         $m=InventoryMaterial::create(['sku'=>'WHMAT-1','name'=>'Sample flour','unit'=>'kg']);
-        $m->forceFill(['on_hand_quantity'=>'10.000000'])->save();
-        return [$user,$a,$b,$m];
+        // Stock enters through the real ledger so a FIFO layer with a verified
+        // (unassigned) lot position exists; warehouse moves reject legacy stock
+        // that has no reconciled lot location.
+        app(\App\Services\InventoryStockService::class)->post($m,[
+            'type'=>'opening','direction'=>'in','quantity'=>'10.000000',
+            'reference_type'=>'opening','reference_id'=>$m->id,
+            'occurred_on'=>now()->subDays(3)->toDateString(),'created_by'=>$user->id,
+        ]);
+        return [$user,$a,$b,$m->fresh()];
     }
 
     private function payload($material,$to,$qty,$type='initial_allocation',$source=null):array
@@ -50,7 +57,18 @@ class WarehouseStockServiceTest extends TestCase
         $this->assertEquals(4,DB::table('inventory_warehouse_balances')->where('company_warehouse_id',$a->id)->value('quantity'));
         $this->assertEquals(4,DB::table('inventory_warehouse_balances')->where('company_warehouse_id',$b->id)->value('quantity'));
         $this->assertDatabaseCount('inventory_warehouse_movements',2);
-        $this->assertDatabaseCount('inventory_stock_movements',0);
+        // Only the fixture's opening receipt: allocations and transfers never post
+        // a second global stock movement.
+        $this->assertDatabaseCount('inventory_stock_movements',1);
+        // The single FIFO lot is positioned 4 at A, 4 at B and 2 still unassigned,
+        // and its remaining quantity and cost layer are untouched.
+        $layer=DB::table('inventory_cost_layers')->where('inventory_material_id',$material->id)->first();
+        $this->assertEquals(10,$layer->remaining_quantity);
+        $positions=DB::table('inventory_cost_layer_locations')->where('inventory_cost_layer_id',$layer->id)->pluck('quantity','location_key');
+        $this->assertEquals(4,$positions['wh:'.$a->id]);
+        $this->assertEquals(4,$positions['wh:'.$b->id]);
+        $this->assertEquals(2,$positions['unassigned']);
+        $this->assertDatabaseCount('inventory_cost_layers',1);
     }
 
     public function test_transfer_is_blocked_during_global_production_reservation():void
@@ -75,5 +93,16 @@ class WarehouseStockServiceTest extends TestCase
         $outsider=User::factory()->create();
         $this->actingAs($outsider)->get(route('inventory.warehouse-stock.index'))->assertForbidden();
         $this->actingAs($outsider)->post(route('inventory.warehouse-stock.store'),[])->assertForbidden();
+    }
+
+    public function test_legacy_stock_without_a_reconciled_fifo_lot_cannot_be_allocated():void
+    {
+        [$user,$a]=$this->fixtures();
+        $legacy=InventoryMaterial::create(['sku'=>'WHMAT-LEGACY','name'=>'Legacy unpositioned stock','unit'=>'kg']);
+        $legacy->forceFill(['on_hand_quantity'=>'5.000000'])->save();
+        $this->actingAs($user)->post(route('inventory.warehouse-stock.store'),$this->payload($legacy,$a,'5'))
+            ->assertSessionHasErrors('quantity');
+        $this->assertDatabaseCount('inventory_warehouse_movements',0);
+        $this->assertDatabaseMissing('inventory_warehouse_balances',['inventory_material_id'=>$legacy->id]);
     }
 }

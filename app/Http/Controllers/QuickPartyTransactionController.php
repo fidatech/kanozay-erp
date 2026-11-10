@@ -65,8 +65,10 @@ class QuickPartyTransactionController extends Controller
             $selectedAccountId=$data['financial_account_id']??$data['cash_account_id']??null;
             if($selectedAccountId){
                 $cash=$available->firstWhere('id',(int)$selectedAccountId);
+                // Attach the error to the field the form actually submitted so
+                // inline validation highlights the right input.
                 if(!$cash)throw ValidationException::withMessages([
-                    'financial_account_id'=>'Choose an active financial account in the selected currency.',
+                    ($usingModernAccount?'financial_account_id':'cash_account_id')=>'Choose an active financial account in the selected currency.',
                 ]);
             }else{
                 if($available->count()!==1)throw ValidationException::withMessages([

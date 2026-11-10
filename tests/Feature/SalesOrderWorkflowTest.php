@@ -41,7 +41,7 @@ class SalesOrderWorkflowTest extends TestCase
         $this->assertDatabaseCount('finished_good_dispatches', 0);
         Permission::findOrCreate('sales.view', 'web');
         $user->givePermissionTo('sales.view');
-        $this->actingAs($user)->get(route('sales.orders.show', $order))->assertOk()->assertSee('No inventory reservation or dispatch has occurred');
+        $this->actingAs($user)->get(route('sales.orders.show', $order))->assertOk()->assertSee('Inventory is issued when a posted sales invoice dispatches released finished goods');
     }
 
     public function test_expired_quotation_cannot_be_accepted(): void

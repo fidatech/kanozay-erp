@@ -15,6 +15,10 @@ class PurchaseOrderTest extends TestCase {
   $supplier=TradeParty::create(['type'=>'supplier','name'=>'Test Supplier','code'=>'SUP-001','is_active'=>true,'created_by'=>$user->id]);
   $currency=Currency::create(['code'=>'AFN','name'=>'Afghani','symbol'=>'؋','decimal_places'=>2,'is_active'=>true,'is_base'=>true]);
   $payload=['supplier_id'=>$supplier->id,'currency_id'=>$currency->id,'source'=>'foreign','order_date'=>'2026-10-27','items'=>[['description'=>'Flour','quantity'=>10,'unit_price'=>200]]];
+  // An order cannot be raised in a currency the supplier account does not trade in.
+  $this->actingAs($user)->post(route('purchases.orders.store'),$payload)->assertSessionHasErrors('currency_id');
+  $this->assertDatabaseCount('purchase_orders',0);
+  $supplier->currencies()->attach($currency->id);
   $this->actingAs($user)->post(route('purchases.orders.store'),$payload)->assertRedirect(route('purchases.orders.index'));
   $order=PurchaseOrder::firstOrFail();
   $this->assertSame('draft',$order->status);
@@ -88,6 +92,7 @@ class PurchaseOrderTest extends TestCase {
   $user->givePermissionTo('purchases.view');
   $supplier=TradeParty::create(['type'=>'supplier','name'=>'Scoped Supplier','is_active'=>true,'created_by'=>$user->id]);
   $currency=Currency::create(['code'=>'AFN','name'=>'Afghani','is_active'=>true,'is_base'=>true]);
+  $supplier->currencies()->attach($currency->id);
   $existing=PurchaseOrder::create(['number'=>'PO-EXISTING','supplier_id'=>$supplier->id,'currency_id'=>$currency->id,'source'=>'local','order_date'=>'2026-10-26','status'=>'draft','created_by'=>$user->id]);
   $existing->items()->create(['description'=>'Material','quantity'=>1,'unit_price'=>10]);
   $this->actingAs($user)->post(route('purchases.orders.store'),[])->assertForbidden();

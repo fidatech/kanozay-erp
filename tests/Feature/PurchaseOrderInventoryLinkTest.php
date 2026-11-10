@@ -20,6 +20,7 @@ class PurchaseOrderInventoryLinkTest extends TestCase
         $user->givePermissionTo(['administration.view','purchases.create','purchases.update']);
         $supplier=TradeParty::create(['type'=>'supplier','name'=>'Supplier','code'=>'SUP-LINK','is_active'=>true,'created_by'=>$user->id]);
         $currency=Currency::create(['code'=>'AFN','name'=>'Afghani','is_active'=>true,'is_base'=>true]);
+        $supplier->currencies()->attach($currency->id);
         $material=InventoryMaterial::create(['sku'=>'RM-LINK','name'=>'Flour','unit'=>'kg']);
         $payload=['supplier_id'=>$supplier->id,'currency_id'=>$currency->id,'source'=>'local','order_date'=>'2026-11-01',
             'items'=>[['description'=>'Flour 10 kg','quantity'=>'10.0000','unit_price'=>'100.0000','inventory_material_id'=>$material->id]]];

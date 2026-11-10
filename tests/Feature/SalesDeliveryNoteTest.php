@@ -78,9 +78,19 @@ class SalesDeliveryNoteTest extends TestCase
             'delivery_date'=>now()->toDateString(),'quantities'=>[$line->id=>5]];
         $this->actingAs($user)->post(route('sales.delivery-notes.store'),$data)->assertRedirect();
         $note=SalesDeliveryNote::firstOrFail();
+        // Customer receipt cannot be confirmed without a proof reference and a location.
         $this->actingAs($user)->post(route('sales.delivery-notes.delivered',$note),[
             'received_by'=>'Synthetic receiver','delivered_at'=>now()->toDateTimeString(),
-        ])->assertRedirect();
+        ])->assertSessionHasErrors('proof_reference');
+        $this->actingAs($user)->post(route('sales.delivery-notes.delivered',$note),[
+            'received_by'=>'Synthetic receiver','delivered_at'=>now()->toDateTimeString(),
+            'proof_reference'=>'SYN-POD-001',
+        ])->assertSessionHasErrors('delivery_location');
+        $this->assertNotSame('delivered',$note->fresh()->status);
+        $this->actingAs($user)->post(route('sales.delivery-notes.delivered',$note),[
+            'received_by'=>'Synthetic receiver','delivered_at'=>now()->toDateTimeString(),
+            'proof_reference'=>'SYN-POD-001','delivery_location'=>'Synthetic customer warehouse gate',
+        ])->assertRedirect()->assertSessionHasNoErrors();
         $this->assertSame('delivered',$note->fresh()->status);
         $this->actingAs($user)->post(route('sales.delivery-notes.cancel',$note),['reason'=>'Incorrect package'])->assertSessionHasErrors('status');
         $stranger=User::factory()->create();

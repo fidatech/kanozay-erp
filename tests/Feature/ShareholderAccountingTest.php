@@ -91,6 +91,23 @@ class ShareholderAccountingTest extends TestCase
         $this->actingAs($user)->get(route('shareholders.index'))->assertOk();
     }
 
+    public function test_shareholder_permission_alone_cannot_post_capital_movements(): void
+    {
+        $this->seed([RolePermissionSeeder::class, ChartOfAccountsSeeder::class]);
+        [$user, $currency, $account] = $this->setupActorAndAccount();
+        $shareholder = Shareholder::create(['name' => 'Synthetic Scoped Shareholder', 'code' => 'SYN-SH-09', 'is_active' => true, 'created_by' => $user->id]);
+        $shareholder->currencies()->attach($currency->id);
+        $shareholder->provisionLedgerAccountsForCurrency($currency->id);
+        $user->revokePermissionTo('finance.update');
+        $this->actingAs($user)->post(route('shareholders.transactions.store', $shareholder), [
+            'idempotency_key' => (string) Str::uuid(), 'type' => 'contribution', 'transaction_date' => '2026-11-02',
+            'currency_id' => $currency->id, 'financial_account_id' => $account->id, 'amount' => '10.0000',
+            'description' => 'Synthetic contribution.',
+        ])->assertForbidden();
+        $this->assertDatabaseCount('shareholder_transactions', 0);
+        $this->assertDatabaseCount('journal_entries', 0);
+    }
+
     private function setupActorAndAccount(): array
     {
         $user = User::factory()->create();
@@ -98,6 +115,9 @@ class ShareholderAccountingTest extends TestCase
             Permission::findOrCreate($permission, 'web');
         }
         $user->givePermissionTo(['shareholders.view', 'shareholders.create', 'shareholders.update']);
+        // Capital movements post to cash and the GL, so they also require finance.update.
+        Permission::findOrCreate('finance.update', 'web');
+        $user->givePermissionTo('finance.update');
 
         $currency = Currency::create(['code' => 'USD', 'name' => 'US Dollar', 'symbol' => '$', 'decimal_places' => 2, 'is_active' => true, 'is_base' => true]);
         $account = FinancialAccount::create(['type' => 'cashbox', 'name' => 'Synthetic Cashbox', 'currency_id' => $currency->id, 'is_active' => true, 'created_by' => $user->id]);
