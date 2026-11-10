@@ -61,13 +61,13 @@ stated otherwise.
 | M10 | Products, raw materials, units | PARTIAL | `InventoryMaterialPage`, `ApprovedProductCatalog` | **Unit conversion is NOT STARTED** (no conversion code or table). Units and categories are generic registers not referenced by materials or products. Barcode, purchase/stock/production/sales units not verified |
 | M11 | Recipes and formulations | PARTIAL | `ProductionRecipe`, `ProductionRecipeWorkflow`, `ProductionRecipeApproval`, `ProductionRecipeImportPreview`, `ProductionOrderRecipeSnapshot` | CLIENT: source workbook has a negative water quantity and a formula total above its package target; these recipes must stay unapproved until Kanozay confirms corrected formulas |
 | M12 | Production planning | PARTIAL | `ProductionOrderPlanning`, `ProductionMaterialAvailability` | Production plan/schedule pages route to operational controllers but have no dedicated tests. Shortage report not verified |
-| M13 | Manufacturing and production costing | PARTIAL | `ProductionMaterialIssue`, `ProductionMaterialWaste`, `ProductionCostReadiness`, `ManufacturingOperations` | `ManufacturingCostAccountingService::capitalize()` is **not** exercised end to end: the sales tests use a fixture that inserts the cost posting directly (documented in `tests/Support/CapitalizesProductionBatches.php`). Scenario B is therefore not proven. Labour/overhead allocation untested |
+| M13 | Manufacturing and production costing | PARTIAL | `ProcurementToFinishedGoodsCostChain` drives GRN → supplier invoice → FIFO issue → batch → QC → release → the real `capitalize()` and reconciles raw material, WIP and finished goods to the GL; plus `ProductionMaterialIssue`, `ProductionMaterialWaste`, `ProductionCostReadiness`, `ManufacturingOperations` | Overhead allocation and abnormal-waste splits inside capitalization are untested. Labour cost not verified. Reservation is tested separately, not inside the chain |
 | M14 | Laboratory and quality control | PARTIAL | `LaboratoryQualityWorkflow`, `ProductionBatchQc`, `QualityMaterialHold` | Retest, rework and recall closed-loop not verified. NCR blocking rule has no dedicated test |
 | M15 | Finished goods | PARTIAL | `FinishedGoodDispatch`, `ProductionBatchQc` | Expiry handling, damaged quantities and FG-to-GL reconciliation not verified |
 | M16 | Sales and quotations | PARTIAL | `SalesQuotationWorkflow`, `SalesOrderWorkflow`, `CustomerCreditPolicy` | Tax rules: CLIENT. Partial fulfilment edge cases not verified |
 | M17 | Invoicing, dispatch, customer returns | PARTIAL | `SalesInvoiceWorkflow`, `SalesPaidRefundWorkflow`, `SalesDeliveryNote` | CLIENT: invoice sample `01-Sample.xlsx` was never available, so invoice layout/terminology is unapproved. A4 print/PDF not checked in a browser |
 | M18 | Customer and supplier payments | PARTIAL | `QuickPartyTransaction`, `UnifiedQuickAccountTransaction`, `TradeSettlement`, `MoneyTransaction` | `CustomerAdvanceService` and `SupplierAdvanceService` have no feature tests. Payment reversal not verified |
-| M19 | Cash, banks, Sarafi | PARTIAL | `FinancialAccount`, `MoneyTransaction`, `CurrencyExchange`, `CashMovementReport` | **Bank reconciliation (`BankReconciliationService`, controller, CSV import) has no automated test at all.** Statement re-import duplicate protection is unproven |
+| M19 | Cash, banks, Sarafi | PARTIAL | `BankReconciliationWorkflow` (period, CSV import and re-import, matching, independent approval, immutability, staleness, permissions), `FinancialAccount`, `MoneyTransaction`, `CurrencyExchange`, `CashMovementReport` | Bank fees, timing differences and reconciling items have no workflow. A *changed* CSV with the same rows is treated as a new source and would add lines. Sarafi statements not verified |
 | M20 | Shareholders and investment | PARTIAL | `ShareholderAccounting`, `ShareholderGovernance` | CLIENT: classification and currency treatment of the owner-investment workbook; ownership percentages. Distribution allocation service untested |
 | M21 | Human resources | PARTIAL | `EmployeeProfile`, `EmployeeDepartment`, `EmployeeAttendance`, `EmployeeLeaveWorkflow`, `EmployeeSalaryAdvance` | Contracts, shifts, overtime and exits pages are generic registers. `EmployeeExitService` untested. Attachments not verified |
 | M22 | Payroll | PARTIAL | `PayrollPeriodWorkflow`, `PayrollComponentWorkflow`, `PayrollTaxPolicyWorkflow` | `PayrollTaxRemittanceService` has no tests. Payroll reversal not found/verified. CLIENT: salary currency, tax and transport deduction rules (must stay inactive until approved) |
@@ -86,9 +86,9 @@ marked complete.
 | D02 | Historical FIFO and warehouse reconciliation | PARTIAL | Lot location moves verified by `WarehouseStockService` | The historical FIFO recovery services (`HistoricalProductionFifo*`, `HistoricalOpeningStockValuation`, `HistoricalConsumedFifoAdjustmentValuation`) are **source only, never executed by any test**. Backdated-transaction handling unproven |
 | D03 | Historical amendments and atomic reversals | PARTIAL | Journal reversal covered by `JournalEntry` tests | `HistoricalSourceAmendmentService` untested; by its own documentation there is no source-specific reversal executor yet |
 | D04 | Supplier claims and landed costs | PARTIAL | Landed-cost capitalization, debit notes and purchase returns tested | Short-credit settlement and landed-cost correction on return are untested |
-| D05 | Manufacturing and production costing | PARTIAL | Material issue, waste and cost readiness tested | Full raw → WIP → FG → COGS reconciliation per batch is not tested end to end (see M13) |
+| D05 | Manufacturing and production costing | PARTIAL | `ProcurementToFinishedGoodsCostChain`: batch cost reconciles raw material ledger = remaining FIFO value, WIP cleared to zero, finished goods = batch cost; replay and double-capitalization blocked; uninvoiced material and unreleased batches rejected | Overhead, abnormal waste, scrap and the COGS leg on dispatch are not in the same chain (COGS is tested on a fixture in `SalesInvoiceWorkflow`) |
 | D06 | Laboratory and QC integration | PARTIAL | QC decisions gate stock in `ProductionBatchQc`, `QualityMaterialHold` | NCR auto-block, recall and rework untested |
-| D07 | Banking and reconciliation | PARTIAL | Code and UI committed 2026-11-10 | **Zero tests.** Not verified in any way |
+| D07 | Banking and reconciliation | PARTIAL | `BankReconciliationWorkflow` passes on SQLite and MySQL: 3 tests covering import, duplicate protection, exact GL matching, segregation of duties, ledger disagreement and later staleness | Fees, timing differences, opening-balance evidence and period-close integration test still open |
 | D08 | Payroll integration and reconciliation | PARTIAL | Accrual, components, tax policy and payment tested | Withholding remittance untested; reversal missing; employee statement not verified |
 | D09 | Fixed assets and shareholder reconciliation | PARTIAL | Depreciation, disposal segregation and capital movements tested | Register-to-GL and shareholder-to-GL reconciliation reports untested |
 
@@ -96,8 +96,8 @@ marked complete.
 
 | Scenario | State |
 |---|---|
-| A Procurement to inventory | Covered in pieces across several tests; not as one chained scenario |
-| B Manufacturing | Not proven end to end (cost capitalization bypassed by fixture) |
+| A Procurement to inventory | Receipt, supplier invoice and stock/GL agreement chained in `ProcurementToFinishedGoodsCostChain`; landed cost and part-payment are in separate tests |
+| B Manufacturing | Covered by `ProcurementToFinishedGoodsCostChain` except reservation (separate test) and overhead |
 | C Sales | Mostly covered by `SalesInvoiceWorkflow` and `SalesPaidRefundWorkflow` on a capitalized-batch fixture |
 | D Supplier claim | Not covered |
 | E Payroll | Covered except attendance/leave-driven adjustments and payslip assertions in one chain |
@@ -110,10 +110,9 @@ marked complete.
 
 ## Known limitations
 
-1. **PHP version.** `composer.lock` pins Symfony 8.1, which needs PHP ≥ 8.4.1, while
-   `composer.json` declares `^8.3`. The application cannot be installed on PHP 8.3 from the
-   committed lock file. Either the server must run PHP 8.4, or the lock must be regenerated with
-   `config.platform.php` set to 8.3 (needs Packagist access). Decision needed from Fida Technologies.
+1. **PHP version.** `composer.lock` pins Symfony 8.1, which needs PHP ≥ 8.4.1. Fida Technologies
+   confirmed on 2026-11-10 that the server runs PHP 8.4, so 8.4 is the supported runtime.
+   `composer.json` still says `^8.3`; aligning it needs a lock refresh with Packagist access.
 2. **Down migrations** have not been exercised on MySQL. Follow the forward-fix rule in
    `docs/handoff.md`.
 3. Much service code is written as very long single-line methods, which makes review slow and
@@ -136,8 +135,9 @@ marked complete.
 
 Reasons, in order of weight:
 
-1. D02, D03 and D07 contain posting code that no test has ever executed.
-2. Manufacturing cost capitalization is not proven end to end.
+1. D02 and D03 contain posting code that no test has ever executed (D07 and the manufacturing
+   cost chain gained executable tests on 2026-11-10).
+2. Advance, payroll-remittance, short-credit and employee-exit services are untested.
 3. Unit conversion is missing; shipments are not connected to costing.
 4. Dari and Pashto interface coverage is minimal.
 5. No browser, print or role-matrix verification has taken place.
@@ -153,3 +153,4 @@ have executable tests and a human has run the browser checklist in `docs/uat-che
 | 2026-11-10 | `59b1058` | first green run of this pass | PASSED — SQLite: 408 passed, 1 skipped, 3,176 assertions; frontend build; clean SQLite and MySQL install; tested ZIP artifact |
 | 2026-11-10 | `f2fd3e2` | MySQL suite added | SQLite: 408 passed, 1 skipped (3,177 assertions). MySQL: 407 passed, 1 failed, 1 skipped — the failure was a test assuming row id 1 |
 | 2026-11-10 | `500f282` | 42897987456 | PASSED — SQLite: 408 passed, 1 skipped, 3,178 assertions. MySQL 8.4: 408 passed, 1 skipped, 3,178 assertions. Frontend build, compiled Blade lint, clean SQLite and MySQL install, tested ZIP artifact `kanozay-erp-tested-zip`. The skipped test needs the original client workbook, which is not in the repository |
+| 2026-11-10 | `8550c2d` | 42901331678 | PASSED — SQLite and MySQL 8.4: 414 passed, 1 skipped, 3,322 assertions each. Adds D07 bank reconciliation and D05 cost-chain acceptance tests |
