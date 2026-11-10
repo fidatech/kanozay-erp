@@ -25,7 +25,7 @@ class PurchaseOrderTest extends TestCase {
   $this->assertSame('foreign',$order->source);
   $this->assertSame('Flour',$order->items()->firstOrFail()->description);
   $this->actingAs($user)->get(route('purchases.orders.show',$order))->assertOk()->assertSee('Flour');
-  $this->assertSame('PO-000001',$order->number);
+  $this->assertSame('PO-'.str_pad((string)$order->id,6,'0',STR_PAD_LEFT),$order->number);
   $this->actingAs($user)->post(route('purchases.orders.store'),$payload)->assertRedirect(route('purchases.orders.index'));
   $this->assertSame('PO-000002',PurchaseOrder::latest('id')->first()->number);
   $this->assertSame(2,PurchaseOrder::count());

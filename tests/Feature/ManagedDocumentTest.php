@@ -48,7 +48,7 @@ class ManagedDocumentTest extends TestCase
         $user=$this->officer();
         $doc=$this->upload($user);
         $record=DB::table('managed_documents')->find($doc);
-        $this->assertSame('DOC-0000001',$record->number);
+        $this->assertSame('DOC-'.str_pad((string)$record->id,7,'0',STR_PAD_LEFT),$record->number);
         $version=DB::table('managed_document_versions')->where('managed_document_id',$doc)->first();
         Storage::disk('local')->assertExists($version->storage_path);
         $this->actingAs($user)->get(route('documents.download',$doc))->assertOk();

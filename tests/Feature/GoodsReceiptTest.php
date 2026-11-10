@@ -46,8 +46,11 @@ class GoodsReceiptTest extends TestCase
         $this->assertSame('received',$order->fresh()->status);
         $this->assertDatabaseCount('goods_receipts',2);
         $this->assertDatabaseCount('inventory_stock_movements',2);
-        $this->assertSame('GRN-000001',GoodsReceipt::orderBy('id')->firstOrFail()->number);
-        $this->actingAs($user)->get(route('purchases.orders.show',$order))->assertOk()->assertSee('GRN-000001');
+        // The GRN number derives from the receipt id (ids are not reset on MySQL).
+        $first=GoodsReceipt::orderBy('id')->firstOrFail();
+        $this->assertSame('GRN-'.str_pad((string)$first->id,6,'0',STR_PAD_LEFT),$first->number);
+        $this->assertSame(2,GoodsReceipt::distinct()->count('number'));
+        $this->actingAs($user)->get(route('purchases.orders.show',$order))->assertOk()->assertSee($first->number);
     }
 
     public function test_duplicate_token_and_over_receipt_cannot_double_post(): void

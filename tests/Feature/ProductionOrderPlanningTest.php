@@ -24,7 +24,7 @@ class ProductionOrderPlanningTest extends TestCase {
   $this->actingAs($user)->post(route('production.orders.store'),$payload)->assertRedirect();
   $order=ProductionOrder::firstOrFail();
   $this->assertSame('planned',$order->status);
-  $this->assertSame('PRD-000001',$order->number);
+  $this->assertSame('PRD-'.str_pad((string)$order->id,6,'0',STR_PAD_LEFT),$order->number);
   $this->assertDatabaseHas('production_order_materials',['production_order_id'=>$order->id,'material_name'=>'Dextrose','required_quantity'=>50]);
   $this->actingAs($user)->get(route('production.orders.show',$order))->assertOk()->assertSee('50.000000')->assertSee('Not mapped');
  }

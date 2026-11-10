@@ -55,7 +55,7 @@ class SalesDeliveryNoteTest extends TestCase
         $this->actingAs($user)->post(route('sales.delivery-notes.store'),$data)->assertRedirect();
         $this->assertDatabaseCount('sales_delivery_notes',1);
         $note=SalesDeliveryNote::firstOrFail();
-        $this->assertSame('DN-0000001',$note->number);
+        $this->assertSame('DN-'.str_pad((string)$note->id,7,'0',STR_PAD_LEFT),$note->number);
         $this->actingAs($user)->get(route('sales.delivery-notes.show',$note))->assertOk()
             ->assertSee('Delivery customer')->assertSee('Synthetic packages');
         $this->actingAs($user)->post(route('sales.delivery-notes.store'),$data)->assertRedirect();

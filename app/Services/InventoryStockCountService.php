@@ -51,7 +51,9 @@ class InventoryStockCountService
                 ->lockForUpdate()->get();
             $warehouseBalances=$balanceRows->groupBy('inventory_material_id');
             $count = InventoryStockCount::create([
-                'number' => 'TMP-'.Str::uuid(),
+                // The column is 32 characters; a full UUID placeholder (40) is rejected by
+                // MySQL strict mode. 28 hex characters keep the placeholder unique.
+                'number' => 'TMP-'.substr(str_replace('-', '', (string) Str::uuid()), 0, 28),
                 'submission_token' => $data['submission_token'],
                 'counted_on' => $data['counted_on'],
                 'status' => 'draft', 'notes' => $data['notes'] ?? null,
