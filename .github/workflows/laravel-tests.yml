@@ -67,7 +67,7 @@ jobs:
       - name: Verify supplier invoice accounting regression first
         run: php artisan test tests/Feature/MatchedSupplierInvoiceTest.php --stop-on-failure
       - name: Run Laravel test suite
-        run: php artisan test
+        run: timeout --signal=TERM 900 php artisan test
       - name: Verify clean SQLite installation
         run: |
           touch database/database.sqlite

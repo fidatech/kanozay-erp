@@ -18,6 +18,9 @@
         </include>
     </source>
     <php>
+        <!-- A runaway test must fail with a traceable PHP fatal error instead of
+             exhausting the CI runner (which only reports "operation was canceled"). -->
+        <ini name="memory_limit" value="1024M"/>
         <env name="APP_ENV" value="testing"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
