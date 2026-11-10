@@ -27,7 +27,7 @@ class PurchaseOrderTest extends TestCase {
   $this->actingAs($user)->get(route('purchases.orders.show',$order))->assertOk()->assertSee('Flour');
   $this->assertSame('PO-'.str_pad((string)$order->id,6,'0',STR_PAD_LEFT),$order->number);
   $this->actingAs($user)->post(route('purchases.orders.store'),$payload)->assertRedirect(route('purchases.orders.index'));
-  $this->assertSame('PO-000002',PurchaseOrder::latest('id')->first()->number);
+  $second=PurchaseOrder::latest('id')->first();$this->assertSame('PO-'.str_pad((string)$second->id,6,'0',STR_PAD_LEFT),$second->number);$this->assertNotSame($order->number,$second->number);
   $this->assertSame(2,PurchaseOrder::count());
  }
  public function test_expenses_and_advances_are_recorded_on_order_without_finance_postings():void {

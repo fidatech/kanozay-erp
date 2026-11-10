@@ -4,7 +4,7 @@ Kanozay ERP is a Laravel application for Kanozay Food Manufacturing Company. It 
 
 ## Requirements
 
-- PHP 8.3 or later (CI currently uses PHP 8.4)
+- PHP 8.4.1 or later (the committed `composer.lock` requires it; see the tracker's known limitations)
 - Composer
 - Node.js 22 and npm
 - SQLite for local UAT; MySQL is supported by Laravel and is the planned local environment for client testing
@@ -15,7 +15,7 @@ Follow [Local SQLite UAT setup](docs/local-sqlite-uat.md) to install dependencie
 
 ## Project status
 
-This development branch is **not approved for full employee UAT**. Sales invoice/dispatch, payroll calculation and posting, shareholder posting, fixed assets, full client data mapping, and visual invoice/RTL acceptance remain incomplete. Read the evidence and blockers in [UAT readiness](docs/uat-readiness.md), and use the [UAT checklist](docs/uat-checklist.md) only for workflows marked ready.
+This development branch is **blocked from UAT**. The evidence-based status of all 25 modules and the D01–D09 integration items, the defects fixed, and the open client decisions are in the [complete implementation tracker](docs/COMPLETE_IMPLEMENTATION_TRACKER.md). Use the [UAT checklist](docs/uat-checklist.md) only for workflows the tracker lists as tested.
 
 ## Development checks
 
@@ -26,7 +26,7 @@ npm run build
 php artisan test
 ```
 
-CI runs the Laravel suite using SQLite and builds the frontend on pushes to `development/kanozay-completion`.
+CI builds the frontend, runs the Laravel suite on SQLite and on MySQL 8, verifies a clean installation on both, and uploads a tested source ZIP on pushes to `development/kanozay-completion`.
 
 ## Safety
 
