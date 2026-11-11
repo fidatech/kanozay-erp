@@ -124,6 +124,7 @@ class HistoricalOpeningStockValuationTest extends TestCase
         // Later FIFO issues carry the recognized cost: 4 kg of 10 kg at 250 = 100.
         $movement = $stock->post($material->fresh(), [
             'type' => 'issue', 'direction' => 'out', 'quantity' => '4.000000', 'reference_type' => 'manual_issue', 'reference_id' => $material->id,
+            'company_warehouse_id' => $warehouse->id,
             'occurred_on' => today()->toDateString(), 'created_by' => $stockkeeper->id,
         ]);
         $consumed = DB::table('inventory_cost_consumptions')->where('inventory_cost_layer_id', $layer->id)->get();
