@@ -99,14 +99,17 @@ class HistoricalOpeningStockValuationService
             }
             $located=BigDecimal::zero();
             foreach($positions as $position){
+                // A lot that entered unassigned and was then fully allocated keeps an
+                // emptied "unassigned" position row. Only rows that still hold
+                // quantity must be in a verified warehouse.
+                $quantity=BigDecimal::of((string)$position->quantity);
+                if(!$quantity->isPositive())continue;
                 if(!$position->company_warehouse_id ||
                     !DB::table('company_warehouses')
                         ->where('id',$position->company_warehouse_id)
                         ->where('is_active',true)->exists()){
                     $this->fail('Every valued opening-stock quantity must be assigned to an active, physically verified warehouse.');
                 }
-                $quantity=BigDecimal::of((string)$position->quantity);
-                if(!$quantity->isPositive())continue;
                 $balance=DB::table('inventory_warehouse_balances')
                     ->where('inventory_material_id',$material->id)
                     ->where('company_warehouse_id',$position->company_warehouse_id)
