@@ -9,6 +9,18 @@ use Illuminate\Validation\Rule;
 
 class HistoricalFinanceCorrectionController extends Controller
 {
+    use \App\Http\Controllers\Concerns\BlocksUnverifiedLegacyRecovery;
+
+    /** Posting and evidence actions without acceptance tests; see config/erp_release.php. */
+    public const UNVERIFIED_LEGACY_ACTIONS = [
+        'execute', 'classifySupplierCredit', 'classifyDispatch',
+        'submitHistoricalReturnDisposition', 'reviewHistoricalReturnDisposition', 'postHistoricalReturnScrap',
+        'submitHistoricalCustomerReturn', 'reviewHistoricalCustomerReturn', 'postHistoricalCustomerReturn',
+        'submitHistoricalBatch', 'reviewHistoricalBatch', 'postHistoricalBatch',
+        'submitDispatchCost', 'approveDispatchCost', 'postDispatchCost',
+        'submitShortCredit', 'approveShortCredit', 'postShortCredit',
+    ];
+
     private function gate(Request $request,bool $write=false):void
     {
         abort_unless($request->user()->canAny($write

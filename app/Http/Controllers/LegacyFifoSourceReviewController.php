@@ -9,6 +9,16 @@ use Illuminate\Validation\Rule;
 
 final class LegacyFifoSourceReviewController extends Controller
 {
+    use \App\Http\Controllers\Concerns\BlocksUnverifiedLegacyRecovery;
+
+    /** Every write on this screen is legacy cost recovery without acceptance tests. */
+    public const UNVERIFIED_LEGACY_ACTIONS = [
+        'consumed', 'review', 'submitCost', 'reviewCost', 'postCost',
+        'submitProductionCost', 'reviewProductionCost',
+        'submitProductionRecovery', 'reviewProductionRecovery', 'postProductionRecovery',
+        'submitMultiProductionRecovery', 'reviewMultiProductionRecovery', 'postMultiProductionRecovery',
+    ];
+
     private function authorizeAccess(Request $request,bool $write=false): void
     {
         abort_unless($write

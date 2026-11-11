@@ -126,7 +126,7 @@ The untested historical production FIFO recovery, dispatch-cost settlement and s
 short-credit services exist to repair records created *before* the current posting controls
 were added. A fresh Kanozay installation has no such records, and the normal purchase,
 production and sales paths do not call them. They remain a risk only if legacy transactions
-are imported. They should stay disabled in UAT unless that import is planned.
+are imported. Since 2026-11-11 their posting actions are refused unless `ERP_LEGACY_RECOVERY_POSTINGS` is enabled (`LegacyRecoverySwitch` test).
 
 ### Blocked in the audit workspace
 

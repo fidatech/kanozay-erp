@@ -17,6 +17,10 @@ Follow [Local SQLite UAT setup](docs/local-sqlite-uat.md) to install dependencie
 
 This development branch is **blocked from UAT**. The evidence-based status of all 25 modules and the D01–D09 integration items, the defects fixed, and the open client decisions are in the [complete implementation tracker](docs/COMPLETE_IMPLEMENTATION_TRACKER.md). Use the [UAT checklist](docs/uat-checklist.md) only for workflows the tracker lists as tested.
 
+## Deployment
+
+Server installation, first administrator, backup and update steps are in the [installation guide](docs/INSTALLATION.md). What a pilot may and may not rely on is in the [pilot release scope](docs/PILOT_RELEASE.md).
+
 ## Development checks
 
 ```sh
