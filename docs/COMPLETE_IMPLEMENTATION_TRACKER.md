@@ -157,7 +157,7 @@ Reasons, in order of weight:
 3. Historical production FIFO recovery code (D02) has never been executed by a test; see the
    scope note.
 4. Dari and Pashto interface coverage is minimal.
-5. No browser, print or role-matrix verification has taken place.
+5. About 20 document types bypass the configurable numbering; PDF export has no library.
 
 The automated gates set earlier for controlled UAT (bank reconciliation and the manufacturing
 cost chain having executable tests) are now met. What still stands between this branch and
