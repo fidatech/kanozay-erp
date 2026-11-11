@@ -65,7 +65,9 @@ return [
     |
     */
 
-    'timezone' => 'UTC',
+    // Business dates ("today", "not in the future") follow this zone. Set
+    // APP_TIMEZONE=Asia/Kabul before the first transaction and do not change it later.
+    'timezone' => env('APP_TIMEZONE') ?: 'UTC',
 
     /*
     |--------------------------------------------------------------------------

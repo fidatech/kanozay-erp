@@ -52,4 +52,11 @@ class LegacyRecoverySwitchTest extends TestCase
         $response = $this->actingAs($admin)->post(route('inventory.legacy-fifo-reviews.consumed'), []);
         $this->assertNotSame(403, $response->getStatusCode());
     }
+
+    public function test_business_timezone_is_configurable_and_defaults_to_utc(): void
+    {
+        $config = file_get_contents(config_path('app.php'));
+        $this->assertStringContainsString("env('APP_TIMEZONE')", $config);
+        $this->assertSame('UTC', config('app.timezone'));
+    }
 }

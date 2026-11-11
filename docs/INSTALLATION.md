@@ -40,7 +40,7 @@ APP_NAME="Kanozay ERP"
 APP_ENV=production
 APP_DEBUG=false
 APP_URL=https://erp.example.af
-APP_TIMEZONE=Asia/Kabul
+APP_TIMEZONE=Asia/Kabul        # set before the first transaction; do not change afterwards
 
 DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
