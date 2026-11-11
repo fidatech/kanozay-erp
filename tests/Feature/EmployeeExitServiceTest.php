@@ -85,9 +85,17 @@ class EmployeeExitServiceTest extends TestCase
         }
         $this->assertSame(1, \App\Models\ActivityLog::where('action', 'hr.employee.exit.closed')->count());
 
-        // Future payroll no longer includes the separated employee.
-        $period = app(PayrollPeriodService::class)->create(today()->addMonthNoOverflow()->format('Y-m'), $this->currency->id, $this->hr->id);
-        $this->assertSame(0, $period->lines()->where('employee_profile_id', $employee->id)->count());
+        // Payroll no longer includes the separated employee; with nobody else active it cannot be created.
+        try {
+            app(PayrollPeriodService::class)->create(today()->subMonthNoOverflow()->format('Y-m'), $this->currency->id, $this->hr->id);
+            $this->fail('Payroll must not be generated for a separated employee.');
+        } catch (ValidationException $exception) {
+            $this->assertDatabaseCount('payroll_lines', 0);
+        }
+        $colleague = $this->employee('EXIT-EMP-1B', today()->subYear()->toDateString());
+        $period = app(PayrollPeriodService::class)->create(today()->subMonthNoOverflow()->format('Y-m'), $this->currency->id, $this->hr->id);
+        $this->assertSame(1, $period->lines()->count());
+        $this->assertSame($colleague->id, (int) $period->lines()->firstOrFail()->employee_profile_id);
     }
 
     public function test_separation_is_refused_without_approval_clearance_or_valid_dates(): void
