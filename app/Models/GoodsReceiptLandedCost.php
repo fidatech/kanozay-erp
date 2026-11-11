@@ -7,7 +7,7 @@ use LogicException;
 
 class GoodsReceiptLandedCost extends Model
 {
-    protected $fillable = ['goods_receipt_id', 'component', 'currency_code', 'amount', 'reference', 'created_by'];
+    protected $fillable = ['goods_receipt_id', 'component', 'currency_code', 'amount', 'reference', 'created_by', 'import_shipment_id'];
 
     protected static function booted(): void
     {
@@ -18,6 +18,11 @@ class GoodsReceiptLandedCost extends Model
     public function receipt()
     {
         return $this->belongsTo(GoodsReceipt::class, 'goods_receipt_id');
+    }
+
+    public function shipment()
+    {
+        return $this->belongsTo(OperationalRegister::class, 'import_shipment_id');
     }
 
     public function allocations()

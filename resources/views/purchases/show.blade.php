@@ -196,6 +196,7 @@ $hasSubtotal=$subtotal->compareTo(\Brick\Math\BigDecimal::zero())>0;
 @foreach($recordedCosts as $cost)
 @php($postedCost=$landedPostings->get($cost->id))
 <div style="padding:12px;border:1px solid #dae6f1;border-radius:8px">
+@if($cost->shipment)<span style="float:inline-end;font-size:11px;color:#375575">Shipment {{ $cost->shipment->number }}</span>@endif
 <strong>{{ ucfirst($cost->component) }}:</strong>
 <x-finance-amount :amount="$cost->amount" /> {{ $cost->currency_code }}
 ({{ $cost->allocations->count() }} allocated GRN lines)
@@ -248,6 +249,11 @@ Inventory GL capitalization posted: {{ $postedCost->journal_number }} · {{ $pos
 </select></label>
 <label>Amount ({{ $receipt->cost_currency_code }})<input type="text" name="amount" inputmode="decimal" placeholder="0.00" required></label>
 <label>Reference<input type="text" name="reference" maxlength="100"></label>
+@if(($orderShipments ?? collect())->isNotEmpty())
+<label>Import shipment (optional)<select name="import_shipment_id"><option value="">Not linked to a shipment</option>
+@foreach($orderShipments as $shipment)<option value="{{ $shipment->id }}">{{ $shipment->number }} — {{ $shipment->data['shipment_no'] ?? '' }}</option>@endforeach
+</select></label>
+@endif
 <button type="submit" onclick="return confirm('Record this immutable allocation?')">Record allocation</button>
 </form>
 @endif

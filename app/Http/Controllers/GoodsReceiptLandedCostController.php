@@ -23,9 +23,11 @@ class GoodsReceiptLandedCostController extends Controller
             'component' => ['required', Rule::in(['freight', 'customs', 'transport', 'handling', 'insurance', 'other'])],
             'amount' => ['required', 'regex:/^(?:0|[1-9][0-9]{0,13})(?:\\.[0-9]{1,2})?$/'],
             'reference' => ['nullable', 'string', 'max:100'],
+            'import_shipment_id' => ['nullable', 'integer', Rule::exists('operational_registers', 'id')->where('workflow', 'purchases.shipments')],
         ]);
 
-        $service->record($receipt->id, $data['component'], $data['amount'], $request->user()->id, $data['reference'] ?? null);
+        $service->record($receipt->id, $data['component'], $data['amount'], $request->user()->id, $data['reference'] ?? null,
+            ! empty($data['import_shipment_id']) ? (int) $data['import_shipment_id'] : null);
 
         return redirect()->route('purchases.orders.show', $order)
             ->with('success', 'Landed-cost allocation recorded for '.$receipt->number.'. Inventory cost layers now include this allocation; no general-ledger journal was posted.');

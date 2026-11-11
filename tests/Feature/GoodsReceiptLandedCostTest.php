@@ -198,6 +198,52 @@ class GoodsReceiptLandedCostTest extends TestCase
         $this->assertDatabaseCount('goods_receipt_landed_costs', 1);
     }
 
+    public function test_landed_cost_can_be_tied_only_to_a_documented_shipment_of_the_same_purchase_order(): void
+    {
+        [$user, $order, $receipt] = $this->postedReceiptWithTwoLines();
+        foreach (['inventory.update', 'administration.view'] as $permission) {
+            \Spatie\Permission\Models\Permission::findOrCreate($permission, 'web');
+        }
+        $user->givePermissionTo(['inventory.update', 'administration.view']);
+        $register = fn (string $workflow, array $data, string $status = 'approved') => \App\Models\OperationalRegister::create([
+            'workflow' => $workflow, 'number' => 'SYN-'.Str::upper(Str::random(8)), 'submission_token' => (string) Str::uuid(),
+            'status' => $status, 'created_by' => $user->id, 'data' => $data,
+        ]);
+        $otherOrder = PurchaseOrder::create([
+            'number' => 'PO-LC-OTHER', 'supplier_id' => $order->supplier_id, 'currency_id' => $order->currency_id,
+            'source' => 'local', 'order_date' => '2026-11-02', 'status' => 'confirmed', 'created_by' => $user->id,
+        ]);
+        $shipment = $register('purchases.shipments', ['purchase_order' => $order->id, 'shipment_no' => 'SYN-BL-001', 'stage' => 'cleared']);
+        $foreign = $register('purchases.shipments', ['purchase_order' => $otherOrder->id, 'shipment_no' => 'SYN-BL-002', 'stage' => 'cleared']);
+        $rejected = $register('purchases.shipments', ['purchase_order' => $order->id, 'shipment_no' => 'SYN-BL-003', 'stage' => 'booked'], 'rejected');
+        $notShipment = $register('purchases.quotations', ['purchase_order' => $order->id]);
+        $store = fn (array $data) => $this->actingAs($user)->post(route('purchases.orders.receipts.landed-costs.store', [$order, $receipt]), $data);
+
+        foreach ([$foreign, $rejected, $notShipment] as $invalid) {
+            $store(['component' => 'freight', 'amount' => '40.00', 'import_shipment_id' => $invalid->id])->assertSessionHasErrors('import_shipment_id');
+        }
+        $this->assertDatabaseCount('goods_receipt_landed_costs', 0);
+
+        $store(['component' => 'freight', 'amount' => '40.00', 'reference' => 'SYN-FRT-1', 'import_shipment_id' => $shipment->id])
+            ->assertRedirect()->assertSessionHasNoErrors();
+        $store(['component' => 'customs', 'amount' => '20.00'])->assertRedirect()->assertSessionHasNoErrors();
+        $freight = GoodsReceiptLandedCost::where('component', 'freight')->firstOrFail();
+        $this->assertSame($shipment->id, (int) $freight->import_shipment_id);
+        $this->assertNull(GoodsReceiptLandedCost::where('component', 'customs')->firstOrFail()->import_shipment_id);
+        // The link does not change how the charge is allocated: 100 : 300 of 40.00.
+        $this->assertEqualsCanonicalizing([10.0, 30.0], $freight->allocations->map(fn ($row) => (float) $row->amount)->all());
+
+        // The shipment page lists exactly the charges tied to it, with their ledger state.
+        $this->actingAs($user)->get(route('operations.show', ['purchases', 'shipments', $shipment]))
+            ->assertOk()->assertSee('Landed costs recorded against this shipment')->assertSee($receipt->number)
+            ->assertSee('Freight')->assertSee('40.00')->assertSee('Awaiting capitalization')->assertDontSee('20.00');
+        $this->actingAs($user)->get(route('operations.show', ['purchases', 'shipments', $rejected]))
+            ->assertOk()->assertSee('No landed cost has been linked to this shipment');
+        // The order page offers this order's shipment and shows the link on the recorded charge.
+        $this->actingAs($user)->get(route('purchases.orders.show', $order))
+            ->assertOk()->assertSee('Shipment '.$shipment->number)->assertSee('SYN-BL-001')->assertDontSee('SYN-BL-002')->assertDontSee('SYN-BL-003');
+    }
+
     private function postedReceiptWithTwoLines(): array
     {
         $user = User::factory()->create();

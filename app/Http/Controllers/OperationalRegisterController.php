@@ -342,7 +342,16 @@ class OperationalRegisterController extends Controller
   $def=$this->definition($module,$page);$this->allowed($request,$module);
   $this->sameWorkflow($record,$module,$page);
   $record->load(['creator','reviewer','events.actor']);
+  $linkedLandedCosts=$record->workflow==='purchases.shipments'
+   ?\Illuminate\Support\Facades\DB::table('goods_receipt_landed_costs as cost')
+     ->join('goods_receipts as receipt','receipt.id','=','cost.goods_receipt_id')
+     ->leftJoin('goods_receipt_landed_cost_postings as posting','posting.goods_receipt_landed_cost_id','=','cost.id')
+     ->where('cost.import_shipment_id',$record->id)->orderBy('cost.id')
+     ->get(['cost.id','cost.component','cost.amount','cost.currency_code','cost.reference',
+      'receipt.number as receipt_number','receipt.purchase_order_id','posting.id as posting_id'])
+   :null;
   return view('operations.detail',[
+   'linkedLandedCosts'=>$linkedLandedCosts,
    'module'=>$module,'page'=>$page,'definition'=>$def,
    'record'=>$record,'options'=>$this->options($def['fields']),
   ]);

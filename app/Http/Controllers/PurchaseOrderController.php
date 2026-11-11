@@ -160,7 +160,12 @@ class PurchaseOrderController extends Controller {
    foreach($applicationAmounts->get($advance->id,collect()) as $application)$left=$left->minus((string)$application->amount);
    if($left->isPositive())$unappliedAdvances=$unappliedAdvances->plus($left);
   }
-  $landedCosts=\App\Models\GoodsReceiptLandedCost::with('allocations')
+  // Documented import shipments of this order, offered when a landed cost is recorded.
+  $orderShipments=\App\Models\OperationalRegister::where('workflow','purchases.shipments')
+    ->where('status','!=','rejected')->orderByDesc('id')->limit(300)->get()
+    ->filter(fn($shipment)=>(int)($shipment->data['purchase_order']??0)===(int)$order->id)->values();
+  view()->share('orderShipments',$orderShipments);
+  $landedCosts=\App\Models\GoodsReceiptLandedCost::with(['allocations','shipment'])
     ->whereIn('goods_receipt_id',$order->receipts->pluck('id'))->get();
   $landedPostings=DB::table('goods_receipt_landed_cost_postings as posting')
     ->join('journal_entries as journal','journal.id','=','posting.journal_entry_id')

@@ -122,6 +122,18 @@
 @endcanany
 @endif
 </div></section>
+@if(($linkedLandedCosts ?? null) !== null)
+<section class="od-panel"><h2>Landed costs recorded against this shipment</h2>
+<div class="od-history"><table><thead><tr><th>Goods receipt</th><th>Component</th><th style="text-align:end">Amount</th><th>Currency</th><th>Reference</th><th>General ledger</th></tr></thead><tbody>
+@forelse($linkedLandedCosts as $cost)
+<tr><td><a href="{{ route('purchases.orders.show',$cost->purchase_order_id) }}">{{ $cost->receipt_number }}</a></td><td>{{ ucfirst($cost->component) }}</td><td style="text-align:end;font-variant-numeric:tabular-nums">{{ number_format((float)$cost->amount,2) }}</td><td>{{ $cost->currency_code }}</td><td>{{ $cost->reference }}</td><td>{{ $cost->posting_id ? 'Capitalized' : 'Awaiting capitalization' }}</td></tr>
+@empty<tr><td colspan="6">No landed cost has been linked to this shipment. Link it when recording the charge on the goods receipt.</td></tr>@endforelse
+</tbody>
+@if($linkedLandedCosts->isNotEmpty())
+<tfoot>@foreach($linkedLandedCosts->groupBy('currency_code') as $code=>$group)<tr><th colspan="2">Total {{ $code }}</th><th style="text-align:end;font-variant-numeric:tabular-nums">{{ number_format((float)$group->sum('amount'),2) }}</th><th colspan="3"></th></tr>@endforeach</tfoot>
+@endif
+</table></div></section>
+@endif
 <section class="od-panel"><h2>Record history</h2><div class="od-history"><table><thead><tr><th>When</th><th>Action</th><th>Actor</th><th>Note</th></tr></thead><tbody>
 @forelse($record->events as $event)
 <tr><td>{{ $event->created_at?->format('Y-m-d H:i') }}</td><td>{{ ucfirst($event->action) }}</td>
