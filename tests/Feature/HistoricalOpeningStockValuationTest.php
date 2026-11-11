@@ -133,6 +133,36 @@ class HistoricalOpeningStockValuationTest extends TestCase
         $this->assertSame($currency->id, (int) $consumed[0]->currency_id);
         $this->assertTrue(BigDecimal::of((string) $consumed[0]->amount)->isEqualTo('100'));
 
+        // Reversal of a resolved correction is a documented, independently reviewed assessment.
+        // It is requested and reviewed by people who took no part in the original correction,
+        // and by design it posts nothing: no source-specific reversal executor exists yet.
+        [$auditor, $controller] = User::factory()->count(2)->create()->all();
+        foreach ([$auditor, $controller] as $user) {
+            $user->givePermissionTo(['finance.view', 'finance.update']);
+        }
+        $long = 'Synthetic assessment: inventory asset debit and opening equity credit of 250.00 AFN were posted for this lot.';
+        $request = ['original_accounting_effects' => $long, 'requested_replacement_treatment' => $long,
+            'evidence_reference' => 'SYN-REV-REQ', 'confirm_no_automatic_reversal' => '1'];
+        $assessment = ['decision' => 'approve', 'review_reference' => 'SYN-REV-OK', 'review_notes' => $long, 'confirm_source_reversal_is_documentary' => '1'];
+        $journalsBefore = DB::table('journal_entries')->count();
+        foreach ([$requester, $reviewer, $poster] as $originalActor) {
+            $this->actingAs($originalActor)->post(route('finance.historical-corrections.reversal-assessment', $caseId), $request)
+                ->assertSessionHasErrors('historical_amendment');
+        }
+        $this->actingAs($auditor)->post(route('finance.historical-corrections.reversal-assessment', $caseId), $request)->assertRedirect()->assertSessionHasNoErrors();
+        $this->actingAs($controller)->post(route('finance.historical-corrections.reversal-assessment', $caseId), $request)->assertSessionHasErrors('historical_amendment');
+        foreach ([$auditor, $poster] as $conflicted) {
+            $this->actingAs($conflicted)->post(route('finance.historical-corrections.reversal-review', $caseId), $assessment)
+                ->assertSessionHasErrors('historical_amendment');
+        }
+        $this->actingAs($controller)->post(route('finance.historical-corrections.reversal-review', $caseId), $assessment)->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('finance_historical_source_reversal_requests', [
+            'finance_historical_correction_case_id' => $caseId, 'status' => 'approved', 'reviewed_by' => $controller->id,
+        ]);
+        $this->assertSame($journalsBefore, DB::table('journal_entries')->count());
+        $this->assertSame('250.0000', $this->ledgerBalanceForTest($inventoryLedger, $currency->id));
+        $this->assertSame('resolved', DB::table('finance_historical_correction_cases')->where('id', $caseId)->value('status'));
+
         // Read access and the audit trail.
         $this->actingAs($reviewer)->get(route('finance.historical-corrections.show', $caseId))->assertOk()->assertSee($resolved->case_number);
         $this->assertGreaterThanOrEqual(3, DB::table('finance_historical_correction_events')->where('finance_historical_correction_case_id', $caseId)->count());
@@ -176,7 +206,22 @@ class HistoricalOpeningStockValuationTest extends TestCase
             'decision' => 'reject', 'approval_reference' => 'SYN-HFC-NO', 'review_notes' => self::TEXT, 'confirm_independent_review' => '1',
         ])->assertRedirect()->assertSessionHasNoErrors();
         $this->assertSame('rejected', DB::table('finance_historical_correction_cases')->where('id', $second)->value('status'));
-        $this->actingAs($requester)->post(route('finance.historical-corrections.store'), $case)->assertRedirect()->assertSessionHasNoErrors();
+
+        // Refiling a rejected case: not by its reviewer, not with the same evidence, and only once.
+        $refile = fn (User $user, string $evidence) => $this->actingAs($user)->post(route('finance.historical-corrections.resubmit', $second), [
+            'identified_discrepancy' => self::TEXT, 'source_evidence' => $evidence,
+            'amendment_reason' => 'Synthetic recount located the missing supplier statement page for this lot.',
+            'confirm_fresh_evidence' => '1',
+        ]);
+        $refile($reviewer, self::TEXT.' Page two attached.')->assertSessionHasErrors('historical_amendment');
+        $refile($requester, self::TEXT)->assertSessionHasErrors('historical_amendment');
+        $refile($requester, self::TEXT.' Page two attached.')->assertRedirect()->assertSessionHasNoErrors();
+        $third = (int) DB::table('finance_historical_correction_cases')->max('id');
+        $this->assertDatabaseHas('finance_historical_source_amendments', ['original_case_id' => $second, 'replacement_case_id' => $third]);
+        $this->assertSame('submitted', DB::table('finance_historical_correction_cases')->where('id', $third)->value('status'));
+        $refile($requester, self::TEXT.' Page three attached.')->assertSessionHasErrors('historical_amendment');
+        // A withdrawn case is not silently reopened by a plain new submission while the refiled one is open.
+        $this->actingAs($requester)->post(route('finance.historical-corrections.store'), $case)->assertSessionHasErrors('historical_correction');
 
         $this->assertDatabaseCount('finance_historical_correction_cases', 3);
         $this->assertDatabaseCount('journal_entries', 0);
