@@ -43,6 +43,9 @@ Route::middleware('auth')->get('/inventory/warehouse-valuation', [\App\Http\Cont
 Route::middleware('auth')->post('/inventory/materials/{material}/catalog', [\App\Http\Controllers\InventoryMaterialController::class,'assignCatalog'])->name('inventory.materials.catalog');
 Route::middleware('auth')->post('/production/finished-goods/{good}/catalog', [\App\Http\Controllers\FinishedGoodController::class,'assignCatalog'])->name('production.finished-goods.catalog');
 Route::middleware('auth')->post('/inventory/warehouse-stock', [\App\Http\Controllers\WarehouseStockController::class,'store'])->name('inventory.warehouse-stock.store');
+Route::middleware('auth')->get('/inventory/unit-conversions', [\App\Http\Controllers\UnitConversionController::class,'index'])->name('inventory.unit-conversions.index');
+Route::middleware('auth')->post('/inventory/unit-conversions', [\App\Http\Controllers\UnitConversionController::class,'store'])->name('inventory.unit-conversions.store');
+Route::middleware('auth')->post('/inventory/unit-conversions/{conversion}/deactivate', [\App\Http\Controllers\UnitConversionController::class,'deactivate'])->whereNumber('conversion')->name('inventory.unit-conversions.deactivate');
 Route::middleware('auth')->post('/inventory/warehouse-stock/legacy-lots', [\App\Http\Controllers\WarehouseStockController::class,'assignLegacy'])->name('inventory.warehouse-stock.legacy.assign');
 Route::middleware('auth')->get('/inventory/legacy-fifo-reviews', [\App\Http\Controllers\LegacyFifoSourceReviewController::class,'index'])->name('inventory.legacy-fifo-reviews.index');
 Route::middleware('auth')->post('/inventory/legacy-fifo-reviews/consumed', [\App\Http\Controllers\LegacyFifoSourceReviewController::class,'consumed'])->name('inventory.legacy-fifo-reviews.consumed');

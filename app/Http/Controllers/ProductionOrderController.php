@@ -172,20 +172,58 @@ class ProductionOrderController extends Controller {
             ],
         ]);
         $catalog = InventoryMaterial::findOrFail($data['inventory_material_id']);
-        if ($catalog->unit !== $materialLine->unit || $catalog->is_packaging !== (bool) $materialLine->is_packaging) {
+        if ($catalog->is_packaging !== (bool) $materialLine->is_packaging) {
             throw ValidationException::withMessages([
-                'inventory_material_id' => 'Stock unit and material type must match the saved production requirement.',
+                'inventory_material_id' => 'Material type (ingredient or packaging) must match the saved production requirement.',
             ]);
         }
-        DB::transaction(function () use ($order, $materialLine, $catalog) {
+        $converted = false;
+        DB::transaction(function () use ($order, $materialLine, $catalog, &$converted) {
             $lockedOrder = ProductionOrder::query()->lockForUpdate()->findOrFail($order->id);
             if ($lockedOrder->status !== 'planned') {
                 throw ValidationException::withMessages([
                     'inventory_material_id' => 'Material links cannot change after a plan is reserved or closed.',
                 ]);
             }
-            $materialLine->update(['inventory_material_id' => $catalog->id]);
+            $line = ProductionOrderMaterial::whereKey($materialLine->id)->lockForUpdate()->firstOrFail();
+            $units = app(\App\Services\UnitConversionService::class);
+            // Always convert from what the recipe originally said, never from an earlier conversion.
+            $recipeUnit = $line->source_unit ?? $line->unit;
+            $recipePerPackage = (string) ($line->source_quantity_per_package ?? $line->quantity_per_package);
+            $recipeRequired = (string) ($line->source_required_quantity ?? $line->required_quantity);
+            if ($units->sameUnit($recipeUnit, $catalog->unit)) {
+                $line->forceFill([
+                    'inventory_material_id' => $catalog->id, 'unit' => $recipeUnit,
+                    'quantity_per_package' => $recipePerPackage, 'required_quantity' => $recipeRequired,
+                    'source_unit' => null, 'source_quantity_per_package' => null,
+                    'source_required_quantity' => null, 'unit_conversion_factor' => null,
+                ])->save();
+
+                return;
+            }
+            $factor = $units->factor($recipeUnit, $catalog->unit, $catalog->id);
+            if (! $factor) {
+                throw ValidationException::withMessages([
+                    'inventory_material_id' => "The requirement is in {$recipeUnit} but this stock item is kept in {$catalog->unit}, and no unit conversion from {$recipeUnit} to {$catalog->unit} is defined.",
+                ]);
+            }
+            // From here on the requirement is expressed in the stock unit, so reservation,
+            // issue, waste and costing all work in one unit. The recipe values are kept.
+            $line->forceFill([
+                'inventory_material_id' => $catalog->id, 'unit' => $catalog->unit,
+                'quantity_per_package' => $units->convert($recipePerPackage, $recipeUnit, $catalog->unit, $catalog->id, 'inventory_material_id'),
+                'required_quantity' => $units->convert($recipeRequired, $recipeUnit, $catalog->unit, $catalog->id, 'inventory_material_id'),
+                'source_unit' => $recipeUnit, 'source_quantity_per_package' => $recipePerPackage,
+                'source_required_quantity' => $recipeRequired, 'unit_conversion_factor' => (string) $factor,
+            ])->save();
+            $converted = true;
+            \App\Models\ActivityLog::record('production.material.unit_converted', 'production_order_material', $line->id,
+                "Requirement converted from {$recipeRequired} {$recipeUnit} to {$line->required_quantity} {$catalog->unit} for stock item {$catalog->sku}.",
+                ['factor' => (string) $factor, 'production_order_id' => $lockedOrder->id]);
         });
+        if ($converted) {
+            return back()->with('success', 'Material linked and the requirement converted into the stock unit. No stock was reserved or consumed.');
+        }
         return back()->with('success', 'Material linked to stock catalog. No stock was reserved or consumed.');
     }
     public function reserve(Request $request, ProductionOrder $order, ProductionMaterialService $service) {

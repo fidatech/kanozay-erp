@@ -16,6 +16,7 @@
 <div class="heading"><div><h1>Warehouse stock allocation & transfers</h1><p>Raw materials / Warehouse FIFO lot provenance and transfers without duplicate inventory postings.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap">
 <a class="btn btn-light" href="{{ route('inventory.warehouse-valuation.index') }}">FIFO valuation by location</a>
 <a class="btn btn-light" href="{{ route('inventory.legacy-fifo-reviews.index') }}">Independent FIFO source reviews</a>
+<a class="btn btn-light" href="{{ route('inventory.unit-conversions.index') }}">Unit conversions</a>
 <a class="btn btn-light" href="{{ route('admin.company.edit') }}">Manage warehouses</a>
 </div></div>
 @if(session('success'))<p class="notice">{{ session('success') }}</p>@endif
