@@ -85,17 +85,15 @@ class EmployeeExitServiceTest extends TestCase
         }
         $this->assertSame(1, \App\Models\ActivityLog::where('action', 'hr.employee.exit.closed')->count());
 
-        // Payroll no longer includes the separated employee; with nobody else active it cannot be created.
+        // The month in which they still worked keeps their salary line; later months exclude them.
+        $worked = app(PayrollPeriodService::class)->create(\Carbon\CarbonImmutable::parse($lastDay)->format('Y-m'), $this->currency->id, $this->hr->id);
+        $this->assertSame(1, $worked->lines()->where('employee_profile_id', $employee->id)->count());
         try {
-            app(PayrollPeriodService::class)->create(today()->subMonthNoOverflow()->format('Y-m'), $this->currency->id, $this->hr->id);
-            $this->fail('Payroll must not be generated for a separated employee.');
+            app(PayrollPeriodService::class)->create(\Carbon\CarbonImmutable::parse($lastDay)->addMonthNoOverflow()->format('Y-m'), $this->currency->id, $this->hr->id);
+            $this->fail('Payroll after the separation month must not include the separated employee.');
         } catch (ValidationException $exception) {
-            $this->assertDatabaseCount('payroll_lines', 0);
+            $this->assertSame(1, \Illuminate\Support\Facades\DB::table('payroll_lines')->count());
         }
-        $colleague = $this->employee('EXIT-EMP-1B', today()->subYear()->toDateString());
-        $period = app(PayrollPeriodService::class)->create(today()->subMonthNoOverflow()->format('Y-m'), $this->currency->id, $this->hr->id);
-        $this->assertSame(1, $period->lines()->count());
-        $this->assertSame($colleague->id, (int) $period->lines()->firstOrFail()->employee_profile_id);
     }
 
     public function test_separation_is_refused_without_approval_clearance_or_valid_dates(): void
