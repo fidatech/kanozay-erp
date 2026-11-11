@@ -36,6 +36,7 @@ Status legend: `COMPLETE` · `PARTIAL` · `BLOCKED` (external decision needed) �
 | 4 | Stock count placeholder number (40 chars) longer than its 32-char column | Creating a physical stock count failed on MySQL (error 1406) | Shorter unique placeholder |
 | 5 | Quick party payment reported a wrong-currency account error on a field the form did not submit | Inline validation pointed at the wrong input | Error key follows the submitted field |
 | 7 | `HistoricalOpeningStockValuationService` checked the warehouse of emptied lot positions | No opening stock lot could ever be valued once it had been allocated to a warehouse (found 2026-11-11 by the new test) | Empty positions skipped before the warehouse check |
+| 8 | `config/app.php` hard-coded UTC and ignored `APP_TIMEZONE` | Between midnight and 04:30 Kabul time a document dated today would be rejected as a future date | Timezone read from `APP_TIMEZONE` (default UTC) |
 | 6 | 28 tests were stale against hardened services (segregation of duties, source reconciliation, capitalization, submission tokens) | Suite could not act as a regression gate | Tests now drive the real approval paths and each gained a negative case; no assertion was removed without an equal or stricter replacement |
 
 ### Current CI evidence
@@ -176,3 +177,4 @@ RTL. Until someone has opened the application and done that, the decision stays 
 | 2026-11-10 | `8550c2d` | 42901331678 | PASSED — SQLite and MySQL 8.4: 414 passed, 1 skipped, 3,322 assertions each. Adds D07 bank reconciliation and D05 cost-chain acceptance tests |
 | 2026-11-11 | `1d5c126` | 42965452631 | PASSED — SQLite and MySQL 8.4: 422 passed, 1 skipped, 3,606 assertions each. Adds advances, payroll tax remittance, historical correction/opening valuation/amendment and employee exit tests; one defect fixed |
 | 2026-11-11 | `ac0c0db` | 42968327384 | PASSED — SQLite and MySQL 8.4: 429 passed, 1 skipped, 3,757 assertions each. Adds unit conversion, shipment link for landed costs, sign-in audit and the route authorization sweep |
+| 2026-11-11 | `0fdc49b` | 42970390533 | PASSED — SQLite and MySQL 8.4: 432 passed, 1 skipped, 3,770 assertions each. Adds the legacy recovery release switch, installation guide, pilot scope and the timezone fix |
